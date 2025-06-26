@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amber Electric Cost Comparator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
+        <header class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator</h1>
+            <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare your electricity costs with another supplier.</p>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <div id="apiKeySection" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Amber API Key</label>
+                        <input type="password" id="apiKey" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="psk_...">
+                        <p class="text-xs text-gray-500 mt-1">Your key is stored only in your browser. Find it at <a href="https://app.amber.com.au/developers" target="_blank" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
+                    </div>
+                    <div>
+                        <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">Other Supplier General Rate (c/kWh)</label>
+                        <input type="number" id="otherSupplierRate" value="36" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 36">
+                    </div>
+                     <div>
+                        <label for="otherSupplierFeedInRate" class="block text-sm font-medium text-gray-700 mb-1">Other Supplier Feed-in Rate (c/kWh)</label>
+                        <input type="number" id="otherSupplierFeedInRate" value="5" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                    </div>
+                    <div>
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <input type="date" id="startDate" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                     <div>
+                        <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                        <input type="date" id="endDate" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                 <div class="mt-6 text-right">
+                    <button id="fetchData" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Compare Costs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading and Message Section -->
+            <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
+                <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
+                <p id="message" class="text-lg"></p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden">
+                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Comparison Results</h2>
+                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+                    <!-- Dynamic content will be inserted here -->
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        const formatForInput = (date) => {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // Set default date range to the previous month on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const endDateInput = document.getElementById('endDate');
+            const startDateInput = document.getElementById('startDate');
+            
+            const now = new Date();
+            // Go to the first day of the current month
+            const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            // Subtract one day to get the last day of the previous month
+            const lastDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
+            lastDayOfPreviousMonth.setDate(lastDayOfPreviousMonth.getDate() - 1);
+            
+            // Get the first day of that previous month
+            const firstDayOfPreviousMonth = new Date(lastDayOfPreviousMonth.getFullYear(), lastDayOfPreviousMonth.getMonth(), 1);
+
+            endDateInput.value = formatForInput(lastDayOfPreviousMonth);
+            startDateInput.value = formatForInput(firstDayOfPreviousMonth);
+        });
+
+        document.getElementById('fetchData').addEventListener('click', async () => {
+            // Clear previous results and messages
+            const resultsSection = document.getElementById('resultsSection');
+            const messageSection = document.getElementById('messageSection');
+            const messageEl = document.getElementById('message');
+            const loader = document.getElementById('loader');
+            const resultsOutput = document.getElementById('results-output');
+
+            resultsSection.classList.add('hidden');
+            resultsOutput.innerHTML = '';
+            messageEl.textContent = '';
+
+            // Get user inputs
+            const apiKey = document.getElementById('apiKey').value;
+            const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value);
+            const otherSupplierFeedInRate = parseFloat(document.getElementById('otherSupplierFeedInRate').value);
+            const startDateValue = document.getElementById('startDate').value;
+            const endDateValue = document.getElementById('endDate').value;
+
+
+            // Validate inputs
+            if (!apiKey) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'Please enter your Amber API key.';
+                return;
+            }
+            if (isNaN(otherSupplierRate) || otherSupplierRate <= 0 || isNaN(otherSupplierFeedInRate) || otherSupplierFeedInRate < 0) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'Please enter a valid supplier rates.';
+                return;
+            }
+            if (!startDateValue || !endDateValue) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'Please select a start and end date.';
+                return;
+            }
+            
+            const overallStartDate = new Date(startDateValue);
+            const overallEndDate = new Date(endDateValue);
+            
+            if (overallEndDate < overallStartDate) {
+                 messageSection.classList.remove('hidden');
+                messageEl.textContent = 'End date cannot be before the start date.';
+                return;
+            }
+
+            // Show loader and start fetching data
+            messageSection.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            messageEl.textContent = 'Fetching your site details...';
+
+            const headers = {
+                'Authorization': `Bearer ${apiKey}`,
+                'accept': 'application/json'
+            };
+            const AMBER_API_URL = 'https://api.amber.com.au/v1';
+
+            try {
+                // 1. Fetch Sites
+                const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
+                 if (!sitesResponse.ok) {
+                    let detail = `Status: ${sitesResponse.status} ${sitesResponse.statusText}`;
+                    try {
+                        const errorText = await sitesResponse.text();
+                        detail = JSON.parse(errorText).message || errorText;
+                    } catch (e) { /* ignore */ }
+
+                    if (sitesResponse.status === 403) {
+                         throw new Error(`Authentication failed. Your API Key appears to be invalid. Please check it and try again.`);
+                    }
+                    throw new Error(`Failed to fetch sites. ${detail}`);
+                }
+                const sites = await sitesResponse.json();
+                if (!sites || sites.length === 0) {
+                    throw new Error('No sites found for this API key.');
+                }
+                const site = sites[0];
+                const siteId = site.id; 
+                const channels = site.channels;
+                if (!channels || channels.length === 0) {
+                    throw new Error('No channels (e.g., general, feedIn) found for this site.');
+                }
+
+                messageEl.textContent = `Site found: ${siteId}. Fetching usage data for ${channels.length} channel(s)...`;
+                
+                let channelTotals = {};
+                channels.forEach(c => {
+                    channelTotals[c.identifier] = {
+                        identifier: c.identifier,
+                        type: c.type,
+                        totalKWh: 0,
+                        totalAmberCost: 0,
+                    };
+                });
+
+
+                // 2. Fetch Usage for each channel in chunks
+                let loopStartDate = new Date(overallStartDate);
+
+                while (loopStartDate <= overallEndDate) {
+                    let loopEndDate = new Date(loopStartDate);
+                    loopEndDate.setDate(loopEndDate.getDate() + 6); // Fetch in 7 day chunks
+                    if (loopEndDate > overallEndDate) {
+                        loopEndDate = new Date(overallEndDate);
+                    }
+
+                    const startDateStr = formatForInput(loopStartDate);
+                    const endDateStr = formatForInput(loopEndDate);
+                    
+                    for (const channel of channels) {
+                        const channelId = channel.identifier;
+                        messageEl.textContent = `Fetching ${channelId} (${channel.type}) data for ${startDateStr} to ${endDateStr}...`;
+                        
+                        const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${startDateStr}&endDate=${endDateStr}&channel=${channelId}`;
+                        const usageResponse = await fetch(usageUrl, { headers });
+                        const responseText = await usageResponse.text();
+
+                         if (!usageResponse.ok) {
+                            let detail = responseText;
+                            try {
+                                const errorBody = JSON.parse(responseText);
+                                detail = errorBody.message || responseText;
+                            } catch (e) { /* not JSON */ }
+                            throw new Error(`Failed to fetch usage for channel ${channelId}. Status: ${usageResponse.status}. Message: ${detail}`);
+                        }
+                        
+                        const usageData = JSON.parse(responseText);
+                        
+                        if (usageData && usageData.length > 0) {
+                            usageData.forEach(item => {
+                                // Ignore any records that aren't for the channel we requested
+                                if (item.channelIdentifier !== channelId) return;
+                                channelTotals[channelId].totalKWh += item.kwh;
+                                // Amber's cost includes GST. perKwh is in cents.
+                                channelTotals[channelId].totalAmberCost += (item.perKwh / 100) * item.kwh;
+                            });
+                        }
+                    }
+                    // Move to the next chunk
+                    loopStartDate.setDate(loopStartDate.getDate() + 7);
+                }
+                
+                messageEl.textContent = 'Calculating costs...';
+                
+                // 3. Calculate Other Supplier Costs and totals
+                let overallAmberCost = 0;
+                let overallOtherCost = 0;
+
+                Object.values(channelTotals).forEach(c => {
+                    if (c.type === 'feedIn') {
+                        // Feed-in is a credit. User enters a positive rate (e.g. 10), we make the cost negative.
+                        c.totalOtherCost = -1 * (c.totalKWh * otherSupplierFeedInRate) / 100;
+                    } else { // general, controlledLoad, etc.
+                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
+                    }
+                    overallAmberCost += c.totalAmberCost;
+                    overallOtherCost += c.totalOtherCost;
+                });
+
+                // 4. Display results
+                loader.classList.add('hidden');
+                messageSection.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+
+                const period = `(${formatForInput(overallStartDate)} to ${formatForInput(overallEndDate)})`;
+
+                let tableHTML = `
+                    <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
+                    <table class="min-w-full divide-y divide-gray-200">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber Cost</th>
+                                <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other Supplier Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                `;
+
+                Object.values(channelTotals).forEach(c => {
+                    tableHTML += `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.totalKWh.toFixed(2)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalAmberCost.toFixed(2)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalOtherCost.toFixed(2)}</td>
+                        </tr>
+                    `;
+                });
+                
+                // Add Total Row
+                 tableHTML += `
+                        <tr class="bg-gray-50 font-bold">
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallAmberCost.toFixed(2)}</td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallOtherCost.toFixed(2)}</td>
+                        </tr>
+                    </tbody>
+                    </table>
+                `;
+                
+                const savings = overallOtherCost - overallAmberCost;
+                let savingsSummaryHTML = '<div class="mt-6 text-center">';
+                if (savings > 0) {
+                    savingsSummaryHTML += `<p class="text-lg font-medium text-green-700">You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber this period!</p>`;
+                } else {
+                     savingsSummaryHTML += `<p class="text-lg font-medium text-red-700">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with the other supplier.</p>`;
+                }
+                savingsSummaryHTML += '</div>';
+
+                resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
+
+
+            } catch (error) {
+                console.error('Error:', error);
+                loader.classList.add('hidden');
+                messageEl.textContent = `Error: ${error.message}`;
+            }
+        });
+    </script>
+</body>
+</html>
