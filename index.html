@@ -149,7 +149,13 @@
 
         // --- Event Listeners and Initial Setup ---
         window.addEventListener('DOMContentLoaded', () => {
-            // Set default date range to the previous month
+            const apiKeyInput = document.getElementById('apiKey');
+            const savedApiKey = localStorage.getItem('amberApiKey');
+            if (savedApiKey) {
+                apiKeyInput.value = savedApiKey;
+                console.log("Loaded API key from local storage.");
+            }
+
             const endDateInput = document.getElementById('endDate');
             const startDateInput = document.getElementById('startDate');
             
@@ -162,7 +168,6 @@
             endDateInput.value = formatForInput(lastDayOfPreviousMonth);
             startDateInput.value = formatForInput(firstDayOfPreviousMonth);
 
-            // Set up rate type toggling
             const rateTypeSelector = document.getElementById('rateTypeSelector');
             const flatRateSection = document.getElementById('flatRateSection');
             const touRateSection = document.getElementById('touRateSection');
@@ -190,17 +195,19 @@
             resultsOutput.innerHTML = '';
             messageEl.textContent = '';
 
-            // Get API key and date inputs
             const apiKey = document.getElementById('apiKey').value;
             const startDateValue = document.getElementById('startDate').value;
             const endDateValue = document.getElementById('endDate').value;
             
-            // --- Input Validation ---
             if (!apiKey) {
                 messageSection.classList.remove('hidden');
                 messageEl.textContent = 'Please enter your Amber API key.';
                 return;
             }
+            
+            localStorage.setItem('amberApiKey', apiKey);
+            console.log("Saved API key to local storage.");
+
              if (!startDateValue || !endDateValue) {
                 messageSection.classList.remove('hidden');
                 messageEl.textContent = 'Please select a start and end date.';
@@ -214,7 +221,6 @@
                 return;
             }
 
-            // --- Check if we can use cached data ---
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
                 console.log("Using cached data, recalculating costs...");
                 messageSection.classList.remove('hidden');
@@ -222,9 +228,11 @@
                 messageEl.textContent = 'Recalculating with new rates...';
 
                 setTimeout(() => {
-                    // Recalculate 'Other Supplier' costs on the cached data
                     calculateOtherSupplierCosts(cachedChannelData);
                     
+                    const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                    const demandTariffCost = demandTariffInfo.cost;
+
                     let overallAmberCost = 0;
                     let overallOtherCost = 0;
 
@@ -232,20 +240,19 @@
                         overallAmberCost += c.totalAmberCost;
                         overallOtherCost += c.totalOtherCost;
                     });
+                    
+                    overallAmberCost += demandTariffCost;
 
-                    // Display the new results
                     messageSection.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue);
-                }, 200); // Brief delay for UX
+                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                }, 200);
 
-                return; // Stop execution here, don't re-fetch
+                return;
             }
 
-            // --- If not using cache, proceed with fetch ---
-            cachedChannelData = null; // Clear old cache as dates have changed
+            cachedChannelData = null;
 
-            // Show loader
             messageSection.classList.remove('hidden');
             loader.classList.remove('hidden');
             messageEl.textContent = 'Fetching your site details...';
@@ -254,7 +261,6 @@
             const AMBER_API_URL = 'https://api.amber.com.au/v1';
 
             try {
-                // 1. Fetch Sites
                 const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
                  if (!sitesResponse.ok) {
                     let detail = `Status: ${sitesResponse.status} ${sitesResponse.statusText}`;
@@ -279,15 +285,14 @@
                         type: c.type,
                         totalKWh: 0,
                         totalAmberCost: 0,
-                        usageData: [] // To store detailed interval data
+                        usageData: []
                     };
                 });
 
-                // 2. Fetch Usage for each channel in chunks
                 let loopStartDate = new Date(overallStartDate);
                 while (loopStartDate <= overallEndDate) {
                     let loopEndDate = new Date(loopStartDate);
-                    loopEndDate.setDate(loopEndDate.getDate() + 6); // Fetch in 7 day chunks
+                    loopEndDate.setDate(loopEndDate.getDate() + 6);
                     if (loopEndDate > overallEndDate) loopEndDate = new Date(overallEndDate);
 
                     const startDateStr = formatForInput(loopStartDate);
@@ -324,14 +329,14 @@
                 
                 messageEl.textContent = 'Calculating costs...';
                 
-                // --- Cache the newly fetched data ---
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
-                // Deep copy the data to the cache to prevent mutation issues
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
-                // 3. Calculate Other Supplier Costs and totals
                 calculateOtherSupplierCosts(channelTotals);
+                
+                const demandTariffInfo = calculateDemandTariff(channelTotals);
+                const demandTariffCost = demandTariffInfo.cost;
                 
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
@@ -340,17 +345,17 @@
                     overallAmberCost += c.totalAmberCost;
                     overallOtherCost += c.totalOtherCost;
                 });
+                
+                overallAmberCost += demandTariffCost;
 
-
-                // 4. Display results
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(channelTotals, overallAmberCost, overallOtherCost, formatForInput(overallStartDate), formatForInput(overallEndDate));
+                displayResults(channelTotals, overallAmberCost, overallOtherCost, formatForInput(overallStartDate), formatForInput(overallEndDate), demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
-                cachedChannelData = null; // Clear cache on error
+                cachedChannelData = null;
                 loader.classList.add('hidden');
                 messageEl.textContent = `Error: ${error.message}`;
             }
@@ -366,20 +371,15 @@
             const hour = date.getHours();
             const isWeekday = day >= 1 && day <= 5;
 
-            // 1. Check for Off-Peak (10pm - 7am)
             if (hour >= 22 || hour < 7) {
                 return rates.offpeak;
             }
-
             if (isWeekday) {
-                // 2. Check for Peak (2pm - 8pm)
                 if (hour >= 14 && hour < 20) {
                     return rates.peak;
                 }
-                // 3. Shoulder is everything else on a weekday during active hours
                 return rates.shoulder;
-            } else { // It's a Weekend
-                // On weekends, times not in Off-Peak are Shoulder (7am - 10pm)
+            } else {
                 return rates.shoulder;
             }
         }
@@ -397,7 +397,7 @@
                 Object.values(channelTotals).forEach(c => {
                     if (c.type === 'feedIn') {
                         c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
-                    } else { // general, controlledLoad, etc.
+                    } else {
                         c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
                     }
                 });
@@ -412,11 +412,10 @@
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
                     if (c.type === 'feedIn') {
-                        // Assuming flat feed-in rate for simplicity, even in TOU mode
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             return total - (item.kwh * feedInRate / 100);
                         }, 0);
-                    } else { // general, controlledLoad etc. apply TOU rates
+                    } else {
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.startTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
@@ -429,9 +428,83 @@
         }
         
         /**
+         * Calculates the Demand Tariff based on peak usage in demand windows.
+         */
+        function calculateDemandTariff(channelTotals) {
+            const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
+
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                console.log("No general channel data for demand tariff calculation.");
+                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            const demandWindowUsage = generalChannel.usageData.filter(item =>
+                item.tariffInformation && item.tariffInformation.demandWindow === true
+            );
+
+            if (demandWindowUsage.length === 0) {
+                console.log("No usage found within a demand window.");
+                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            // Group 5-min intervals into 30-min chunks and sum their kWh
+            const thirtyMinChunks = {};
+            demandWindowUsage.forEach(item => {
+                const itemDate = new Date(item.startTime);
+                const minutes = itemDate.getMinutes();
+                itemDate.setSeconds(0, 0);
+
+                if (minutes < 30) {
+                    itemDate.setMinutes(0);
+                } else {
+                    itemDate.setMinutes(30);
+                }
+                const blockStartTime = itemDate.toISOString();
+
+                if (!thirtyMinChunks[blockStartTime]) {
+                    thirtyMinChunks[blockStartTime] = 0;
+                }
+                thirtyMinChunks[blockStartTime] += item.kwh;
+            });
+
+            // Find the 30-min chunk with the highest usage
+            let maxDemandKwh = 0;
+            let maxDemandTime = null;
+
+            for (const startTime in thirtyMinChunks) {
+                if (thirtyMinChunks[startTime] > maxDemandKwh) {
+                    maxDemandKwh = thirtyMinChunks[startTime];
+                    maxDemandTime = startTime;
+                }
+            }
+            
+            if (maxDemandKwh === 0) {
+                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            // Find the unique days that had a demand window
+            const demandDaysSet = new Set(
+                demandWindowUsage.map(item => item.startTime.substring(0, 10))
+            );
+            const numberOfDemandDays = demandDaysSet.size;
+
+            // Calculate the final cost
+            const demandTariffCost = maxDemandKwh * 2 * 0.42 * numberOfDemandDays;
+
+            console.log(`Demand Tariff Calculation: Max 30-min Demand=${maxDemandKwh.toFixed(4)}kWh at ${maxDemandTime}, Days=${numberOfDemandDays}, Cost=$${demandTariffCost.toFixed(2)}`);
+
+            return {
+                cost: demandTariffCost,
+                maxDemandKwh: maxDemandKwh,
+                demandDays: numberOfDemandDays,
+                maxDemandTime: maxDemandTime
+            };
+        }
+
+        /**
          * Renders the final results table and summary.
          */
-        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr) {
+        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, demandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
             const period = `(${startDateStr} to ${endDateStr})`;
 
@@ -462,6 +535,25 @@
                 `;
             });
             
+            // --- Add Demand Tariff Row with Date/Time ---
+            if (demandTariffInfo && demandTariffInfo.cost > 0) {
+                const maxDemandKw = (demandTariffInfo.maxDemandKwh * 2).toFixed(2);
+                const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
+                
+                tableHTML += `
+                    <tr class="font-semibold border-t">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Demand Tariff</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div class="text-xs">Max: ${maxDemandKw} kW</div>
+                            <div class="text-xs">Days: ${demandTariffInfo.demandDays}</div>
+                            <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${demandTariffInfo.cost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A</td>
+                    </tr>
+                `;
+            }
+
              tableHTML += `
                     <tr class="bg-gray-50 font-bold">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
