@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amber Electric Cost Comparator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
+        <header class="bg-white rounded-lg shadow-md p-6 mb-6">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator</h1>
+            <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare your electricity costs with another supplier.</p>
+        </header>
+
+        <main>
+            <!-- Input Section -->
+            <div id="apiKeySection" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="md:col-span-2">
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Amber API Key</label>
+                        <input type="password" id="apiKey" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="psk_...">
+                        <p class="text-xs text-gray-500 mt-1">Your key is stored only in your browser. Find it at <a href="https://app.amber.com.au/developers" target="_blank" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
+                    </div>
+
+                    <!-- Other Supplier Inputs -->
+                    <div class="md:col-span-2 border-t pt-4">
+                         <label class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</label>
+
+                         <!-- Rate Structure Selection -->
+                         <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</label>
+                            <div class="flex items-center space-x-4" id="rateTypeSelector">
+                                <label class="flex items-center">
+                                    <input type="radio" name="rateType" value="flat" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked>
+                                    <span class="ml-2 text-sm text-gray-700">Flat Rate</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="rateType" value="tou" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
+                                    <span class="ml-2 text-sm text-gray-700">Time of Use (TOU)</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Flat Rate Section -->
+                        <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                             <div>
+                                <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh)</label>
+                                <input type="number" id="otherSupplierRate" value="36" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 36">
+                             </div>
+                             <div>
+                                <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
+                                <input type="number" id="otherSupplierFeedInRateFlat" value="5" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                            </div>
+                        </div>
+
+                        <!-- TOU Rate Section -->
+                        <div id="touRateSection" class="hidden">
+                            <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
+                            <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                                <!-- Peak -->
+                                <div class="bg-red-50 p-3 rounded-lg border border-red-200">
+                                    <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
+                                    <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
+                                    <input type="number" id="tou_peak_rate" value="55" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <!-- Shoulder -->
+                                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                    <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
+                                    <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
+                                    <input type="number" id="tou_shoulder_rate" value="35" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <!-- Off-Peak -->
+                                <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                                    <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
+                                    <p class="text-xs text-gray-500">10pm - 7am every day</p>
+                                    <input type="number" id="tou_offpeak_rate" value="25" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                             <div>
+                                <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
+                                <input type="number" id="otherSupplierFeedInRateTou" value="5" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date Inputs -->
+                    <div class="border-t pt-4">
+                        <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                        <input type="date" id="startDate" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                     <div class="border-t pt-4">
+                        <label for="endDate" class="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                        <input type="date" id="endDate" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                </div>
+                 <div class="mt-6 text-right">
+                    <button id="fetchData" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Compare Costs
+                    </button>
+                </div>
+            </div>
+
+            <!-- Loading and Message Section -->
+            <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
+                <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
+                <p id="message" class="text-lg"></p>
+            </div>
+
+            <!-- Results Section -->
+            <div id="resultsSection" class="hidden">
+                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Comparison Results</h2>
+                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+                    <!-- Dynamic content will be inserted here -->
+                 </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // --- Global cache for API data ---
+        let cachedChannelData = null;
+        let lastFetchedStartDate = null;
+        let lastFetchedEndDate = null;
+
+        const formatForInput = (date) => {
+            const year = date.getFullYear();
+            const month = (date.getMonth() + 1).toString().padStart(2, '0');
+            const day = date.getDate().toString().padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+
+        // --- Event Listeners and Initial Setup ---
+        window.addEventListener('DOMContentLoaded', () => {
+            const apiKeyInput = document.getElementById('apiKey');
+            const savedApiKey = localStorage.getItem('amberApiKey');
+            if (savedApiKey) {
+                apiKeyInput.value = savedApiKey;
+                console.log("Loaded API key from local storage.");
+            }
+
+            const endDateInput = document.getElementById('endDate');
+            const startDateInput = document.getElementById('startDate');
+            
+            const now = new Date();
+            const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
+            lastDayOfPreviousMonth.setDate(lastDayOfPreviousMonth.getDate() - 1);
+            const firstDayOfPreviousMonth = new Date(lastDayOfPreviousMonth.getFullYear(), lastDayOfPreviousMonth.getMonth(), 1);
+
+            endDateInput.value = formatForInput(lastDayOfPreviousMonth);
+            startDateInput.value = formatForInput(firstDayOfPreviousMonth);
+
+            const rateTypeSelector = document.getElementById('rateTypeSelector');
+            const flatRateSection = document.getElementById('flatRateSection');
+            const touRateSection = document.getElementById('touRateSection');
+
+            rateTypeSelector.addEventListener('change', (e) => {
+                if (e.target.value === 'tou') {
+                    flatRateSection.classList.add('hidden');
+                    touRateSection.classList.remove('hidden');
+                } else {
+                    flatRateSection.classList.remove('hidden');
+                    touRateSection.classList.add('hidden');
+                }
+            });
+        });
+
+        // --- Main Fetch and Calculation Logic ---
+        document.getElementById('fetchData').addEventListener('click', async () => {
+            const resultsSection = document.getElementById('resultsSection');
+            const messageSection = document.getElementById('messageSection');
+            const messageEl = document.getElementById('message');
+            const loader = document.getElementById('loader');
+            const resultsOutput = document.getElementById('results-output');
+
+            resultsSection.classList.add('hidden');
+            resultsOutput.innerHTML = '';
+            messageEl.textContent = '';
+
+            const apiKey = document.getElementById('apiKey').value;
+            const startDateValue = document.getElementById('startDate').value;
+            const endDateValue = document.getElementById('endDate').value;
+            
+            if (!apiKey) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'Please enter your Amber API key.';
+                return;
+            }
+            
+            localStorage.setItem('amberApiKey', apiKey);
+            console.log("Saved API key to local storage.");
+
+             if (!startDateValue || !endDateValue) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'Please select a start and end date.';
+                return;
+            }
+            const overallStartDate = new Date(startDateValue);
+            const overallEndDate = new Date(endDateValue);
+            if (overallEndDate < overallStartDate) {
+                messageSection.classList.remove('hidden');
+                messageEl.textContent = 'End date cannot be before the start date.';
+                return;
+            }
+
+            if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
+                console.log("Using cached data, recalculating costs...");
+                messageSection.classList.remove('hidden');
+                loader.classList.add('hidden');
+                messageEl.textContent = 'Recalculating with new rates...';
+
+                setTimeout(() => {
+                    calculateOtherSupplierCosts(cachedChannelData);
+                    
+                    const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                    const demandTariffCost = demandTariffInfo.cost;
+
+                    let overallAmberCost = 0;
+                    let overallOtherCost = 0;
+
+                    Object.values(cachedChannelData).forEach(c => {
+                        overallAmberCost += c.totalAmberCost;
+                        overallOtherCost += c.totalOtherCost;
+                    });
+                    
+                    overallAmberCost += demandTariffCost;
+
+                    messageSection.classList.add('hidden');
+                    resultsSection.classList.remove('hidden');
+                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                }, 200);
+
+                return;
+            }
+
+            cachedChannelData = null;
+
+            messageSection.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            messageEl.textContent = 'Fetching your site details...';
+
+            const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
+            const AMBER_API_URL = 'https://api.amber.com.au/v1';
+
+            try {
+                const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
+                 if (!sitesResponse.ok) {
+                    let detail = `Status: ${sitesResponse.status} ${sitesResponse.statusText}`;
+                    try { const errorText = await sitesResponse.text(); detail = JSON.parse(errorText).message || errorText; } catch (e) { /* ignore */ }
+                    if (sitesResponse.status === 403) { throw new Error(`Authentication failed. Your API Key appears to be invalid.`); }
+                    throw new Error(`Failed to fetch sites. ${detail}`);
+                }
+                const sites = await sitesResponse.json();
+                if (!sites || sites.length === 0) throw new Error('No sites found for this API key.');
+                
+                const site = sites[0];
+                const siteId = site.id;
+                const channels = site.channels;
+                if (!channels || channels.length === 0) throw new Error('No channels found for this site.');
+
+                messageEl.textContent = `Site found: ${siteId}. Fetching usage data...`;
+                
+                let channelTotals = {};
+                channels.forEach(c => {
+                    channelTotals[c.identifier] = {
+                        identifier: c.identifier,
+                        type: c.type,
+                        totalKWh: 0,
+                        totalAmberCost: 0,
+                        usageData: []
+                    };
+                });
+
+                let loopStartDate = new Date(overallStartDate);
+                while (loopStartDate <= overallEndDate) {
+                    let loopEndDate = new Date(loopStartDate);
+                    loopEndDate.setDate(loopEndDate.getDate() + 6);
+                    if (loopEndDate > overallEndDate) loopEndDate = new Date(overallEndDate);
+
+                    const startDateStr = formatForInput(loopStartDate);
+                    const endDateStr = formatForInput(loopEndDate);
+                    
+                    for (const channel of channels) {
+                        const channelId = channel.identifier;
+                        messageEl.textContent = `Fetching ${channelId} data for ${startDateStr} to ${endDateStr}...`;
+                        
+                        const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${startDateStr}&endDate=${endDateStr}&channel=${channelId}`;
+                        const usageResponse = await fetch(usageUrl, { headers });
+                        const responseText = await usageResponse.text();
+
+                         if (!usageResponse.ok) {
+                            let detail = responseText;
+                            try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
+                            throw new Error(`Failed to fetch usage for ${channelId}. Status: ${usageResponse.status}. Message: ${detail}`);
+                        }
+                        
+                        const usageData = JSON.parse(responseText);
+                        
+                        if (usageData && usageData.length > 0) {
+                            usageData.forEach(item => {
+                                if (item.channelIdentifier !== channelId) return;
+                                const channelData = channelTotals[channelId];
+                                channelData.totalKWh += item.kwh;
+                                channelData.totalAmberCost += (item.perKwh / 100) * item.kwh;
+                                channelData.usageData.push(item);
+                            });
+                        }
+                    }
+                    loopStartDate.setDate(loopStartDate.getDate() + 7);
+                }
+                
+                messageEl.textContent = 'Calculating costs...';
+                
+                lastFetchedStartDate = startDateValue;
+                lastFetchedEndDate = endDateValue;
+                cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
+                
+                calculateOtherSupplierCosts(channelTotals);
+                
+                const demandTariffInfo = calculateDemandTariff(channelTotals);
+                const demandTariffCost = demandTariffInfo.cost;
+                
+                let overallAmberCost = 0;
+                let overallOtherCost = 0;
+
+                Object.values(channelTotals).forEach(c => {
+                    overallAmberCost += c.totalAmberCost;
+                    overallOtherCost += c.totalOtherCost;
+                });
+                
+                overallAmberCost += demandTariffCost;
+
+                loader.classList.add('hidden');
+                messageSection.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+                displayResults(channelTotals, overallAmberCost, overallOtherCost, formatForInput(overallStartDate), formatForInput(overallEndDate), demandTariffInfo);
+
+            } catch (error) {
+                console.error('Error:', error);
+                cachedChannelData = null;
+                loader.classList.add('hidden');
+                messageEl.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        // --- Helper Functions ---
+
+        /**
+         * Determines the TOU rate for a given timestamp based on a standard structure.
+         */
+        function getTouRate(date, rates) {
+            const day = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const hour = date.getHours();
+            const isWeekday = day >= 1 && day <= 5;
+
+            if (hour >= 22 || hour < 7) {
+                return rates.offpeak;
+            }
+            if (isWeekday) {
+                if (hour >= 14 && hour < 20) {
+                    return rates.peak;
+                }
+                return rates.shoulder;
+            } else {
+                return rates.shoulder;
+            }
+        }
+        
+        /**
+         * Calculates the 'Other Supplier' cost for each channel based on the selected rate type.
+         */
+        function calculateOtherSupplierCosts(channelTotals) {
+            const rateType = document.querySelector('input[name="rateType"]:checked').value;
+
+            if (rateType === 'flat') {
+                const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value);
+                const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value);
+                
+                Object.values(channelTotals).forEach(c => {
+                    if (c.type === 'feedIn') {
+                        c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                    } else {
+                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
+                    }
+                });
+            } else { // 'tou'
+                const touRates = {
+                    peak: parseFloat(document.getElementById('tou_peak_rate').value),
+                    shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value),
+                    offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value)
+                };
+                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value);
+
+                Object.values(channelTotals).forEach(c => {
+                    let channelOtherCost = 0;
+                    if (c.type === 'feedIn') {
+                        channelOtherCost = c.usageData.reduce((total, item) => {
+                            return total - (item.kwh * feedInRate / 100);
+                        }, 0);
+                    } else {
+                        channelOtherCost = c.usageData.reduce((total, item) => {
+                            const itemDate = new Date(item.startTime);
+                            const rateForInterval = getTouRate(itemDate, touRates);
+                            return total + (item.kwh * rateForInterval / 100);
+                        }, 0);
+                    }
+                    c.totalOtherCost = channelOtherCost;
+                });
+            }
+        }
+        
+        /**
+         * Calculates the Demand Tariff based on peak usage in demand windows.
+         */
+        function calculateDemandTariff(channelTotals) {
+            const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
+
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                console.log("No general channel data for demand tariff calculation.");
+                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            const demandWindowUsage = generalChannel.usageData.filter(item =>
+                item.tariffInformation && item.tariffInformation.demandWindow === true
+            );
+
+            if (demandWindowUsage.length === 0) {
+                console.log("No usage found within a demand window.");
+                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            // Group 5-min intervals into 30-min chunks and sum their kWh
+            const thirtyMinChunks = {};
+            demandWindowUsage.forEach(item => {
+                const itemDate = new Date(item.startTime);
+                const minutes = itemDate.getMinutes();
+                itemDate.setSeconds(0, 0);
+
+                if (minutes < 30) {
+                    itemDate.setMinutes(0);
+                } else {
+                    itemDate.setMinutes(30);
+                }
+                const blockStartTime = itemDate.toISOString();
+
+                if (!thirtyMinChunks[blockStartTime]) {
+                    thirtyMinChunks[blockStartTime] = 0;
+                }
+                thirtyMinChunks[blockStartTime] += item.kwh;
+            });
+
+            // Find the 30-min chunk with the highest usage
+            let maxDemandKwh = 0;
+            let maxDemandTime = null;
+
+            for (const startTime in thirtyMinChunks) {
+                if (thirtyMinChunks[startTime] > maxDemandKwh) {
+                    maxDemandKwh = thirtyMinChunks[startTime];
+                    maxDemandTime = startTime;
+                }
+            }
+            
+            if (maxDemandKwh === 0) {
+                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            }
+
+            // Find the unique days that had a demand window
+            const demandDaysSet = new Set(
+                demandWindowUsage.map(item => item.startTime.substring(0, 10))
+            );
+            const numberOfDemandDays = demandDaysSet.size;
+
+            // Calculate the final cost
+            const demandTariffCost = maxDemandKwh * 2 * 0.42 * numberOfDemandDays;
+
+            console.log(`Demand Tariff Calculation: Max 30-min Demand=${maxDemandKwh.toFixed(4)}kWh at ${maxDemandTime}, Days=${numberOfDemandDays}, Cost=$${demandTariffCost.toFixed(2)}`);
+
+            return {
+                cost: demandTariffCost,
+                maxDemandKwh: maxDemandKwh,
+                demandDays: numberOfDemandDays,
+                maxDemandTime: maxDemandTime
+            };
+        }
+
+        /**
+         * Renders the final results table and summary.
+         */
+        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, demandTariffInfo) {
+            const resultsOutput = document.getElementById('results-output');
+            const period = `(${startDateStr} to ${endDateStr})`;
+
+            let tableHTML = `
+                <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber Cost</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other Supplier Cost</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200">
+            `;
+
+            Object.values(channelTotals).forEach(c => {
+                tableHTML += `
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.totalKWh.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalAmberCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalOtherCost.toFixed(2)}</td>
+                    </tr>
+                `;
+            });
+            
+            // --- Add Demand Tariff Row with Date/Time ---
+            if (demandTariffInfo && demandTariffInfo.cost > 0) {
+                const maxDemandKw = (demandTariffInfo.maxDemandKwh * 2).toFixed(2);
+                const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
+                
+                tableHTML += `
+                    <tr class="font-semibold border-t">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Demand Tariff</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div class="text-xs">Max: ${maxDemandKw} kW</div>
+                            <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
+                            <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${demandTariffInfo.cost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A?</td>
+                    </tr>
+                `;
+            }
+
+             tableHTML += `
+                    <tr class="bg-gray-50 font-bold">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallAmberCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallOtherCost.toFixed(2)}</td>
+                    </tr>
+                </tbody>
+                </table>
+            `;
+            
+            const savings = overallOtherCost - overallAmberCost;
+            let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
+            if (savings > 0) {
+                savingsSummaryHTML += 'bg-green-100">';
+                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber this period!</p>`;
+            } else {
+                 savingsSummaryHTML += 'bg-red-100">';
+                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with the other supplier.</p>`;
+            }
+            savingsSummaryHTML += '</div>';
+
+            resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
+        }
+
+    </script>
+</body>
+</html>
