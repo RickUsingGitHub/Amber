@@ -30,7 +30,6 @@
         </header>
 
         <main>
-            <!-- Input Section -->
             <div id="apiKeySection" class="bg-white rounded-lg shadow-md p-6 mb-6">
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div class="md:col-span-2">
@@ -39,11 +38,9 @@
                         <p class="text-xs text-gray-500 mt-1">Your key is stored only in your browser. Find it at <a href="https://app.amber.com.au/developers" target="_blank" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
                     </div>
 
-                    <!-- Other Supplier Inputs -->
                     <div class="md:col-span-2 border-t pt-4">
                          <label class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</label>
 
-                         <!-- Rate Structure Selection -->
                          <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</label>
                             <div class="flex items-center space-x-4" id="rateTypeSelector">
@@ -58,7 +55,6 @@
                             </div>
                         </div>
 
-                        <!-- Flat Rate Section -->
                         <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                              <div>
                                 <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh)</label>
@@ -70,24 +66,20 @@
                             </div>
                         </div>
 
-                        <!-- TOU Rate Section -->
                         <div id="touRateSection" class="hidden">
                             <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
                             <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                                <!-- Peak -->
                                 <div class="bg-red-50 p-3 rounded-lg border border-red-200">
                                     <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
                                     <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
                                     <input type="number" id="tou_peak_rate" value="55" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
-                                <!-- Shoulder -->
                                 <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                                     <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
                                     <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
                                     <input type="number" id="tou_shoulder_rate" value="35" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
-                                <!-- Off-Peak -->
                                 <div class="bg-green-50 p-3 rounded-lg border border-green-200">
                                     <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
                                     <p class="text-xs text-gray-500">10pm - 7am every day</p>
@@ -101,7 +93,6 @@
                         </div>
                     </div>
 
-                    <!-- Date Inputs -->
                     <div class="border-t pt-4">
                         <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
                         <input type="date" id="startDate" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
@@ -118,18 +109,15 @@
                 </div>
             </div>
 
-            <!-- Loading and Message Section -->
             <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
                 <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
                 <p id="message" class="text-lg"></p>
             </div>
 
-            <!-- Results Section -->
             <div id="resultsSection" class="hidden">
                  <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Comparison Results</h2>
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
-                    <!-- Dynamic content will be inserted here -->
-                 </div>
+                    </div>
             </div>
         </main>
     </div>
@@ -161,12 +149,10 @@
             
             const now = new Date();
             const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const lastDayOfPreviousMonth = new Date(firstDayOfCurrentMonth);
-            lastDayOfPreviousMonth.setDate(lastDayOfPreviousMonth.getDate() - 1);
-            const firstDayOfPreviousMonth = new Date(lastDayOfPreviousMonth.getFullYear(), lastDayOfPreviousMonth.getMonth(), 1);
+            const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-            endDateInput.value = formatForInput(lastDayOfPreviousMonth);
-            startDateInput.value = formatForInput(firstDayOfPreviousMonth);
+            startDateInput.value = formatForInput(firstDayOfCurrentMonth);
+            endDateInput.value = formatForInput(lastDayOfCurrentMonth);
 
             const rateTypeSelector = document.getElementById('rateTypeSelector');
             const flatRateSection = document.getElementById('flatRateSection');
