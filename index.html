@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Amber Electric Cost Comparator & Exporter</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -121,12 +122,20 @@
             <div id="resultsSection" class="hidden">
                  <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                    <button id="downloadCsvButton" disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                        Download CSV
-                    </button>
-                 </div>
-                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+                    <div class="flex space-x-2">
+                        <button id="showGraphButton" disabled class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                            Show 24hr Avg Graph
+                        </button>
+                        <button id="downloadCsvButton" disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                            Download CSV
+                        </button>
                     </div>
+                 </div>
+                 <div id="graphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[80vh]">
+                    <canvas id="usagePriceChart"></canvas>
+                </div>
+                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
+                 </div>
             </div>
         </main>
     </div>
@@ -136,6 +145,7 @@
         let cachedChannelData = null;
         let lastFetchedStartDate = null;
         let lastFetchedEndDate = null;
+        let usageChart = null;
 
         const formatForInput = (date) => {
             const year = date.getFullYear();
@@ -152,6 +162,11 @@
                 apiKeyInput.value = savedApiKey;
                 console.log("Loaded API key from local storage.");
             }
+
+            // Custom tooltip positioner to follow the cursor
+            Chart.Tooltip.positioners.cursor = function(items, eventPosition) {
+                return eventPosition;
+            };
 
             const endDateInput = document.getElementById('endDate');
             const startDateInput = document.getElementById('startDate');
@@ -178,6 +193,7 @@
             });
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
+            document.getElementById('showGraphButton').addEventListener('click', display24hrAverageGraph);
         });
 
         // --- Main Fetch and Calculation Logic ---
@@ -188,9 +204,13 @@
             const loader = document.getElementById('loader');
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
+            const showGraphButton = document.getElementById('showGraphButton');
+            const graphContainer = document.getElementById('graphContainer');
 
             resultsSection.classList.add('hidden');
+            graphContainer.classList.add('hidden');
             downloadCsvButton.disabled = true;
+            showGraphButton.disabled = true;
             resultsOutput.innerHTML = '';
             messageEl.textContent = '';
 
@@ -561,11 +581,147 @@
         }
 
         /**
+         * Renders an interactive chart of average 24hr usage and pricing.
+         */
+        function display24hrAverageGraph() {
+            const graphContainer = document.getElementById('graphContainer');
+            const showGraphButton = document.getElementById('showGraphButton');
+
+            if (graphContainer.classList.contains('hidden')) {
+                graphContainer.classList.remove('hidden');
+                showGraphButton.textContent = 'Hide Graph';
+            } else {
+                graphContainer.classList.add('hidden');
+                showGraphButton.textContent = 'Show 24hr Avg Graph';
+                return; // Just hide it and exit
+            }
+
+            if (!cachedChannelData) {
+                console.error("No data available for graph.");
+                graphContainer.innerHTML = '<p class="text-center text-red-500">No data available to render graph.</p>';
+                return;
+            }
+            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                console.error("No general usage data for graph.");
+                 graphContainer.innerHTML = '<p class="text-center text-red-500">No general usage data found to render graph.</p>';
+                return;
+            }
+
+            // 1. Initialize data structures
+            const intervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
+            
+            const startDate = new Date(document.getElementById('startDate').value);
+            const endDate = new Date(document.getElementById('endDate').value);
+            const numDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+            // 2. Iterate and aggregate data
+            generalChannel.usageData.forEach(item => {
+                const date = new Date(item.startTime);
+                const intervalIndex = date.getHours() * 2 + Math.floor(date.getMinutes() / 30);
+                
+                intervals[intervalIndex].totalKwh += item.kwh;
+                intervals[intervalIndex].totalCents += item.perKwh;
+                intervals[intervalIndex].count += 1;
+            });
+
+            // 3. Calculate final averages for the chart
+            const labels = intervals.map((_, i) => {
+                const hour = Math.floor(i / 2).toString().padStart(2, '0');
+                const minute = (i % 2 === 0) ? '00' : '30';
+                return `${hour}:${minute}`;
+            });
+
+            const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) : 0);
+            const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
+
+            // 4. Create or update the chart
+            const ctx = document.getElementById('usagePriceChart').getContext('2d');
+            
+            if (usageChart) {
+                usageChart.destroy();
+            }
+
+            usageChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Average Usage (kWh)',
+                            data: avgUsageData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            yAxisID: 'yUsage',
+                            order: 2
+                        },
+                        {
+                            label: 'Average Spot Price (c/kWh)',
+                            data: avgPriceData,
+                            type: 'line',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            fill: false,
+                            yAxisID: 'yPrice',
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        yUsage: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Average Usage (kWh)' },
+                            beginAtZero: true
+                        },
+                        yPrice: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Average Spot Price (c/kWh)' },
+                            grid: { drawOnChartArea: false },
+                        }
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `Average 24-Hour Usage vs. Spot Price (${document.getElementById('startDate').value} to ${document.getElementById('endDate').value})`
+                        },
+                        tooltip: {
+                            position: 'cursor',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        if (context.dataset.yAxisID === 'yPrice') {
+                                            label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
+                                        } else {
+                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kWh`;
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        /**
          * Renders the final results table and summary.
          */
         function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, demandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
+            const showGraphButton = document.getElementById('showGraphButton');
             const period = `(${startDateStr} to ${endDateStr})`;
 
             let tableHTML = `
@@ -637,8 +793,9 @@
 
             resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
             
-            // Enable the CSV download button now that there is data
+            // Enable the action buttons now that there is data
             downloadCsvButton.disabled = false;
+            showGraphButton.disabled = false;
         }
 
     </script>
