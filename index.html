@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Amber Electric Cost Comparator</title>
+    <title>Amber Electric Cost Comparator & Exporter</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -19,14 +19,18 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
         <header class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator</h1>
-            <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare your electricity costs with another supplier.</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator & Exporter</h1>
+            <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare costs or export your usage data.</p>
         </header>
 
         <main>
@@ -115,7 +119,12 @@
             </div>
 
             <div id="resultsSection" class="hidden">
-                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Comparison Results</h2>
+                 <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
+                    <button id="downloadCsvButton" disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                        Download CSV
+                    </button>
+                 </div>
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
                     </div>
             </div>
@@ -167,6 +176,8 @@
                     touRateSection.classList.add('hidden');
                 }
             });
+
+            document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
         });
 
         // --- Main Fetch and Calculation Logic ---
@@ -176,8 +187,10 @@
             const messageEl = document.getElementById('message');
             const loader = document.getElementById('loader');
             const resultsOutput = document.getElementById('results-output');
+            const downloadCsvButton = document.getElementById('downloadCsvButton');
 
             resultsSection.classList.add('hidden');
+            downloadCsvButton.disabled = true;
             resultsOutput.innerHTML = '';
             messageEl.textContent = '';
 
@@ -301,7 +314,7 @@
                         const usageData = JSON.parse(responseText);
                         
                         if (usageData && usageData.length > 0) {
-                            usageData.forEach(item => {
+                             usageData.forEach(item => {
                                 if (item.channelIdentifier !== channelId) return;
                                 const channelData = channelTotals[channelId];
                                 channelData.totalKWh += item.kwh;
@@ -312,6 +325,11 @@
                     }
                     loopStartDate.setDate(loopStartDate.getDate() + 7);
                 }
+
+                // Sort all usage data by date after fetching is complete
+                Object.values(channelTotals).forEach(c => {
+                    c.usageData.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+                });
                 
                 messageEl.textContent = 'Calculating costs...';
                 
@@ -348,6 +366,61 @@
         });
 
         // --- Helper Functions ---
+        
+        /**
+         * Generates and downloads a CSV of spot prices for the general channel.
+         */
+        function generateAndDownloadCSV() {
+            if (!cachedChannelData) {
+                alert("No data available to export. Please fetch data first.");
+                return;
+            }
+
+            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
+
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                alert("No general usage data found to export.");
+                return;
+            }
+
+            let csvContent = "StartTime,EndTime,SpotPrice_cents_per_kWh\n";
+            
+            const options = {
+                timeZone: 'Australia/Sydney',
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: 'numeric',
+                minute: 'numeric',
+                second: 'numeric'
+            };
+
+            generalChannel.usageData.forEach(item => {
+                const startDate = new Date(item.startTime);
+                // Amber usage data from smart meters is typically in 5-minute intervals.
+                const endDate = new Date(startDate.getTime() + 5 * 60 * 1000);
+
+                const startString = startDate.toLocaleString('en-AU', options);
+                const endString = endDate.toLocaleString('en-AU', options);
+                
+                const row = `"${startString}","${endString}",${item.perKwh}\n`;
+                csvContent += row;
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            link.setAttribute("download", `amber_spot_prices_${startDate}_to_${endDate}.csv`);
+            
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         /**
          * Determines the TOU rate for a given timestamp based on a standard structure.
@@ -492,6 +565,7 @@
          */
         function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, demandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
+            const downloadCsvButton = document.getElementById('downloadCsvButton');
             const period = `(${startDateStr} to ${endDateStr})`;
 
             let tableHTML = `
@@ -562,6 +636,9 @@
             savingsSummaryHTML += '</div>';
 
             resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
+            
+            // Enable the CSV download button now that there is data
+            downloadCsvButton.disabled = false;
         }
 
     </script>
