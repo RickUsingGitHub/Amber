@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -136,6 +137,17 @@
                 </div>
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
                  </div>
+                <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mt-6">
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">Daily Usage & Price Graph</h3>
+                    <div class="flex items-center space-x-2 sm:space-x-4 mb-4">
+                        <button id="prevDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt; Prev</button>
+                        <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                        <button id="nextDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">Next &gt;</button>
+                    </div>
+                    <div class="h-[70vh] relative">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -146,6 +158,7 @@
         let lastFetchedStartDate = null;
         let lastFetchedEndDate = null;
         let usageChart = null;
+        let dailyUsageChart = null;
 
         const formatForInput = (date) => {
             const year = date.getFullYear();
@@ -206,9 +219,11 @@
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const showGraphButton = document.getElementById('showGraphButton');
             const graphContainer = document.getElementById('graphContainer');
+            const dailyGraphSection = document.getElementById('dailyGraphSection');
 
             resultsSection.classList.add('hidden');
             graphContainer.classList.add('hidden');
+            dailyGraphSection.classList.add('hidden');
             downloadCsvButton.disabled = true;
             showGraphButton.disabled = true;
             resultsOutput.innerHTML = '';
@@ -589,7 +604,7 @@
 
             if (graphContainer.classList.contains('hidden')) {
                 graphContainer.classList.remove('hidden');
-                showGraphButton.textContent = 'Hide Graph';
+                showGraphButton.textContent = 'Hide Avg Graph';
             } else {
                 graphContainer.classList.add('hidden');
                 showGraphButton.textContent = 'Show 24hr Avg Graph';
@@ -608,14 +623,12 @@
                 return;
             }
 
-            // 1. Initialize data structures
             const intervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
             
             const startDate = new Date(document.getElementById('startDate').value);
             const endDate = new Date(document.getElementById('endDate').value);
             const numDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-            // 2. Iterate and aggregate data
             generalChannel.usageData.forEach(item => {
                 const date = new Date(item.startTime);
                 const intervalIndex = date.getHours() * 2 + Math.floor(date.getMinutes() / 30);
@@ -625,7 +638,6 @@
                 intervals[intervalIndex].count += 1;
             });
 
-            // 3. Calculate final averages for the chart
             const labels = intervals.map((_, i) => {
                 const hour = Math.floor(i / 2).toString().padStart(2, '0');
                 const minute = (i % 2 === 0) ? '00' : '30';
@@ -635,7 +647,6 @@
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
-            // 4. Create or update the chart
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
             
             if (usageChart) {
@@ -713,7 +724,122 @@
                 }
             });
         }
+        
+        /**
+         * Renders an interactive chart of usage and pricing for a single selected day.
+         */
+        function displayDailyGraph(selectedDateStr) {
+            if (!cachedChannelData) return;
 
+            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                console.error("No general usage data for daily graph.");
+                return;
+            }
+
+            const dayData = generalChannel.usageData.filter(item => item.startTime.substring(0, 10) === selectedDateStr);
+
+            const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0 }));
+
+            dayData.forEach(item => {
+                const date = new Date(item.startTime);
+                const intervalIndex = date.getHours() * 12 + Math.floor(date.getMinutes() / 5);
+                
+                if(intervals[intervalIndex]) {
+                    intervals[intervalIndex].kwh += item.kwh;
+                    intervals[intervalIndex].price = (intervals[intervalIndex].price || 0) + item.perKwh;
+                    intervals[intervalIndex].count += 1;
+                }
+            });
+
+            const labels = intervals.map((_, i) => {
+                const hour = Math.floor(i / 12).toString().padStart(2, '0');
+                const minute = ((i % 12) * 5).toString().padStart(2, '0');
+                return `${hour}:${minute}`;
+            });
+
+            const usageData = intervals.map(i => i.kwh);
+            const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
+
+            const ctx = document.getElementById('dailyChart').getContext('2d');
+            if (dailyUsageChart) {
+                dailyUsageChart.destroy();
+            }
+
+            dailyUsageChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Usage (kWh)',
+                            data: usageData,
+                            backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                            borderColor: 'rgba(54, 162, 235, 1)',
+                            yAxisID: 'yUsage',
+                            order: 2,
+                            barPercentage: 1.0,
+                            categoryPercentage: 1.0
+                        },
+                        {
+                            label: 'Spot Price (c/kWh)',
+                            data: priceData,
+                            type: 'line',
+                            borderColor: 'rgba(255, 99, 132, 1)',
+                            backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            fill: false,
+                            yAxisID: 'yPrice',
+                            order: 1,
+                            spanGaps: true,
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { ticks: { autoSkip: true, maxTicksLimit: 24 } },
+                        yUsage: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Usage (kWh)' },
+                            beginAtZero: true
+                        },
+                        yPrice: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Spot Price (c/kWh)' },
+                            grid: { drawOnChartArea: false },
+                        }
+                    },
+                    plugins: {
+                        title: { display: true, text: `Usage vs. Spot Price for ${selectedDateStr}` },
+                        tooltip: {
+                            position: 'cursor',
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        if (context.dataset.yAxisID === 'yPrice') {
+                                            label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
+                                        } else {
+                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kWh`;
+                                        }
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         /**
          * Renders the final results table and summary.
@@ -751,7 +877,6 @@
                 `;
             });
             
-            // --- Add Demand Tariff Row with Date/Time ---
             if (demandTariffInfo && demandTariffInfo.cost > 0) {
                 const maxDemandKw = (demandTariffInfo.maxDemandKwh * 2).toFixed(2);
                 const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
@@ -793,11 +918,62 @@
 
             resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
             
-            // Enable the action buttons now that there is data
             downloadCsvButton.disabled = false;
             showGraphButton.disabled = false;
+
+            const dailyGraphSection = document.getElementById('dailyGraphSection');
+            const daySelector = document.getElementById('daySelector');
+            const prevDayBtn = document.getElementById('prevDayBtn');
+            const nextDayBtn = document.getElementById('nextDayBtn');
+            
+            daySelector.innerHTML = ''; 
+
+            const start = new Date(new Date(startDateStr).getTime() + 10 * 3600 * 1000); // Adjust for timezone issues in date iteration
+            const end = new Date(new Date(endDateStr).getTime() + 10 * 3600 * 1000);
+            let current = new Date(start);
+
+            while (current <= end) {
+                const dateValue = formatForInput(current);
+                const option = document.createElement('option');
+                option.value = dateValue;
+                option.textContent = dateValue;
+                daySelector.appendChild(option);
+                current.setDate(current.getDate() + 1);
+            }
+
+            daySelector.onchange = () => {
+                displayDailyGraph(daySelector.value);
+                updateNavButtons();
+            };
+
+            prevDayBtn.onclick = () => {
+                if (daySelector.selectedIndex > 0) {
+                    daySelector.selectedIndex--;
+                    daySelector.dispatchEvent(new Event('change'));
+                }
+            };
+
+            nextDayBtn.onclick = () => {
+                 if (daySelector.selectedIndex < daySelector.options.length - 1) {
+                    daySelector.selectedIndex++;
+                    daySelector.dispatchEvent(new Event('change'));
+                }
+            };
+            
+            function updateNavButtons() {
+                prevDayBtn.disabled = daySelector.selectedIndex === 0;
+                nextDayBtn.disabled = daySelector.selectedIndex === daySelector.options.length - 1;
+            }
+
+            if (daySelector.options.length > 0) {
+                dailyGraphSection.classList.remove('hidden');
+                daySelector.dispatchEvent(new Event('change'));
+            } else {
+                dailyGraphSection.classList.add('hidden');
+            }
         }
 
     </script>
 </body>
 </html>
+```
