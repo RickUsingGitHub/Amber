@@ -376,7 +376,7 @@
                 
                 calculateOtherSupplierCosts(channelTotals);
                 
-                const demandTariffInfo = calculateDemandTariff(channelTotals);
+                const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
                 
                 let overallAmberCost = 0;
@@ -953,48 +953,6 @@
                                         }
                                     }
                                     return label;
-                                },
-                                afterBody: function(tooltipItems) {
-                                    const context = tooltipItems[0];
-                                    if (!context) return '';
-
-                                    const dataIndex = context.dataIndex;
-                                    const chart = context.chart;
-                                    const customData = chart.customData;
-
-                                    let rawDataItems = [];
-                                    tooltipItems.forEach(item => {
-                                        if (item.dataset.label.includes('Usage')) {
-                                            rawDataItems.push(...customData.general[dataIndex].rawData);
-                                        } else if (item.dataset.label.includes('Feed-in')) {
-                                            rawDataItems.push(...customData.feedIn[dataIndex].rawData);
-                                        }
-                                    });
-                                    
-                                    if (rawDataItems.length === 0) return '';
-
-                                    const uniqueItems = [...new Map(rawDataItems.map(item => [item.nemTime, item])).values()];
-                                    const lines = [''];
-                                    
-                                    uniqueItems.forEach(item => {
-                                        for (const key in item) {
-                                            if (Object.prototype.hasOwnProperty.call(item, key)) {
-                                                let value = item[key];
-                                                if (key === 'tariffInformation' && typeof value === 'object' && value !== null) {
-                                                    lines.push(`${key}:`);
-                                                    for (const subKey in value) {
-                                                        lines.push(`  ${subKey}: ${value[subKey]}`);
-                                                    }
-                                                } else {
-                                                    lines.push(`${key}: ${value}`);
-                                                }
-                                            }
-                                        }
-                                        lines.push('---');
-                                    });
-                                    
-                                    if (lines[lines.length - 1] === '---') lines.pop();
-                                    return lines;
                                 }
                             }
                         }
