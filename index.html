@@ -277,7 +277,7 @@
                         overallOtherCost += c.totalOtherCost;
                     });
                     
-                    overallAmberCost += demandTariffCost;
+                    overallAmberCost += demandTariffInfo.cost;
 
                     messageSection.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
@@ -354,7 +354,6 @@
                              usageData.forEach(item => {
                                 if (item.channelIdentifier !== channelId) return;
                                 const channelData = channelTotals[channelId];
-                                // FIX: Ensure values are parsed as numbers during accumulation
                                 const kwh = parseFloat(item.kwh) || 0;
                                 const perKwh = parseFloat(item.perKwh) || 0;
                                 channelData.totalKWh += kwh;
@@ -385,17 +384,17 @@
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
 
-                Object.values(cachedChannelData).forEach(c => {
+                Object.values(channelTotals).forEach(c => {
                     overallAmberCost += c.totalAmberCost;
                     overallOtherCost += c.totalOtherCost;
                 });
                 
-                overallAmberCost += demandTariffCost;
+                overallAmberCost += demandTariffInfo.cost;
 
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -646,23 +645,16 @@
                 });
             }
 
-            // Create 49 labels from 00:00 to 24:00 so bars are drawn between ticks
             const labels = [];
-            for (let i = 0; i <= 48; i++) {
+            for (let i = 0; i < 48; i++) {
                 const hour = Math.floor(i / 2);
                 const minute = (i % 2 === 0) ? '00' : '30';
-                 if (hour === 24) {
-                    labels.push('24:00');
-                } else {
-                    labels.push(`${hour.toString().padStart(2, '0')}:${minute}`);
-                }
+                labels.push(`${hour.toString().padStart(2, '0')}:${minute}`);
             }
-
+            
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0); // Made negative and scaled
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
-            // Add a null to the end of the price data so the line axis extends to 24:00
-            const avgPriceDataForChart = [...avgPriceData, null];
 
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
             
@@ -683,7 +675,7 @@
                 },
                 {
                     label: 'Average Spot Price (c/kWh)',
-                    data: avgPriceDataForChart,
+                    data: avgPriceData,
                     type: 'line',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
@@ -742,14 +734,21 @@
                             stacked: true,
                             ticks: {
                                 callback: function(value, index, ticks) {
-                                    if (index === ticks.length - 1) return '';
                                     const label = this.getLabelForValue(value);
-                                    if (label.endsWith(':00')) return label;
+                                    if (index % 4 === 0) return label; // Every 2 hours
                                     return '';
                                 },
                                 autoSkip: false,
                                 maxRotation: 45,
                                 minRotation: 45
+                            },
+                            grid: {
+                                color: function(context) {
+                                    if (context.index % 2 === 0) { // Darker for hourly
+                                        return 'rgba(0, 0, 0, 0.2)';
+                                    }
+                                    return 'rgba(0, 0, 0, 0.05)'; // Lighter for 30-min
+                                },
                             }
                         },
                         yUsage: {
@@ -757,7 +756,12 @@
                             display: true,
                             position: 'left',
                             title: { display: true, text: 'Average Power (kW)' },
-                            stacked: true
+                            stacked: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return Math.round(value / 5) * 5;
+                                }
+                            }
                         },
                         yPrice: priceAxisOptions
                     },
@@ -929,7 +933,12 @@
                             display: true,
                             position: 'left',
                             title: { display: true, text: 'Power (kW)' },
-                            stacked: true
+                            stacked: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return Math.round(value / 5) * 5;
+                                }
+                            }
                         },
                         yPrice: priceAxisOptions
                     },
