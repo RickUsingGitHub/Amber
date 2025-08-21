@@ -354,8 +354,11 @@
                              usageData.forEach(item => {
                                 if (item.channelIdentifier !== channelId) return;
                                 const channelData = channelTotals[channelId];
-                                channelData.totalKWh += item.kwh;
-                                channelData.totalAmberCost += (item.perKwh / 100) * item.kwh;
+                                // FIX: Ensure values are parsed as numbers during accumulation
+                                const kwh = parseFloat(item.kwh) || 0;
+                                const perKwh = parseFloat(item.perKwh) || 0;
+                                channelData.totalKWh += kwh;
+                                channelData.totalAmberCost += (perKwh / 100) * kwh;
                                 channelData.usageData.push(item);
                             });
                         }
@@ -374,7 +377,7 @@
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
-                calculateOtherSupplierCosts(channelTotals);
+                calculateOtherSupplierCosts(cachedChannelData);
                 
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
@@ -382,7 +385,7 @@
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
 
-                Object.values(channelTotals).forEach(c => {
+                Object.values(cachedChannelData).forEach(c => {
                     overallAmberCost += c.totalAmberCost;
                     overallOtherCost += c.totalOtherCost;
                 });
@@ -392,7 +395,7 @@
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -492,13 +495,13 @@
                     let channelOtherCost = 0;
                     if (c.type === 'feedIn') {
                         channelOtherCost = c.usageData.reduce((total, item) => {
-                            return total - ((item.kwh || 0) * feedInRate / 100);
+                            return total - ((parseFloat(item.kwh) || 0) * feedInRate / 100);
                         }, 0);
                     } else {
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
-                            return total + ((item.kwh || 0) * rateForInterval / 100);
+                            return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
                         }, 0);
                     }
                     c.totalOtherCost = channelOtherCost;
@@ -543,7 +546,7 @@
                 if (!thirtyMinChunks[blockStartTime]) {
                     thirtyMinChunks[blockStartTime] = 0;
                 }
-                thirtyMinChunks[blockStartTime] += item.kwh;
+                thirtyMinChunks[blockStartTime] += (parseFloat(item.kwh) || 0);
             });
 
             // Find the 30-min chunk with the highest usage
@@ -623,8 +626,8 @@
                 const intervalIndex = hours * 2 + Math.floor(minutes / 30);
                 
                 if (intervals[intervalIndex]) {
-                    intervals[intervalIndex].totalKwh += item.kwh;
-                    intervals[intervalIndex].totalCents += item.perKwh;
+                    intervals[intervalIndex].totalKwh += (parseFloat(item.kwh) || 0);
+                    intervals[intervalIndex].totalCents += (parseFloat(item.perKwh) || 0);
                     intervals[intervalIndex].count += 1;
                 }
             });
@@ -638,7 +641,7 @@
                     const intervalIndex = hours * 2 + Math.floor(minutes / 30);
                     
                     if (feedInIntervals[intervalIndex]) {
-                        feedInIntervals[intervalIndex].totalKwh += item.kwh;
+                        feedInIntervals[intervalIndex].totalKwh += (parseFloat(item.kwh) || 0);
                     }
                 });
             }
@@ -655,8 +658,8 @@
                 }
             }
 
-            const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) : 0);
-            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) : 0); // Made negative
+            const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
+            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0); // Made negative and scaled
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
             // Add a null to the end of the price data so the line axis extends to 24:00
             const avgPriceDataForChart = [...avgPriceData, null];
@@ -669,7 +672,7 @@
             
             const chartDatasets = [
                 {
-                    label: 'Average Usage (kWh)',
+                    label: 'Average Usage (kW)',
                     data: avgUsageData,
                     backgroundColor: 'rgba(54, 162, 235, 0.6)',
                     borderColor: 'rgba(54, 162, 235, 1)',
@@ -692,7 +695,7 @@
 
             if (feedInChannel) {
                 chartDatasets.splice(1, 0, {
-                    label: 'Average Feed-in (kWh)',
+                    label: 'Average Feed-in (kW)',
                     data: avgFeedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -753,7 +756,7 @@
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: 'Average Usage (kWh)' },
+                            title: { display: true, text: 'Average Power (kW)' },
                             stacked: true
                         },
                         yPrice: priceAxisOptions
@@ -773,7 +776,7 @@
                                         if (context.dataset.yAxisID === 'yPrice') {
                                             label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
                                         } else {
-                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kWh`;
+                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kW`;
                                         }
                                     }
                                     return label;
@@ -801,7 +804,7 @@
 
             const dayData = generalChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
             
-            const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0, rawData: [] }));
+            const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0 }));
 
             dayData.forEach(item => {
                 const nemTimeStr = item.nemTime;
@@ -810,14 +813,13 @@
                 const intervalIndex = hours * 12 + Math.floor(minutes / 5);
                 
                 if(intervals[intervalIndex]) {
-                    intervals[intervalIndex].kwh += item.kwh;
-                    intervals[intervalIndex].price = (intervals[intervalIndex].price || 0) + item.perKwh;
+                    intervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
+                    intervals[intervalIndex].price = (intervals[intervalIndex].price || 0) + (parseFloat(item.perKwh) || 0);
                     intervals[intervalIndex].count += 1;
-                    intervals[intervalIndex].rawData.push(item);
                 }
             });
 
-            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0, rawData: [] }));
+            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
             if (feedInChannel && feedInChannel.usageData) {
                 const dayDataFeedIn = feedInChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
                 dayDataFeedIn.forEach(item => {
@@ -827,8 +829,7 @@
                     const intervalIndex = hours * 12 + Math.floor(minutes / 5);
 
                     if (feedInIntervals[intervalIndex]) {
-                        feedInIntervals[intervalIndex].kwh += item.kwh;
-                        feedInIntervals[intervalIndex].rawData.push(item);
+                        feedInIntervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
                     }
                 });
             }
@@ -839,8 +840,8 @@
                 return `${hour}:${minute}`;
             });
 
-            const usageData = intervals.map(i => i.kwh);
-            const feedInData = feedInIntervals.map(i => -i.kwh); // Made negative
+            const usageData = intervals.map(i => i.kwh * 12);
+            const feedInData = feedInIntervals.map(i => -i.kwh * 12); // Made negative and scaled
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
 
             const ctx = document.getElementById('dailyChart').getContext('2d');
@@ -850,7 +851,7 @@
             
             const chartDatasets = [
                 {
-                    label: 'Usage (kWh)',
+                    label: 'Usage (kW)',
                     data: usageData,
                     backgroundColor: 'rgba(54, 162, 235, 0.6)',
                     borderColor: 'rgba(54, 162, 235, 1)',
@@ -876,7 +877,7 @@
 
             if (feedInChannel) {
                 chartDatasets.splice(1, 0, {
-                    label: 'Feed-in (kWh)',
+                    label: 'Feed-in (kW)',
                     data: feedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -886,11 +887,6 @@
                     categoryPercentage: 1.0
                 });
             }
-
-            const customData = {
-                general: intervals,
-                feedIn: feedInIntervals
-            };
             
             const usageMin = Math.min(...usageData, ...feedInData);
             const usageMax = Math.max(...usageData, ...feedInData);
@@ -932,7 +928,7 @@
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: 'Usage (kWh)' },
+                            title: { display: true, text: 'Power (kW)' },
                             stacked: true
                         },
                         yPrice: priceAxisOptions
@@ -949,7 +945,7 @@
                                         if (context.dataset.yAxisID === 'yPrice') {
                                             label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
                                         } else {
-                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kWh`;
+                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kW`;
                                         }
                                     }
                                     return label;
@@ -959,8 +955,6 @@
                     }
                 }
             });
-            // Attach custom data to the chart instance so the tooltip can access it
-            dailyUsageChart.customData = customData;
         }
 
         /**
