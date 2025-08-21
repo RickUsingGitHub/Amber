@@ -671,7 +671,9 @@
                     backgroundColor: 'rgba(54, 162, 235, 0.6)',
                     borderColor: 'rgba(54, 162, 235, 1)',
                     yAxisID: 'yUsage',
-                    order: 2
+                    order: 2,
+                    barPercentage: 1.0,
+                    categoryPercentage: 1.0
                 },
                 {
                     label: 'Average Spot Price (c/kWh)',
@@ -689,10 +691,12 @@
                 chartDatasets.splice(1, 0, {
                     label: 'Average Feed-in (kWh)',
                     data: avgFeedInData,
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
                     yAxisID: 'yUsage',
-                    order: 2
+                    order: 2,
+                    barPercentage: 1.0,
+                    categoryPercentage: 1.0
                 });
             }
 
@@ -707,11 +711,15 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     scales: {
+                        x: {
+                            stacked: true,
+                        },
                         yUsage: {
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: 'Average Usage (kWh)' }
+                            title: { display: true, text: 'Average Usage (kWh)' },
+                            stacked: true
                         },
                         yPrice: {
                             type: 'linear',
@@ -834,8 +842,8 @@
                 chartDatasets.splice(1, 0, {
                     label: 'Feed-in (kWh)',
                     data: feedInData,
-                    backgroundColor: 'rgba(75, 192, 192, 0.6)',
-                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
+                    borderColor: 'rgba(40, 167, 69, 1)',
                     yAxisID: 'yUsage',
                     order: 2,
                     barPercentage: 1.0,
@@ -854,12 +862,16 @@
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { ticks: { autoSkip: true, maxTicksLimit: 24 } },
+                        x: { 
+                            stacked: true,
+                            ticks: { autoSkip: true, maxTicksLimit: 24 } 
+                        },
                         yUsage: {
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            title: { display: true, text: 'Usage (kWh)' }
+                            title: { display: true, text: 'Usage (kWh)' },
+                            stacked: true
                         },
                         yPrice: {
                             type: 'linear',
