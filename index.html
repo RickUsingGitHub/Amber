@@ -374,9 +374,9 @@
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
-                calculateOtherSupplierCosts(cachedChannelData);
+                calculateOtherSupplierCosts(channelTotals);
                 
-                const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                const demandTariffInfo = calculateDemandTariff(channelTotals);
                 const demandTariffCost = demandTariffInfo.cost;
                 
                 let overallAmberCost = 0;
@@ -470,8 +470,8 @@
             const rateType = document.querySelector('input[name="rateType"]:checked').value;
 
             if (rateType === 'flat') {
-                const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value);
-                const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value);
+                const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
+                const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
                 
                 Object.values(channelTotals).forEach(c => {
                     if (c.type === 'feedIn') {
@@ -482,23 +482,23 @@
                 });
             } else { // 'tou'
                 const touRates = {
-                    peak: parseFloat(document.getElementById('tou_peak_rate').value),
-                    shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value),
-                    offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value)
+                    peak: parseFloat(document.getElementById('tou_peak_rate').value) || 0,
+                    shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value) || 0,
+                    offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value) || 0
                 };
-                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value);
+                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
                     if (c.type === 'feedIn') {
                         channelOtherCost = c.usageData.reduce((total, item) => {
-                            return total - (item.kwh * feedInRate / 100);
+                            return total - ((item.kwh || 0) * feedInRate / 100);
                         }, 0);
                     } else {
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
-                            return total + (item.kwh * rateForInterval / 100);
+                            return total + ((item.kwh || 0) * rateForInterval / 100);
                         }, 0);
                     }
                     c.totalOtherCost = channelOtherCost;
@@ -703,6 +703,27 @@
                 });
             }
 
+            const usageMin = Math.min(...avgUsageData, ...avgFeedInData);
+            const usageMax = Math.max(...avgUsageData, ...avgFeedInData);
+            const priceMax = Math.max(...avgPriceData.filter(p => p !== null));
+
+            let priceAxisOptions = {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: { display: true, text: 'Average Spot Price (c/kWh)' },
+                grid: { drawOnChartArea: false },
+            };
+
+            if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
+                const ratio = -usageMin / (usageMax - usageMin);
+                const newPriceMin = (ratio * priceMax) / (ratio - 1);
+                priceAxisOptions.min = newPriceMin;
+                priceAxisOptions.max = priceMax;
+            } else {
+                priceAxisOptions.beginAtZero = true;
+            }
+
             usageChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -718,15 +739,9 @@
                             stacked: true,
                             ticks: {
                                 callback: function(value, index, ticks) {
-                                    // Hide the last tick label (24:00)
-                                    if (index === ticks.length - 1) {
-                                        return '';
-                                    }
+                                    if (index === ticks.length - 1) return '';
                                     const label = this.getLabelForValue(value);
-                                    // Only show labels for full hours to prevent clutter
-                                    if (label.endsWith(':00')) {
-                                       return label;
-                                    }
+                                    if (label.endsWith(':00')) return label;
                                     return '';
                                 },
                                 autoSkip: false,
@@ -741,13 +756,7 @@
                             title: { display: true, text: 'Average Usage (kWh)' },
                             stacked: true
                         },
-                        yPrice: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: { display: true, text: 'Average Spot Price (c/kWh)' },
-                            grid: { drawOnChartArea: false },
-                        }
+                        yPrice: priceAxisOptions
                     },
                     plugins: {
                         title: {
@@ -882,6 +891,27 @@
                 general: intervals,
                 feedIn: feedInIntervals
             };
+            
+            const usageMin = Math.min(...usageData, ...feedInData);
+            const usageMax = Math.max(...usageData, ...feedInData);
+            const priceMax = Math.max(...priceData.filter(p => p !== null));
+
+            let priceAxisOptions = {
+                type: 'linear',
+                display: true,
+                position: 'right',
+                title: { display: true, text: 'Spot Price (c/kWh)' },
+                grid: { drawOnChartArea: false },
+            };
+
+            if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
+                const ratio = -usageMin / (usageMax - usageMin);
+                const newPriceMin = (ratio * priceMax) / (ratio - 1);
+                priceAxisOptions.min = newPriceMin;
+                priceAxisOptions.max = priceMax;
+            } else {
+                priceAxisOptions.beginAtZero = true;
+            }
 
             dailyUsageChart = new Chart(ctx, {
                 type: 'bar',
@@ -905,13 +935,7 @@
                             title: { display: true, text: 'Usage (kWh)' },
                             stacked: true
                         },
-                        yPrice: {
-                            type: 'linear',
-                            display: true,
-                            position: 'right',
-                            title: { display: true, text: 'Spot Price (c/kWh)' },
-                            grid: { drawOnChartArea: false },
-                        }
+                        yPrice: priceAxisOptions
                     },
                     plugins: {
                         title: { display: true, text: `Usage vs. Spot Price for ${selectedDateStr}` },
@@ -1006,7 +1030,6 @@
             `;
 
             Object.values(channelTotals).forEach(c => {
-                // FIX: Add default values to prevent toFixed on undefined error
                 const totalKWhText = (c.totalKWh || 0).toFixed(2);
                 const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
                 const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
