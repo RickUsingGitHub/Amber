@@ -246,8 +246,11 @@
                 messageEl.textContent = 'Please select a start and end date.';
                 return;
             }
-            const overallStartDate = new Date(startDateValue);
-            const overallEndDate = new Date(endDateValue);
+            // Parse date strings as local time by appending T00:00:00
+            const overallStartDate = new Date(startDateValue + 'T00:00:00');
+            const overallEndDate = new Date(endDateValue + 'T00:00:00');
+            overallEndDate.setHours(23, 59, 59, 999); // Ensure the entire end day is included
+
             if (overallEndDate < overallStartDate) {
                 messageSection.classList.remove('hidden');
                 messageEl.textContent = 'End date cannot be before the start date.';
@@ -362,7 +365,7 @@
 
                 // Sort all usage data by date after fetching is complete
                 Object.values(channelTotals).forEach(c => {
-                    c.usageData.sort((a, b) => new Date(a.startTime) - new Date(b.startTime));
+                    c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
                 });
                 
                 messageEl.textContent = 'Calculating costs...';
@@ -371,9 +374,9 @@
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
-                calculateOtherSupplierCosts(channelTotals);
+                calculateOtherSupplierCosts(cachedChannelData);
                 
-                const demandTariffInfo = calculateDemandTariff(channelTotals);
+                const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
                 
                 let overallAmberCost = 0;
@@ -389,7 +392,7 @@
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(channelTotals, overallAmberCost, overallOtherCost, formatForInput(overallStartDate), formatForInput(overallEndDate), demandTariffInfo);
+                displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -417,27 +420,10 @@
                 return;
             }
 
-            let csvContent = "StartTime,EndTime,SpotPrice_cents_per_kWh\n";
+            let csvContent = "nemTime,SpotPrice_cents_per_kWh\n";
             
-            const options = {
-                timeZone: 'Australia/Sydney',
-                year: 'numeric',
-                month: 'numeric',
-                day: 'numeric',
-                hour: 'numeric',
-                minute: 'numeric',
-                second: 'numeric'
-            };
-
             generalChannel.usageData.forEach(item => {
-                const startDate = new Date(item.startTime);
-                // Amber usage data from smart meters is typically in 5-minute intervals.
-                const endDate = new Date(startDate.getTime() + 5 * 60 * 1000);
-
-                const startString = startDate.toLocaleString('en-AU', options);
-                const endString = endDate.toLocaleString('en-AU', options);
-                
-                const row = `"${startString}","${endString}",${item.perKwh}\n`;
+                const row = `"${item.nemTime}",${item.perKwh}\n`;
                 csvContent += row;
             });
 
@@ -510,7 +496,7 @@
                         }, 0);
                     } else {
                         channelOtherCost = c.usageData.reduce((total, item) => {
-                            const itemDate = new Date(item.startTime);
+                            const itemDate = new Date(item.nemTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
                             return total + (item.kwh * rateForInterval / 100);
                         }, 0);
@@ -524,7 +510,7 @@
          * Calculates the Demand Tariff based on peak usage in demand windows.
          */
         function calculateDemandTariff(channelTotals) {
-            const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
+            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 console.log("No general channel data for demand tariff calculation.");
@@ -543,7 +529,7 @@
             // Group 5-min intervals into 30-min chunks and sum their kWh
             const thirtyMinChunks = {};
             demandWindowUsage.forEach(item => {
-                const itemDate = new Date(item.startTime);
+                const itemDate = new Date(item.nemTime);
                 const minutes = itemDate.getMinutes();
                 itemDate.setSeconds(0, 0);
 
@@ -577,7 +563,7 @@
 
             // Find the unique days that had a demand window
             const demandDaysSet = new Set(
-                demandWindowUsage.map(item => item.startTime.substring(0, 10))
+                demandWindowUsage.map(item => item.nemTime.substring(0, 10))
             );
             const numberOfDemandDays = demandDaysSet.size;
 
@@ -631,32 +617,49 @@
             const numDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
             generalChannel.usageData.forEach(item => {
-                const date = new Date(item.startTime);
-                const intervalIndex = date.getHours() * 2 + Math.floor(date.getMinutes() / 30);
+                const nemTimeStr = item.nemTime;
+                const hours = parseInt(nemTimeStr.substring(11, 13));
+                const minutes = parseInt(nemTimeStr.substring(14, 16));
+                const intervalIndex = hours * 2 + Math.floor(minutes / 30);
                 
-                intervals[intervalIndex].totalKwh += item.kwh;
-                intervals[intervalIndex].totalCents += item.perKwh;
-                intervals[intervalIndex].count += 1;
+                if (intervals[intervalIndex]) {
+                    intervals[intervalIndex].totalKwh += item.kwh;
+                    intervals[intervalIndex].totalCents += item.perKwh;
+                    intervals[intervalIndex].count += 1;
+                }
             });
 
             const feedInIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0 }));
             if (feedInChannel && feedInChannel.usageData) {
                 feedInChannel.usageData.forEach(item => {
-                    const date = new Date(item.startTime);
-                    const intervalIndex = date.getHours() * 2 + Math.floor(date.getMinutes() / 30);
-                    feedInIntervals[intervalIndex].totalKwh += item.kwh;
+                    const nemTimeStr = item.nemTime;
+                    const hours = parseInt(nemTimeStr.substring(11, 13));
+                    const minutes = parseInt(nemTimeStr.substring(14, 16));
+                    const intervalIndex = hours * 2 + Math.floor(minutes / 30);
+                    
+                    if (feedInIntervals[intervalIndex]) {
+                        feedInIntervals[intervalIndex].totalKwh += item.kwh;
+                    }
                 });
             }
 
-            const labels = intervals.map((_, i) => {
-                const hour = Math.floor(i / 2).toString().padStart(2, '0');
+            // Create 49 labels from 00:00 to 24:00 so bars are drawn between ticks
+            const labels = [];
+            for (let i = 0; i <= 48; i++) {
+                const hour = Math.floor(i / 2);
                 const minute = (i % 2 === 0) ? '00' : '30';
-                return `${hour}:${minute}`;
-            });
+                 if (hour === 24) {
+                    labels.push('24:00');
+                } else {
+                    labels.push(`${hour.toString().padStart(2, '0')}:${minute}`);
+                }
+            }
 
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) : 0);
             const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) : 0); // Made negative
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
+            // Add a null to the end of the price data so the line axis extends to 24:00
+            const avgPriceDataForChart = [...avgPriceData, null];
 
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
             
@@ -677,7 +680,7 @@
                 },
                 {
                     label: 'Average Spot Price (c/kWh)',
-                    data: avgPriceData,
+                    data: avgPriceDataForChart,
                     type: 'line',
                     borderColor: 'rgba(255, 99, 132, 1)',
                     backgroundColor: 'rgba(255, 99, 132, 0.2)',
@@ -713,6 +716,23 @@
                     scales: {
                         x: {
                             stacked: true,
+                            ticks: {
+                                callback: function(value, index, ticks) {
+                                    // Hide the last tick label (24:00)
+                                    if (index === ticks.length - 1) {
+                                        return '';
+                                    }
+                                    const label = this.getLabelForValue(value);
+                                    // Only show labels for full hours to prevent clutter
+                                    if (label.endsWith(':00')) {
+                                       return label;
+                                    }
+                                    return '';
+                                },
+                                autoSkip: false,
+                                maxRotation: 45,
+                                minRotation: 45
+                            }
                         },
                         yUsage: {
                             type: 'linear',
@@ -770,29 +790,36 @@
                 return;
             }
 
-            const dayData = generalChannel.usageData.filter(item => item.startTime.substring(0, 10) === selectedDateStr);
-
-            const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0 }));
+            const dayData = generalChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
+            
+            const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0, rawData: [] }));
 
             dayData.forEach(item => {
-                const date = new Date(item.startTime);
-                const intervalIndex = date.getHours() * 12 + Math.floor(date.getMinutes() / 5);
+                const nemTimeStr = item.nemTime;
+                const hours = parseInt(nemTimeStr.substring(11, 13));
+                const minutes = parseInt(nemTimeStr.substring(14, 16));
+                const intervalIndex = hours * 12 + Math.floor(minutes / 5);
                 
                 if(intervals[intervalIndex]) {
                     intervals[intervalIndex].kwh += item.kwh;
                     intervals[intervalIndex].price = (intervals[intervalIndex].price || 0) + item.perKwh;
                     intervals[intervalIndex].count += 1;
+                    intervals[intervalIndex].rawData.push(item);
                 }
             });
 
-            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
+            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0, rawData: [] }));
             if (feedInChannel && feedInChannel.usageData) {
-                const dayDataFeedIn = feedInChannel.usageData.filter(item => item.startTime.substring(0, 10) === selectedDateStr);
+                const dayDataFeedIn = feedInChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
                 dayDataFeedIn.forEach(item => {
-                    const date = new Date(item.startTime);
-                    const intervalIndex = date.getHours() * 12 + Math.floor(date.getMinutes() / 5);
+                    const nemTimeStr = item.nemTime;
+                    const hours = parseInt(nemTimeStr.substring(11, 13));
+                    const minutes = parseInt(nemTimeStr.substring(14, 16));
+                    const intervalIndex = hours * 12 + Math.floor(minutes / 5);
+
                     if (feedInIntervals[intervalIndex]) {
                         feedInIntervals[intervalIndex].kwh += item.kwh;
+                        feedInIntervals[intervalIndex].rawData.push(item);
                     }
                 });
             }
@@ -851,6 +878,11 @@
                 });
             }
 
+            const customData = {
+                general: intervals,
+                feedIn: feedInIntervals
+            };
+
             dailyUsageChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -897,12 +929,56 @@
                                         }
                                     }
                                     return label;
+                                },
+                                afterBody: function(tooltipItems) {
+                                    const context = tooltipItems[0];
+                                    if (!context) return '';
+
+                                    const dataIndex = context.dataIndex;
+                                    const chart = context.chart;
+                                    const customData = chart.customData;
+
+                                    let rawDataItems = [];
+                                    tooltipItems.forEach(item => {
+                                        if (item.dataset.label.includes('Usage')) {
+                                            rawDataItems.push(...customData.general[dataIndex].rawData);
+                                        } else if (item.dataset.label.includes('Feed-in')) {
+                                            rawDataItems.push(...customData.feedIn[dataIndex].rawData);
+                                        }
+                                    });
+                                    
+                                    if (rawDataItems.length === 0) return '';
+
+                                    const uniqueItems = [...new Map(rawDataItems.map(item => [item.nemTime, item])).values()];
+                                    const lines = [''];
+                                    
+                                    uniqueItems.forEach(item => {
+                                        for (const key in item) {
+                                            if (Object.prototype.hasOwnProperty.call(item, key)) {
+                                                let value = item[key];
+                                                if (key === 'tariffInformation' && typeof value === 'object' && value !== null) {
+                                                    lines.push(`${key}:`);
+                                                    for (const subKey in value) {
+                                                        lines.push(`  ${subKey}: ${value[subKey]}`);
+                                                    }
+                                                } else {
+                                                    lines.push(`${key}: ${value}`);
+                                                }
+                                            }
+                                        }
+                                        lines.push('---');
+                                    });
+                                    
+                                    if (lines[lines.length - 1] === '---') lines.pop();
+                                    return lines;
                                 }
                             }
                         }
                     }
                 }
             });
+            // Attach custom data to the chart instance so the tooltip can access it
+            dailyUsageChart.customData = customData;
         }
 
         /**
@@ -930,19 +1006,23 @@
             `;
 
             Object.values(channelTotals).forEach(c => {
+                // FIX: Add default values to prevent toFixed on undefined error
+                const totalKWhText = (c.totalKWh || 0).toFixed(2);
+                const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
+                const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
                 tableHTML += `
                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.totalKWh.toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalAmberCost.toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${c.totalOtherCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${totalKWhText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalAmberCostText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalOtherCostText}</td>
                     </tr>
                 `;
             });
             
             if (demandTariffInfo && demandTariffInfo.cost > 0) {
-                const maxDemandKw = (demandTariffInfo.maxDemandKwh * 2).toFixed(2);
+                const maxDemandKw = ((demandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
                 const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
                 
                 tableHTML += `
@@ -953,7 +1033,7 @@
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
                             <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${demandTariffInfo.cost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(demandTariffInfo.cost || 0).toFixed(2)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A?</td>
                     </tr>
                 `;
@@ -962,14 +1042,14 @@
              tableHTML += `
                     <tr class="bg-gray-50 font-bold">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallAmberCost.toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${overallOtherCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallAmberCost || 0).toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallOtherCost || 0).toFixed(2)}</td>
                     </tr>
                 </tbody>
                 </table>
             `;
             
-            const savings = overallOtherCost - overallAmberCost;
+            const savings = (overallOtherCost || 0) - (overallAmberCost || 0);
             let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
             if (savings > 0) {
                 savingsSummaryHTML += 'bg-green-100">';
@@ -992,8 +1072,9 @@
             
             daySelector.innerHTML = ''; 
 
-            const start = new Date(new Date(startDateStr).getTime() + 10 * 3600 * 1000); // Adjust for timezone issues in date iteration
-            const end = new Date(new Date(endDateStr).getTime() + 10 * 3600 * 1000);
+            // Parse date strings as local time by appending T00:00:00
+            const start = new Date(startDateStr + 'T00:00:00');
+            const end = new Date(endDateStr + 'T00:00:00');
             let current = new Date(start);
 
             while (current <= end) {
