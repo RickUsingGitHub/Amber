@@ -372,11 +372,11 @@
                 
                 messageEl.textContent = 'Calculating costs...';
                 
+                calculateOtherSupplierCosts(channelTotals);
+
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
-                
-                calculateOtherSupplierCosts(cachedChannelData);
                 
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
@@ -384,7 +384,7 @@
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
 
-                Object.values(channelTotals).forEach(c => {
+                Object.values(cachedChannelData).forEach(c => {
                     overallAmberCost += c.totalAmberCost;
                     overallOtherCost += c.totalOtherCost;
                 });
@@ -394,7 +394,7 @@
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -713,10 +713,8 @@
             if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
                 const ratio = -usageMin / (usageMax - usageMin);
                 const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = newPriceMin;
-                priceAxisOptions.max = priceMax;
-            } else {
-                priceAxisOptions.beginAtZero = true;
+                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
+                priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
             }
 
             usageChart = new Chart(ctx, {
@@ -736,6 +734,7 @@
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
                                     if (index % 4 === 0) return label; // Every 2 hours
+                                    if (index === ticks.length - 1) return '24:00';
                                     return '';
                                 },
                                 autoSkip: false,
@@ -756,12 +755,7 @@
                             display: true,
                             position: 'left',
                             title: { display: true, text: 'Average Power (kW)' },
-                            stacked: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return Math.round(value / 5) * 5;
-                                }
-                            }
+                            stacked: true
                         },
                         yPrice: priceAxisOptions
                     },
@@ -907,10 +901,8 @@
             if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
                 const ratio = -usageMin / (usageMax - usageMin);
                 const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = newPriceMin;
-                priceAxisOptions.max = priceMax;
-            } else {
-                priceAxisOptions.beginAtZero = true;
+                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
+                priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
             }
 
             dailyUsageChart = new Chart(ctx, {
@@ -926,7 +918,27 @@
                     scales: {
                         x: { 
                             stacked: true,
-                            ticks: { autoSkip: true, maxTicksLimit: 24 } 
+                            ticks: { 
+                                callback: function(value, index, ticks) {
+                                    const label = this.getLabelForValue(value);
+                                    if (index % 24 === 0) return label; // Every 2 hours
+                                    return '';
+                                },
+                                autoSkip: false,
+                                maxRotation: 45,
+                                minRotation: 45
+                            },
+                            grid: {
+                                color: function(context) {
+                                    if (context.index % 12 === 0) { // Darker for hourly
+                                        return 'rgba(0, 0, 0, 0.2)';
+                                    }
+                                     if (context.index % 6 === 0) { // Lighter for 30-min
+                                        return 'rgba(0, 0, 0, 0.05)';
+                                    }
+                                    return 'transparent';
+                                },
+                            }
                         },
                         yUsage: {
                             type: 'linear',
@@ -934,11 +946,6 @@
                             position: 'left',
                             title: { display: true, text: 'Power (kW)' },
                             stacked: true,
-                            ticks: {
-                                callback: function(value) {
-                                    return Math.round(value / 5) * 5;
-                                }
-                            }
                         },
                         yPrice: priceAxisOptions
                     },
