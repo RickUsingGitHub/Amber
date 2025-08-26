@@ -35,6 +35,7 @@ No installation needed — just open in your browser.
 
 ## 📂 File Structure
 ├── index.html # Main app (self-contained)
+
 ├── README.md # This file
 
 ---
