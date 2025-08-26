@@ -74,7 +74,7 @@
                         <div id="touRateSection" class="hidden">
                             <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
                             <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
                                 <div class="bg-red-50 p-3 rounded-lg border border-red-200">
                                     <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
                                     <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
@@ -89,6 +89,11 @@
                                     <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
                                     <p class="text-xs text-gray-500">10pm - 7am every day</p>
                                     <input type="number" id="tou_offpeak_rate" value="25" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                    <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load</label>
+                                    <p class="text-xs text-gray-500">e.g., Hot water</p>
+                                    <input type="number" id="tou_controlled_load_rate" value="20" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                              <div>
@@ -165,6 +170,27 @@
             const day = date.getDate().toString().padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
+
+        // Convert a Date object to a local ISO-like string with timezone offset (no milliseconds)
+        // e.g. "2025-08-02T23:55:00+10:00"
+        function toLocalIsoWithOffset(d) {
+            function pad(n) { return String(n).padStart(2, '0'); }
+            const year = d.getFullYear();
+            const month = pad(d.getMonth() + 1);
+            const day = pad(d.getDate());
+            const hours = pad(d.getHours());
+            const minutes = pad(d.getMinutes());
+            const seconds = pad(d.getSeconds());
+
+            // timezone offset in minutes, positive if local time is behind UTC (so we invert sign)
+            const offsetMinutes = -d.getTimezoneOffset();
+            const sign = offsetMinutes >= 0 ? '+' : '-';
+            const absOffset = Math.abs(offsetMinutes);
+            const offsetHours = pad(Math.floor(absOffset / 60));
+            const offsetMins = pad(absOffset % 60);
+
+            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
+        }
 
         // --- Event Listeners and Initial Setup ---
         window.addEventListener('DOMContentLoaded', () => {
@@ -370,6 +396,67 @@
                     c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
                 });
                 
+                // --- START: FAKE CONTROLLED LOAD DATA FOR TESTING ---
+                // To disable, set to false.
+                const addFakeControlledLoad = false;
+                if (addFakeControlledLoad) {
+                    console.log("Injecting FAKE controlled load data for testing...");
+                    let controlledLoadChannel = Object.values(channelTotals).find(c => c.type === 'controlledLoad');
+                    if (!controlledLoadChannel) {
+                        const controlledLoadId = 'B3'; // A common identifier
+                        channelTotals[controlledLoadId] = {
+                            identifier: controlledLoadId,
+                            type: 'controlledLoad',
+                            totalKWh: 0,
+                            totalAmberCost: 0,
+                            usageData: []
+                        };
+                        controlledLoadChannel = channelTotals[controlledLoadId];
+                    }
+
+                    const dailyKwh = 12; // 3kWh per day
+                    const durationHours = 4; // from 10am to 1pm
+                    const intervalsPerHour = 12; // 5-minute intervals
+                    const kwhPerInterval = dailyKwh / (durationHours * intervalsPerHour);
+
+                    let currentDate = new Date(overallStartDate);
+                    while (currentDate <= overallEndDate) {
+                        for (let hour = 10; hour < 10+durationHours; hour++) {
+                            for (let minute = 0; minute < 60; minute += 5) {
+                                const fakeNemTime = new Date(currentDate);
+                                fakeNemTime.setHours(hour, minute, 0, 0);
+
+                                // Find a corresponding general channel item to get a realistic price
+                                const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
+                                let perKwh = 20; // fallback price
+                                if (generalChannel) {
+                                    const correspondingGeneralData = generalChannel.usageData.find(item => new Date(item.nemTime).getTime() === fakeNemTime.getTime());
+                                    if (correspondingGeneralData) {
+                                        perKwh = correspondingGeneralData.perKwh;
+                                    }
+                                }
+
+                                const fakeItem = {
+                                    // use local-ISO-with-offset format (no ms) so fake items match E5-style timestamps
+                                    nemTime: toLocalIsoWithOffset(fakeNemTime),
+                                    kwh: kwhPerInterval,
+                                    perKwh: perKwh,
+                                    channelIdentifier: controlledLoadChannel.identifier,
+                                };
+
+                                controlledLoadChannel.usageData.push(fakeItem);
+                                controlledLoadChannel.totalKWh += kwhPerInterval;
+                                controlledLoadChannel.totalAmberCost += (perKwh / 100) * kwhPerInterval;
+                            }
+                        }
+                        currentDate.setDate(currentDate.getDate() + 1);
+                    }
+                    // Re-sort after adding fake data
+                    controlledLoadChannel.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
+                }
+                // --- END: FAKE CONTROLLED LOAD DATA FOR TESTING ---
+
+
                 messageEl.textContent = 'Calculating costs...';
                 
                 calculateOtherSupplierCosts(channelTotals);
@@ -407,7 +494,7 @@
         // --- Helper Functions ---
         
         /**
-         * Generates and downloads a CSV of spot prices for the general channel.
+         * Generates and downloads a CSV of all channels' usage (nemTime, channelIdentifier, kWh, perKwh).
          */
         function generateAndDownloadCSV() {
             if (!cachedChannelData) {
@@ -415,18 +502,17 @@
                 return;
             }
 
-            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
-
-            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
-                alert("No general usage data found to export.");
-                return;
-            }
-
-            let csvContent = "nemTime,SpotPrice_cents_per_kWh\n";
+            let csvContent = "nemTime,channelIdentifier,kWh,SpotPrice_cents_per_kWh\n";
             
-            generalChannel.usageData.forEach(item => {
-                const row = `"${item.nemTime}",${item.perKwh}\n`;
-                csvContent += row;
+            Object.values(cachedChannelData).forEach(channel => {
+                if (!channel.usageData || channel.usageData.length === 0) return;
+                channel.usageData.forEach(item => {
+                    const nemTime = item.nemTime || '';
+                    const kwh = (item.kwh !== undefined && item.kwh !== null) ? item.kwh : '';
+                    const perKwh = (item.perKwh !== undefined && item.perKwh !== null) ? item.perKwh : '';
+                    const row = `"${nemTime}",${channel.identifier},${kwh},${perKwh}\n`;
+                    csvContent += row;
+                });
             });
 
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -436,7 +522,7 @@
             
             const startDate = document.getElementById('startDate').value;
             const endDate = document.getElementById('endDate').value;
-            link.setAttribute("download", `amber_spot_prices_${startDate}_to_${endDate}.csv`);
+            link.setAttribute("download", `amber_usage_all_channels_${startDate}_to_${endDate}.csv`);
             
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
@@ -489,14 +575,16 @@
                     offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value) || 0
                 };
                  const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
+                 const controlledLoadRate = parseFloat(document.getElementById('tou_controlled_load_rate').value) || 0;
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
                     if (c.type === 'feedIn') {
-                        channelOtherCost = c.usageData.reduce((total, item) => {
-                            return total - ((parseFloat(item.kwh) || 0) * feedInRate / 100);
-                        }, 0);
-                    } else {
+                        channelOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                    } else if (c.type === 'controlledLoad') {
+                        channelOtherCost = (c.totalKWh * controlledLoadRate) / 100;
+                    }
+                    else { // Assumes 'general' or other consumption types fall under standard TOU
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
@@ -605,6 +693,7 @@
             }
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
             const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
+            const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 console.error("No general usage data for graph.");
@@ -644,6 +733,20 @@
                     }
                 });
             }
+            
+            const controlledLoadIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0 }));
+            if (controlledLoadChannel && controlledLoadChannel.usageData) {
+                controlledLoadChannel.usageData.forEach(item => {
+                    const nemTimeStr = item.nemTime;
+                    const hours = parseInt(nemTimeStr.substring(11, 13));
+                    const minutes = parseInt(nemTimeStr.substring(14, 16));
+                    const intervalIndex = hours * 2 + Math.floor(minutes / 30);
+
+                    if (controlledLoadIntervals[intervalIndex]) {
+                        controlledLoadIntervals[intervalIndex].totalKwh += (parseFloat(item.kwh) || 0);
+                    }
+                });
+            }
 
             const labels = [];
             for (let i = 0; i < 48; i++) {
@@ -654,6 +757,7 @@
             
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0); // Made negative and scaled
+            const avgControlledLoadData = controlledLoadIntervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
@@ -662,31 +766,35 @@
                 usageChart.destroy();
             }
             
-            const chartDatasets = [
-                {
-                    label: 'Average Usage (kW)',
-                    data: avgUsageData,
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
+            // --- ONLY show controlled load dataset when channel exists AND has non-zero totalKWh ---
+            const chartDatasets = [];
+
+            if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
+                chartDatasets.push({
+                    label: 'Average Controlled Load (kW)',
+                    data: avgControlledLoadData,
+                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
                     yAxisID: 'yUsage',
                     order: 2,
                     barPercentage: 1.0,
                     categoryPercentage: 1.0
-                },
-                {
-                    label: 'Average Spot Price (c/kWh)',
-                    data: avgPriceData,
-                    type: 'line',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    fill: false,
-                    yAxisID: 'yPrice',
-                    order: 1
-                }
-            ];
+                });
+            }
+
+            chartDatasets.push({
+                label: 'Average Usage (kW)',
+                data: avgUsageData,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                yAxisID: 'yUsage',
+                order: 2,
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            });
 
             if (feedInChannel) {
-                chartDatasets.splice(1, 0, {
+                chartDatasets.push({
                     label: 'Average Feed-in (kW)',
                     data: avgFeedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
@@ -698,8 +806,20 @@
                 });
             }
 
-            const usageMin = Math.min(...avgUsageData, ...avgFeedInData);
-            const usageMax = Math.max(...avgUsageData, ...avgFeedInData);
+            chartDatasets.push({
+                label: 'Average Spot Price (c/kWh)',
+                data: avgPriceData,
+                type: 'line',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                fill: false,
+                yAxisID: 'yPrice',
+                order: 1
+            });
+
+            const allUsage = [...avgUsageData, ...avgFeedInData, ...avgControlledLoadData];
+            const usageMin = Math.min(...allUsage);
+            const usageMax = Math.max(...allUsage);
             const priceMax = Math.max(...avgPriceData.filter(p => p !== null));
 
             let priceAxisOptions = {
@@ -794,6 +914,7 @@
 
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
             const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
+            const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 console.error("No general usage data for daily graph.");
@@ -831,6 +952,21 @@
                     }
                 });
             }
+            
+            const controlledLoadIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
+            if (controlledLoadChannel && controlledLoadChannel.usageData) {
+                const dayDataControlled = controlledLoadChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
+                dayDataControlled.forEach(item => {
+                    const nemTimeStr = item.nemTime;
+                    const hours = parseInt(nemTimeStr.substring(11, 13));
+                    const minutes = parseInt(nemTimeStr.substring(14, 16));
+                    const intervalIndex = hours * 12 + Math.floor(minutes / 5);
+
+                    if (controlledLoadIntervals[intervalIndex]) {
+                        controlledLoadIntervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
+                    }
+                });
+            }
 
             const labels = intervals.map((_, i) => {
                 const hour = Math.floor(i / 12).toString().padStart(2, '0');
@@ -840,6 +976,7 @@
 
             const usageData = intervals.map(i => i.kwh * 12);
             const feedInData = feedInIntervals.map(i => -i.kwh * 12); // Made negative and scaled
+            const controlledLoadData = controlledLoadIntervals.map(i => i.kwh * 12);
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
 
             const ctx = document.getElementById('dailyChart').getContext('2d');
@@ -847,34 +984,35 @@
                 dailyUsageChart.destroy();
             }
             
-            const chartDatasets = [
-                {
-                    label: 'Usage (kW)',
-                    data: usageData,
-                    backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
+            // --- ONLY include controlled load dataset when channel exists AND has non-zero totalKWh ---
+            const chartDatasets = [];
+
+            if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
+                 chartDatasets.push({
+                    label: 'Controlled Load (kW)',
+                    data: controlledLoadData,
+                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
                     yAxisID: 'yUsage',
                     order: 2,
                     barPercentage: 1.0,
                     categoryPercentage: 1.0
-                },
-                {
-                    label: 'Spot Price (c/kWh)',
-                    data: priceData,
-                    type: 'line',
-                    borderColor: 'rgba(255, 99, 132, 1)',
-                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                    pointRadius: 0,
-                    borderWidth: 2,
-                    fill: false,
-                    yAxisID: 'yPrice',
-                    order: 1,
-                    spanGaps: true,
-                }
-            ];
+                });
+            }
+
+            chartDatasets.push({
+                label: 'Usage (kW)',
+                data: usageData,
+                backgroundColor: 'rgba(54, 162, 235, 0.6)',
+                borderColor: 'rgba(54, 162, 235, 1)',
+                yAxisID: 'yUsage',
+                order: 2,
+                barPercentage: 1.0,
+                categoryPercentage: 1.0
+            });
 
             if (feedInChannel) {
-                chartDatasets.splice(1, 0, {
+                chartDatasets.push({
                     label: 'Feed-in (kW)',
                     data: feedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
@@ -886,8 +1024,23 @@
                 });
             }
             
-            const usageMin = Math.min(...usageData, ...feedInData);
-            const usageMax = Math.max(...usageData, ...feedInData);
+            chartDatasets.push({
+                label: 'Spot Price (c/kWh)',
+                data: priceData,
+                type: 'line',
+                borderColor: 'rgba(255, 99, 132, 1)',
+                backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                pointRadius: 0,
+                borderWidth: 2,
+                fill: false,
+                yAxisID: 'yPrice',
+                order: 1,
+                spanGaps: true,
+            });
+            
+            const allUsage = [...usageData, ...feedInData, ...controlledLoadData];
+            const usageMin = Math.min(...allUsage);
+            const usageMax = Math.max(...allUsage);
             const priceMax = Math.max(...priceData.filter(p => p !== null));
 
             let priceAxisOptions = {
