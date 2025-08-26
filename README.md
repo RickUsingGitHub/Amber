@@ -21,6 +21,8 @@ No installation needed — just open in your browser.
   - 24-hour average usage
   - Spot price overlay
   - Controlled Load shown only if data exists
+  <img width="1194" height="990" alt="image" src="https://github.com/user-attachments/assets/01a91a70-7a61-47e2-8f8a-5ac59c3bfd0d" />
+
 - 📥 **CSV export**
   - Exports **all channels** (usage, controlled load, feed-in, etc.)
   - Includes: `nemTime`, `channelIdentifier`, `kWh`, `SpotPrice_cents_per_kWh`
