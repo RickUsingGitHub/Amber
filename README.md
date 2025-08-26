@@ -12,6 +12,8 @@ No installation needed — just open in your browser.
 👉 Run directly from GitHub Pages:  
 [https://rickusinggithub.github.io/Amber/](https://rickusinggithub.github.io/Amber/)
 
+or download index.html and run locally.
+
 ---
 
 ## ✨ Features
