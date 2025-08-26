@@ -22,7 +22,6 @@ No installation needed — just open in your browser.
   - Daily usage breakdown
   - 24-hour average usage
   - Spot price overlay
-  - Controlled Load shown only if data exists
 
 - 📥 **CSV export**
   - Exports **all channels** (usage, controlled load, feed-in, etc.)
