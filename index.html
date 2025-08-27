@@ -378,6 +378,12 @@
                         
                         if (usageData && usageData.length > 0) {
                              usageData.forEach(item => {
+                             
+                                // Adjust timestamps from finish time to start time (subtract 5 minutes) 
+                                const itemDate = new Date(item.nemTime);
+                                itemDate.setMinutes(itemDate.getMinutes() - 5);
+                                item.nemTime = toLocalIsoWithOffset(itemDate);
+                     
                                 if (item.channelIdentifier !== channelId) return;
                                 const channelData = channelTotals[channelId];
                                 const kwh = parseFloat(item.kwh) || 0;
