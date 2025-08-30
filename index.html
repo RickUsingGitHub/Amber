@@ -220,7 +220,39 @@
             const flatRateSection = document.getElementById('flatRateSection');
             const touRateSection = document.getElementById('touRateSection');
 
+            // Load settings from localStorage
+            const savedRateType = localStorage.getItem('rateType');
+            if (savedRateType) {
+                document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
+                if (savedRateType === 'tou') {
+                    flatRateSection.classList.add('hidden');
+                    touRateSection.classList.remove('hidden');
+                } else {
+                    flatRateSection.classList.remove('hidden');
+                    touRateSection.classList.add('hidden');
+                }
+            }
+            
+            const savedFlatRate = localStorage.getItem('flatRate');
+            if (savedFlatRate) document.getElementById('otherSupplierRate').value = savedFlatRate;
+            
+            const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
+            if (savedFlatFeedIn) document.getElementById('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
+            
+            const savedTouRates = localStorage.getItem('touRates');
+            if (savedTouRates) {
+                const rates = JSON.parse(savedTouRates);
+                document.getElementById('tou_peak_rate').value = rates.peak;
+                document.getElementById('tou_shoulder_rate').value = rates.shoulder;
+                document.getElementById('tou_offpeak_rate').value = rates.offpeak;
+                document.getElementById('tou_controlled_load_rate').value = rates.controlledLoad;
+                document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
+            }
+
+
+            // Add listeners to save settings on change
             rateTypeSelector.addEventListener('change', (e) => {
+                localStorage.setItem('rateType', e.target.value);
                 if (e.target.value === 'tou') {
                     flatRateSection.classList.add('hidden');
                     touRateSection.classList.remove('hidden');
@@ -229,6 +261,31 @@
                     touRateSection.classList.add('hidden');
                 }
             });
+
+            document.getElementById('otherSupplierRate').addEventListener('input', (e) => {
+                localStorage.setItem('flatRate', e.target.value);
+            });
+            document.getElementById('otherSupplierFeedInRateFlat').addEventListener('input', (e) => {
+                localStorage.setItem('flatFeedInRate', e.target.value);
+            });
+            
+            document.getElementById('tou_peak_rate').addEventListener('input', saveTouSettings);
+            document.getElementById('tou_shoulder_rate').addEventListener('input', saveTouSettings);
+            document.getElementById('tou_offpeak_rate').addEventListener('input', saveTouSettings);
+            document.getElementById('tou_controlled_load_rate').addEventListener('input', saveTouSettings);
+            document.getElementById('otherSupplierFeedInRateTou').addEventListener('input', saveTouSettings);
+            
+            function saveTouSettings() {
+                const rates = {
+                    peak: document.getElementById('tou_peak_rate').value,
+                    shoulder: document.getElementById('tou_shoulder_rate').value,
+                    offpeak: document.getElementById('tou_offpeak_rate').value,
+                    controlledLoad: document.getElementById('tou_controlled_load_rate').value,
+                    feedIn: document.getElementById('otherSupplierFeedInRateTou').value
+                };
+                localStorage.setItem('touRates', JSON.stringify(rates));
+            }
+
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
             document.getElementById('showGraphButton').addEventListener('click', display24hrAverageGraph);
@@ -1000,7 +1057,7 @@
             
             const controlledLoadIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
             if (controlledLoadChannel && controlledLoadChannel.usageData) {
-                const dayDataControlled = controlledLoadChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
+                const dayDataControlled = controlledLoadChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
                 dayDataControlled.forEach(item => {
                     const nemTimeStr = item.nemTime;
                     const hours = parseInt(nemTimeStr.substring(11, 13));
