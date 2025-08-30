@@ -408,7 +408,7 @@
                 
                 // --- START: FAKE CONTROLLED LOAD DATA FOR TESTING ---
                 // To disable, set to false.
-                const addFakeControlledLoad = true;
+                const addFakeControlledLoad = false;
                 if (addFakeControlledLoad) {
                     console.log("Injecting FAKE controlled load data for testing...");
                     let controlledLoadChannel = Object.values(channelTotals).find(c => c.type === 'controlledLoad');
