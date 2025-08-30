@@ -347,6 +347,8 @@
                         type: c.type,
                         totalKWh: 0,
                         totalAmberCost: 0,
+                        totalCents: 0, // Added to track total cents for average price calculation
+                        count: 0, // Added to track number of intervals for average price
                         usageData: []
                     };
                 });
@@ -391,6 +393,8 @@
                                 channelData.totalKWh += kwh;
                                 channelData.totalAmberCost += (perKwh / 100) * kwh;
                                 channelData.usageData.push(item);
+                                channelData.totalCents += perKwh;
+                                channelData.count += 1;
                             });
                         }
                     }
@@ -404,7 +408,7 @@
                 
                 // --- START: FAKE CONTROLLED LOAD DATA FOR TESTING ---
                 // To disable, set to false.
-                const addFakeControlledLoad = false;
+                const addFakeControlledLoad = true;
                 if (addFakeControlledLoad) {
                     console.log("Injecting FAKE controlled load data for testing...");
                     let controlledLoadChannel = Object.values(channelTotals).find(c => c.type === 'controlledLoad');
@@ -415,6 +419,8 @@
                             type: 'controlledLoad',
                             totalKWh: 0,
                             totalAmberCost: 0,
+                            totalCents: 0,
+                            count: 0,
                             usageData: []
                         };
                         controlledLoadChannel = channelTotals[controlledLoadId];
@@ -453,6 +459,8 @@
                                 controlledLoadChannel.usageData.push(fakeItem);
                                 controlledLoadChannel.totalKWh += kwhPerInterval;
                                 controlledLoadChannel.totalAmberCost += (perKwh / 100) * kwhPerInterval;
+                                controlledLoadChannel.totalCents += perKwh;
+                                controlledLoadChannel.count += 1;
                             }
                         }
                         currentDate.setDate(currentDate.getDate() + 1);
@@ -504,7 +512,29 @@
          */
         function generateAndDownloadCSV() {
             if (!cachedChannelData) {
-                alert("No data available to export. Please fetch data first.");
+                // Custom modal or message box instead of alert()
+                const messageBox = document.createElement('div');
+                messageBox.innerHTML = `
+                    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" id="my-modal">
+                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                            <div class="mt-3 text-center">
+                                <h3 class="text-lg leading-6 font-medium text-gray-900">No Data Available</h3>
+                                <div class="mt-2 px-7 py-3">
+                                    <p class="text-sm text-gray-500">No data available to export. Please fetch data first.</p>
+                                </div>
+                                <div class="items-center px-4 py-3">
+                                    <button id="close-modal" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                                        OK
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(messageBox);
+                document.getElementById('close-modal').addEventListener('click', () => {
+                    messageBox.remove();
+                });
                 return;
             }
 
@@ -774,10 +804,19 @@
             
             // --- ONLY show controlled load dataset when channel exists AND has non-zero totalKWh ---
             const chartDatasets = [];
+            
+            const avgDailyGeneralKwh = (generalChannel?.totalKWh || 0) / numDays;
+            const avgDailyFeedInKwh = (feedInChannel?.totalKWh || 0) / numDays;
+            const avgDailyControlledLoadKwh = (controlledLoadChannel?.totalKWh || 0) / numDays;
+
+            const generalAvgPrice = (generalChannel?.count > 0 ? (generalChannel.totalCents / generalChannel.count) : 0).toFixed(2);
+            const feedInAvgPrice = (feedInChannel?.count > 0 ? (feedInChannel.totalCents / feedInChannel.count) : 0).toFixed(2);
+            const controlledLoadAvgPrice = (controlledLoadChannel?.count > 0 ? (controlledLoadChannel.totalCents / controlledLoadChannel.count) : 0).toFixed(2);
+
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
-                    label: 'Average Controlled Load (kW)',
+                    label: `Avg. Daily Controlled Load (kW) - Avg. Total: ${avgDailyControlledLoadKwh.toFixed(2)} kWh, Avg Price: ${controlledLoadAvgPrice} c/kWh`,
                     data: avgControlledLoadData,
                     backgroundColor: 'rgba(13, 110, 253, 0.6)',
                     borderColor: 'rgba(13, 110, 253, 1)',
@@ -789,7 +828,7 @@
             }
 
             chartDatasets.push({
-                label: 'Average Usage (kW)',
+                label: `Avg. Daily Usage (kW) - Avg. Total: ${avgDailyGeneralKwh.toFixed(2)} kWh, Avg Price: ${generalAvgPrice} c/kWh`,
                 data: avgUsageData,
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -801,7 +840,7 @@
 
             if (feedInChannel) {
                 chartDatasets.push({
-                    label: 'Average Feed-in (kW)',
+                    label: `Avg. Daily Feed-in (kW) - Avg. Total: ${avgDailyFeedInKwh.toFixed(2)} kWh, Avg Price: ${feedInAvgPrice} c/kWh`,
                     data: avgFeedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -895,12 +934,11 @@
                             callbacks: {
                                 label: function(context) {
                                     let label = context.dataset.label || '';
-                                    if (label) { label += ': '; }
                                     if (context.parsed.y !== null) {
                                         if (context.dataset.yAxisID === 'yPrice') {
-                                            label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
+                                            label = `Price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
                                         } else {
-                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kW`;
+                                            label = `Usage: ${parseFloat(context.parsed.y).toFixed(4)} kW`;
                                         }
                                     }
                                     return label;
@@ -993,9 +1031,22 @@
             // --- ONLY include controlled load dataset when channel exists AND has non-zero totalKWh ---
             const chartDatasets = [];
 
+            const dailyGeneralKwh = dayData.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+            const dailyFeedInKwh = (feedInChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+            const dailyControlledLoadKwh = (controlledLoadChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+
+            const dailyGeneralCents = dayData.reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
+            const dailyFeedInCents = (feedInChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
+            const dailyControlledLoadCents = (controlledLoadChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
+
+            const dailyGeneralAvgPrice = (dailyGeneralCents / dayData.length).toFixed(2);
+            const dailyFeedInAvgPrice = (dailyFeedInCents / (feedInChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr).length || 1)).toFixed(2);
+            const dailyControlledLoadAvgPrice = (dailyControlledLoadCents / (controlledLoadChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr).length || 1)).toFixed(2);
+
+
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                  chartDatasets.push({
-                    label: 'Controlled Load (kW)',
+                    label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(2)} kWh, Avg Price: ${dailyControlledLoadAvgPrice} c/kWh`,
                     data: controlledLoadData,
                     backgroundColor: 'rgba(13, 110, 253, 0.6)',
                     borderColor: 'rgba(13, 110, 253, 1)',
@@ -1007,7 +1058,7 @@
             }
 
             chartDatasets.push({
-                label: 'Usage (kW)',
+                label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(2)} kWh, Avg Price: ${dailyGeneralAvgPrice} c/kWh`,
                 data: usageData,
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -1019,7 +1070,7 @@
 
             if (feedInChannel) {
                 chartDatasets.push({
-                    label: 'Feed-in (kW)',
+                    label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(2)} kWh, Avg Price: ${dailyFeedInAvgPrice} c/kWh`,
                     data: feedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -1115,12 +1166,11 @@
                             callbacks: {
                                 label: function(context) {
                                     let label = context.dataset.label || '';
-                                    if (label) { label += ': '; }
                                     if (context.parsed.y !== null) {
                                         if (context.dataset.yAxisID === 'yPrice') {
-                                            label += `${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
+                                            label = `Price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
                                         } else {
-                                            label += `${parseFloat(context.parsed.y).toFixed(4)} kW`;
+                                            label = `Usage: ${parseFloat(context.parsed.y).toFixed(4)} kW`;
                                         }
                                     }
                                     return label;
