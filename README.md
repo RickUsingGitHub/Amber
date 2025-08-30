@@ -57,7 +57,8 @@ No installation needed — just open in your browser.
 
 ## 🖼️ Screenshots
 
-  <img width="1268" height="1065" alt="image" src="https://github.com/user-attachments/assets/fed19330-a39c-4b6b-ac56-32a36358f541" />
+<img width="1679" height="1608" alt="image" src="https://github.com/user-attachments/assets/84702831-6b38-4f42-8af7-0e775d2a2600" />
+<img width="1688" height="1029" alt="image" src="https://github.com/user-attachments/assets/54aa9b76-c53e-47b4-b0f9-c301153e0f2d" />
 
 
 ---
