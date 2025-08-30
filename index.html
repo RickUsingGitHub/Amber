@@ -347,8 +347,8 @@
                         type: c.type,
                         totalKWh: 0,
                         totalAmberCost: 0,
-                        totalCents: 0, // Added to track total cents for average price calculation
-                        count: 0, // Added to track number of intervals for average price
+                        totalCents: 0, 
+                        count: 0, 
                         usageData: []
                     };
                 });
@@ -809,9 +809,10 @@
             const avgDailyFeedInKwh = (feedInChannel?.totalKWh || 0) / numDays;
             const avgDailyControlledLoadKwh = (controlledLoadChannel?.totalKWh || 0) / numDays;
 
-            const generalAvgPrice = (generalChannel?.count > 0 ? (generalChannel.totalCents / generalChannel.count) : 0).toFixed(2);
-            const feedInAvgPrice = (feedInChannel?.count > 0 ? (feedInChannel.totalCents / feedInChannel.count) : 0).toFixed(2);
-            const controlledLoadAvgPrice = (controlledLoadChannel?.count > 0 ? (controlledLoadChannel.totalCents / controlledLoadChannel.count) : 0).toFixed(2);
+            // NEW: Calculate average price based on total cost / total usage
+            const generalAvgPrice = (generalChannel?.totalKWh > 0 ? ((generalChannel.totalAmberCost * 100) / generalChannel.totalKWh) : 0).toFixed(2);
+            const feedInAvgPrice = (feedInChannel?.totalKWh > 0 ? ((-feedInChannel.totalAmberCost * 100) / feedInChannel.totalKWh) : 0).toFixed(2);
+            const controlledLoadAvgPrice = (controlledLoadChannel?.totalKWh > 0 ? ((controlledLoadChannel.totalAmberCost * 100) / controlledLoadChannel.totalKWh) : 0).toFixed(2);
 
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
@@ -1031,17 +1032,20 @@
             // --- ONLY include controlled load dataset when channel exists AND has non-zero totalKWh ---
             const chartDatasets = [];
 
+            // Calculate daily totals for accurate average price
             const dailyGeneralKwh = dayData.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
-            const dailyFeedInKwh = (feedInChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
-            const dailyControlledLoadKwh = (controlledLoadChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+            const dailyGeneralCost = dayData.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
+            const dailyGeneralAvgPrice = (dailyGeneralKwh > 0 ? (dailyGeneralCost / dailyGeneralKwh) * 100 : 0).toFixed(2);
+            
+            const dayDataFeedIn = feedInChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
+            const dailyFeedInKwh = dayDataFeedIn.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+            const dailyFeedInCost = dayDataFeedIn.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
+            const dailyFeedInAvgPrice = (dailyFeedInKwh > 0 ? ((-dailyFeedInCost) / dailyFeedInKwh) * 100 : 0).toFixed(2);
 
-            const dailyGeneralCents = dayData.reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
-            const dailyFeedInCents = (feedInChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
-            const dailyControlledLoadCents = (controlledLoadChannel?.usageData || []).filter(item => item.nemTime.substring(0, 10) === selectedDateStr).reduce((total, item) => total + (parseFloat(item.perKwh) || 0), 0);
-
-            const dailyGeneralAvgPrice = (dailyGeneralCents / dayData.length).toFixed(2);
-            const dailyFeedInAvgPrice = (dailyFeedInCents / (feedInChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr).length || 1)).toFixed(2);
-            const dailyControlledLoadAvgPrice = (dailyControlledLoadCents / (controlledLoadChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr).length || 1)).toFixed(2);
+            const dayDataControlled = controlledLoadChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
+            const dailyControlledLoadKwh = dayDataControlled.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
+            const dailyControlledLoadCost = dayDataControlled.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
+            const dailyControlledLoadAvgPrice = (dailyControlledLoadKwh > 0 ? (dailyControlledLoadCost / dailyControlledLoadKwh) * 100 : 0).toFixed(2);
 
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
