@@ -59,6 +59,13 @@
                                 </label>
                             </div>
                         </div>
+                        
+                        <!-- Daily Connection input for Flat and TOU -->
+                        <div class="mb-4">
+                            <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day)</label>
+                            <input type="number" id="dailyConnectionRate" value="108" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs text-gray-500 mt-1">This is a fixed daily service fee.</p>
+                        </div>
 
                         <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
                              <div>
@@ -78,27 +85,27 @@
                                 <div class="bg-red-50 p-3 rounded-lg border border-red-200">
                                     <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
                                     <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
-                                    <input type="number" id="tou_peak_rate" value="55" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" id="tou_peak_rate" value="57.93" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
                                     <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
                                     <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
-                                    <input type="number" id="tou_shoulder_rate" value="35" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" id="tou_shoulder_rate" value="30.61" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="bg-green-50 p-3 rounded-lg border border-green-200">
                                     <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
                                     <p class="text-xs text-gray-500">10pm - 7am every day</p>
-                                    <input type="number" id="tou_offpeak_rate" value="25" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" id="tou_offpeak_rate" value="24.28" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
                                     <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load</label>
                                     <p class="text-xs text-gray-500">e.g., Hot water</p>
-                                    <input type="number" id="tou_controlled_load_rate" value="20" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <input type="number" id="tou_controlled_load_rate" value="14.6" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                             </div>
                              <div>
                                 <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
-                                <input type="number" id="otherSupplierFeedInRateTou" value="5" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                                <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
                             </div>
                         </div>
                     </div>
@@ -209,12 +216,21 @@
             const endDateInput = document.getElementById('endDate');
             const startDateInput = document.getElementById('startDate');
             
-            const now = new Date();
-            const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-            const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+            const savedStartDate = localStorage.getItem('startDate');
+            const savedEndDate = localStorage.getItem('endDate');
+            
+            if (savedStartDate && savedEndDate) {
+                startDateInput.value = savedStartDate;
+                endDateInput.value = savedEndDate;
+            } else {
+                const now = new Date();
+                const firstDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                const lastDayOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-            startDateInput.value = formatForInput(firstDayOfCurrentMonth);
-            endDateInput.value = formatForInput(lastDayOfCurrentMonth);
+                startDateInput.value = formatForInput(firstDayOfCurrentMonth);
+                endDateInput.value = formatForInput(lastDayOfCurrentMonth);
+            }
+
 
             const rateTypeSelector = document.getElementById('rateTypeSelector');
             const flatRateSection = document.getElementById('flatRateSection');
@@ -249,6 +265,13 @@
                 document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
             }
 
+            const savedDailyConnectionRate = localStorage.getItem('dailyConnectionRate');
+            if (savedDailyConnectionRate) {
+                document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
+            } else {
+                document.getElementById('dailyConnectionRate').value = '108'; // Set default value
+            }
+
 
             // Add listeners to save settings on change
             rateTypeSelector.addEventListener('change', (e) => {
@@ -267,6 +290,9 @@
             });
             document.getElementById('otherSupplierFeedInRateFlat').addEventListener('input', (e) => {
                 localStorage.setItem('flatFeedInRate', e.target.value);
+            });
+            document.getElementById('dailyConnectionRate').addEventListener('input', (e) => {
+                 localStorage.setItem('dailyConnectionRate', e.target.value);
             });
             
             document.getElementById('tou_peak_rate').addEventListener('input', saveTouSettings);
@@ -315,6 +341,10 @@
             const startDateValue = document.getElementById('startDate').value;
             const endDateValue = document.getElementById('endDate').value;
             
+            // Store the dates in localStorage for next time
+            localStorage.setItem('startDate', startDateValue);
+            localStorage.setItem('endDate', endDateValue);
+            
             if (!apiKey) {
                 messageSection.classList.remove('hidden');
                 messageEl.textContent = 'Please enter your Amber API key.';
@@ -339,6 +369,12 @@
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
+            
+            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24)) + 1;
+            const otherConnectionCost = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
+            const amberConnectionCost = 103 * numDays; // Amber connection cost is 103c/day            
+            const amberSubscriptionCost = 83 * numDays; // Amber subscription cost is 83c/day
+
 
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
                 console.log("Using cached data, recalculating costs...");
@@ -360,11 +396,12 @@
                         overallOtherCost += c.totalOtherCost;
                     });
                     
-                    overallAmberCost += demandTariffInfo.cost;
+                    overallAmberCost += (demandTariffInfo.cost + amberSubscriptionCost / 100 + amberConnectionCost / 100);
+                    overallOtherCost += otherConnectionCost / 100;
 
                     messageSection.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
                 }, 200);
 
                 return;
@@ -546,13 +583,15 @@
                     overallAmberCost += c.totalAmberCost;
                     overallOtherCost += c.totalOtherCost;
                 });
-                
-                overallAmberCost += demandTariffInfo.cost;
+
+                overallAmberCost += (demandTariffInfo.cost + amberSubscriptionCost / 100 + amberConnectionCost / 100);
+                 
+                overallOtherCost += otherConnectionCost / 100;
 
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, demandTariffInfo);
+                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -1246,11 +1285,13 @@
         /**
          * Renders the final results table and summary.
          */
-        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, demandTariffInfo) {
+        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const showGraphButton = document.getElementById('showGraphButton');
             const period = `(${startDateStr} to ${endDateStr})`;
+            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
+            const amberSubscriptionCost = 83 * numDays;
 
             let tableHTML = `
                 <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
@@ -1299,6 +1340,19 @@
                     </tr>
                 `;
             }
+
+            tableHTML += `
+                <tr class="font-semibold border-t">
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(103 * numDays / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(otherDailyConnection / 100).toFixed(2)}</td>
+                </tr>
+                <tr class="font-semibold">
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(amberSubscriptionCost / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td>
+                </tr>
+            `;
 
              tableHTML += `
                     <tr class="bg-gray-50 font-bold">
