@@ -164,6 +164,12 @@
     </div>
 
     <script>
+        // --- Amber Electric Constants (Refactored) ---
+        const AMBER_CONNECTION_COST_PER_DAY_CENTS = 109.894;
+        const AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS = 72.316;
+        const AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS = 42.420; // $0.42 per kW
+        const AMBER_API_URL = 'https://api.amber.com.au/v1';
+
         // --- Global cache for API data ---
         let cachedChannelData = null;
         let lastFetchedStartDate = null;
@@ -371,10 +377,8 @@
             }
             
             const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24)) + 1;
-            const otherConnectionCost = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-            const amberConnectionCost = 103 * numDays; // Amber connection cost is 103c/day            
-            const amberSubscriptionCost = 83 * numDays; // Amber subscription cost is 83c/day
-
+            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
+            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
 
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
                 console.log("Using cached data, recalculating costs...");
@@ -396,8 +400,8 @@
                         overallOtherCost += c.totalOtherCost;
                     });
                     
-                    overallAmberCost += (demandTariffInfo.cost + amberSubscriptionCost / 100 + amberConnectionCost / 100);
-                    overallOtherCost += otherConnectionCost / 100;
+                    overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
+                    overallOtherCost += otherDailyConnection / 100;
 
                     messageSection.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
@@ -414,7 +418,6 @@
             messageEl.textContent = 'Fetching your site details...';
 
             const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
-            const AMBER_API_URL = 'https://api.amber.com.au/v1';
 
             try {
                 const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
@@ -584,8 +587,8 @@
                     overallOtherCost += c.totalOtherCost;
                 });
 
-                overallAmberCost += (demandTariffInfo.cost + amberSubscriptionCost / 100 + amberConnectionCost / 100);
-                overallOtherCost += otherConnectionCost / 100;
+                overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
+                overallOtherCost += otherDailyConnection / 100;
 
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
@@ -789,7 +792,7 @@
             const numberOfDemandDays = demandDaysSet.size;
 
             // Calculate the final cost
-            const demandTariffCost = maxDemandKwh * 2 * 0.42 * numberOfDemandDays;
+            const demandTariffCost = maxDemandKwh * 2 * (AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS / 100) * numberOfDemandDays;
 
             console.log(`Demand Tariff Calculation: Max 30-min Demand=${maxDemandKwh.toFixed(4)}kWh at ${maxDemandTime}, Days=${numberOfDemandDays}, Cost=$${demandTariffCost.toFixed(2)}`);
 
@@ -1290,8 +1293,7 @@
             const showGraphButton = document.getElementById('showGraphButton');
             const period = `(${startDateStr} to ${endDateStr})`;
             const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-            const amberConnectionCost = 103 * numDays; // Amber connection cost is 103c/day            
-            const amberSubscriptionCost = 83 * numDays; // Amber subscription cost is 83c/day            
+            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
 
             let tableHTML = `
                 <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
@@ -1344,12 +1346,12 @@
             tableHTML += `
                 <tr class="font-semibold border-t">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(amberConnectionCost / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_CONNECTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(otherDailyConnection / 100).toFixed(2)}</td>
                 </tr>
                 <tr class="font-semibold">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(amberSubscriptionCost / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td>
                 </tr>
             `;
