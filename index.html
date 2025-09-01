@@ -375,8 +375,10 @@
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
+
+            // No need to add 1 as the dates cover the entire day. ie until 23:59:59:999
+            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
             
-            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24)) + 1;
             const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
             const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
 
