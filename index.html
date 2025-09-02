@@ -1313,6 +1313,9 @@
             `;
 
             Object.values(channelTotals).forEach(c => {
+                if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) {
+                    return; // Skip this line if all values are zero
+                }
                 const totalKWhText = (c.totalKWh || 0).toFixed(2);
                 const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
                 const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
