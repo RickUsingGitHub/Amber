@@ -146,6 +146,7 @@
             <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
                 <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
                 <p id="message" class="text-lg"></p>
+                <div id="progressLog" class="text-left text-sm text-gray-600 mt-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded"></div>
             </div>
 
             <div id="resultsSection" class="hidden">
@@ -193,6 +194,66 @@
         let lastFetchedEndDate = null;
         let usageChart = null;
         let dailyUsageChart = null;
+
+        // --- IndexedDB Helper Functions ---
+        const DB_NAME = 'AmberDataCacheDB';
+        const STORE_NAME = 'dailyUsage';
+        const DB_VERSION = 1;
+
+        function openDb() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    }
+                };
+
+                request.onsuccess = (event) => {
+                    resolve(event.target.result);
+                };
+
+                request.onerror = (event) => {
+                    console.error('IndexedDB error:', event.target.errorCode);
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        function getUsageData(db, id) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(id);
+
+                request.onsuccess = (event) => {
+                    resolve(event.target.result ? event.target.result.data : null);
+                };
+
+                request.onerror = (event) => {
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        function setUsageData(db, id, data) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.put({ id, data });
+
+                request.onsuccess = () => {
+                    resolve();
+                };
+
+                request.onerror = (event) => {
+                    reject(event.target.error);
+                };
+            });
+        }
+
 
         const formatForInput = (date) => {
             const year = date.getFullYear();
@@ -265,7 +326,6 @@
             const savedApiKey = localStorage.getItem('amberApiKey');
             if (savedApiKey) {
                 apiKeyInput.value = savedApiKey;
-                console.log("Loaded API key from local storage.");
             }
 
             // Custom tooltip positioner to follow the cursor
@@ -279,6 +339,10 @@
             const savedStartDate = localStorage.getItem('startDate');
             const savedEndDate = localStorage.getItem('endDate');
             
+            const today = new Date();
+            const maxDate = formatForInput(today);
+            startDateInput.setAttribute('max', maxDate);
+
             if (savedStartDate && savedEndDate) {
                 startDateInput.value = savedStartDate;
                 endDateInput.value = savedEndDate;
@@ -383,6 +447,7 @@
             const messageSection = document.getElementById('messageSection');
             const messageEl = document.getElementById('message');
             const loader = document.getElementById('loader');
+            const progressLog = document.getElementById('progressLog');
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const showGraphButton = document.getElementById('showGraphButton');
@@ -396,6 +461,7 @@
             showGraphButton.disabled = true;
             resultsOutput.innerHTML = '';
             messageEl.textContent = '';
+            progressLog.innerHTML = '';
 
             const apiKey = document.getElementById('apiKey').value;
             const startDateValue = document.getElementById('startDate').value;
@@ -412,7 +478,6 @@
             }
             
             localStorage.setItem('amberApiKey', apiKey);
-            console.log("Saved API key to local storage.");
 
              if (!startDateValue || !endDateValue) {
                 messageSection.classList.remove('hidden');
@@ -421,7 +486,16 @@
             }
             // Parse date strings as local time by appending T00:00:00
             const overallStartDate = new Date(startDateValue + 'T00:00:00');
-            const overallEndDate = new Date(endDateValue + 'T00:00:00');
+            let overallEndDate = new Date(endDateValue + 'T00:00:00');
+            
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            // If the user selected a future date, silently cap it to today for calculations.
+            if (overallEndDate > today) {
+                overallEndDate = today;
+            }
+            
             overallEndDate.setHours(23, 59, 59, 999); // Ensure the entire end day is included
 
             if (overallEndDate < overallStartDate) {
@@ -429,20 +503,16 @@
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
-
-            // No need to add 1 as the dates cover the entire day. ie until 23:59:59:999
-            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
             
-            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
-                console.log("Using cached data, recalculating costs...");
                 messageSection.classList.remove('hidden');
                 loader.classList.add('hidden');
                 messageEl.textContent = 'Recalculating with new rates...';
-
+                
                 setTimeout(() => {
+                    const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
+                    const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
+                    const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
                     calculateOtherSupplierCosts(cachedChannelData);
                     
                     const demandTariffInfo = calculateDemandTariff(cachedChannelData);
@@ -471,11 +541,11 @@
 
             messageSection.classList.remove('hidden');
             loader.classList.remove('hidden');
-            messageEl.textContent = 'Fetching your site details...';
-
+            
             const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
 
             try {
+                messageEl.textContent = 'Fetching your site details...';
                 const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
                  if (!sitesResponse.ok) {
                     let detail = `Status: ${sitesResponse.status} ${sitesResponse.statusText}`;
@@ -491,7 +561,7 @@
                 const channels = site.channels;
                 if (!channels || channels.length === 0) throw new Error('No channels found for this site.');
 
-                messageEl.textContent = `Site found: ${siteId}. Fetching usage data...`;
+                messageEl.textContent = `Site found: ${siteId}. Preparing to fetch usage data...`;
                 
                 let channelTotals = {};
                 channels.forEach(c => {
@@ -505,125 +575,122 @@
                         usageData: []
                     };
                 });
+                
+                // --- NEW IndexedDB CACHING AND FETCHING LOGIC ---
+                const db = await openDb();
+                const allUsageData = [];
+                let datesToFetch = [];
 
-                let loopStartDate = new Date(overallStartDate);
-                while (loopStartDate <= overallEndDate) {
-                    let loopEndDate = new Date(loopStartDate);
-                    loopEndDate.setDate(loopEndDate.getDate() + 6);
-                    if (loopEndDate > overallEndDate) loopEndDate = new Date(overallEndDate);
+                const cacheBoundary = new Date();
+                cacheBoundary.setHours(0, 0, 0, 0);
+                cacheBoundary.setDate(cacheBoundary.getDate() - 3);
 
-                    const startDateStr = formatForInput(loopStartDate);
-                    const endDateStr = formatForInput(loopEndDate);
-                    
-                    for (const channel of channels) {
-                        const channelId = channel.identifier;
-                        messageEl.textContent = `Fetching ${channelId} data for ${startDateStr} to ${endDateStr}...`;
-                        
-                        const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${startDateStr}&endDate=${endDateStr}&channel=${channelId}`;
-                        const usageResponse = await fetch(usageUrl, { headers });
-                        const responseText = await usageResponse.text();
-
-                         if (!usageResponse.ok) {
-                            let detail = responseText;
-                            try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
-                            throw new Error(`Failed to fetch usage for ${channelId}. Status: ${usageResponse.status}. Message: ${detail}`);
-                        }
-                        
-                        const usageData = JSON.parse(responseText);
-                        
-                        if (usageData && usageData.length > 0) {
-                             usageData.forEach(item => {
-                             
-                                // Adjust timestamps from finish time to start time (subtract 5 minutes) 
-                                const itemDate = new Date(item.nemTime);
-                                itemDate.setMinutes(itemDate.getMinutes() - 5);
-                                item.nemTime = toLocalIsoWithOffset(itemDate);
-                     
-                                if (item.channelIdentifier !== channelId) return;
-                                const channelData = channelTotals[channelId];
-                                const kwh = parseFloat(item.kwh) || 0;
-                                const perKwh = parseFloat(item.perKwh) || 0;
-                                channelData.totalKWh += kwh;
-                                channelData.totalAmberCost += (perKwh / 100) * kwh;
-                                channelData.usageData.push(item);
-                                channelData.totalCents += perKwh;
-                                channelData.count += 1;
-                            });
+                let currentDate = new Date(overallStartDate);
+                while (currentDate <= overallEndDate) {
+                    const dateStr = formatForInput(currentDate);
+                    if (currentDate >= cacheBoundary) {
+                        datesToFetch.push(dateStr);
+                    } else {
+                        const cacheKey = `${siteId}_${dateStr}`;
+                        const cachedDayData = await getUsageData(db, cacheKey);
+                        if (cachedDayData) {
+                            progressLog.innerHTML += `<div>${dateStr} - cached</div>`;
+                            allUsageData.push(...cachedDayData);
+                        } else {
+                            datesToFetch.push(dateStr);
                         }
                     }
-                    loopStartDate.setDate(loopStartDate.getDate() + 7);
+                    currentDate.setDate(currentDate.getDate() + 1);
                 }
 
+                // Consolidate dates to fetch into ranges of max 7 days to minimize API calls
+                const fetchRanges = [];
+                if (datesToFetch.length > 0) {
+                    let rangeStart = datesToFetch[0];
+                    let rangeEnd = datesToFetch[0];
+
+                    const getDaysBetween = (start, end) => {
+                        const startDate = new Date(start + 'T00:00:00');
+                        const endDate = new Date(end + 'T00:00:00');
+                        // +1 because the range is inclusive
+                        return Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+                    };
+
+                    for (let i = 1; i < datesToFetch.length; i++) {
+                        const nextDay = new Date(rangeEnd + 'T00:00:00');
+                        nextDay.setDate(nextDay.getDate() + 1);
+
+                        // If the current date is consecutive AND the range is less than 7 days
+                        if (datesToFetch[i] === formatForInput(nextDay) && getDaysBetween(rangeStart, rangeEnd) < 7) {
+                            rangeEnd = datesToFetch[i];
+                        } else {
+                            fetchRanges.push({ start: rangeStart, end: rangeEnd });
+                            rangeStart = datesToFetch[i];
+                            rangeEnd = datesToFetch[i];
+                        }
+                    }
+                    fetchRanges.push({ start: rangeStart, end: rangeEnd });
+                }
+
+                for (const range of fetchRanges) {
+                    messageEl.textContent = `Fetching data from API...`;
+                    progressLog.innerHTML += `<div>${range.start} to ${range.end} - API load</div>`;
+
+                    const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${range.start}&endDate=${range.end}`;
+                    const usageResponse = await fetch(usageUrl, { headers });
+                    const responseText = await usageResponse.text();
+
+                    if (!usageResponse.ok) {
+                        let detail = responseText;
+                        try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
+                        throw new Error(`Failed to fetch usage for ${range.start} to ${range.end}. Status: ${usageResponse.status}. Message: ${detail}`);
+                    }
+                    
+                    const apiResponseData = JSON.parse(responseText);
+                    allUsageData.push(...apiResponseData);
+
+                    // Group by day to store in cache
+                    const dailyData = {};
+                    apiResponseData.forEach(item => {
+                        const dateStr = item.nemTime.substring(0, 10);
+                        if (!dailyData[dateStr]) dailyData[dateStr] = [];
+                        dailyData[dateStr].push(item);
+                    });
+
+                    for (const dateStr in dailyData) {
+                        const dayDate = new Date(dateStr + 'T00:00:00');
+                        if (dayDate < cacheBoundary) {
+                            const cacheKey = `${siteId}_${dateStr}`;
+                            await setUsageData(db, cacheKey, dailyData[dateStr]);
+                        }
+                    }
+                }
+                
+                if (allUsageData && allUsageData.length > 0) {
+                    allUsageData.forEach(item => {
+                        const itemDate = new Date(item.nemTime);
+                        itemDate.setMinutes(itemDate.getMinutes() - 5);
+                        item.nemTime = toLocalIsoWithOffset(itemDate);
+
+                        const channelId = item.channelIdentifier;
+                        if (!channelTotals[channelId]) return;
+                        
+                        const channelData = channelTotals[channelId];
+                        const kwh = parseFloat(item.kwh) || 0;
+                        const perKwh = parseFloat(item.perKwh) || 0;
+                        channelData.totalKWh += kwh;
+                        channelData.totalAmberCost += (perKwh / 100) * kwh;
+                        channelData.usageData.push(item);
+                        channelData.totalCents += perKwh;
+                        channelData.count += 1;
+                    });
+                }
+                
                 // Sort all usage data by date after fetching is complete
                 Object.values(channelTotals).forEach(c => {
                     c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
                 });
                 
-                // --- START: FAKE CONTROLLED LOAD DATA FOR TESTING ---
-                // To disable, set to false.
-                const addFakeControlledLoad = false;
-                if (addFakeControlledLoad) {
-                    console.log("Injecting FAKE controlled load data for testing...");
-                    let controlledLoadChannel = Object.values(channelTotals).find(c => c.type === 'controlledLoad');
-                    if (!controlledLoadChannel) {
-                        const controlledLoadId = 'B3'; // A common identifier
-                        channelTotals[controlledLoadId] = {
-                            identifier: controlledLoadId,
-                            type: 'controlledLoad',
-                            totalKWh: 0,
-                            totalAmberCost: 0,
-                            totalCents: 0,
-                            count: 0,
-                            usageData: []
-                        };
-                        controlledLoadChannel = channelTotals[controlledLoadId];
-                    }
-
-                    const dailyKwh = 12; // 3kWh per day
-                    const durationHours = 4; // from 10am to 1pm
-                    const intervalsPerHour = 12; // 5-minute intervals
-                    const kwhPerInterval = dailyKwh / (durationHours * intervalsPerHour);
-
-                    let currentDate = new Date(overallStartDate);
-                    while (currentDate <= overallEndDate) {
-                        for (let hour = 10; hour < 10+durationHours; hour++) {
-                            for (let minute = 0; minute < 60; minute += 5) {
-                                const fakeNemTime = new Date(currentDate);
-                                fakeNemTime.setHours(hour, minute, 0, 0);
-
-                                // Find a corresponding general channel item to get a realistic price
-                                const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
-                                let perKwh = 20; // fallback price
-                                if (generalChannel) {
-                                    const correspondingGeneralData = generalChannel.usageData.find(item => new Date(item.nemTime).getTime() === fakeNemTime.getTime());
-                                    if (correspondingGeneralData) {
-                                        perKwh = correspondingGeneralData.perKwh;
-                                    }
-                                }
-
-                                const fakeItem = {
-                                    // use local-ISO-with-offset format (no ms) so fake items match E5-style timestamps
-                                    nemTime: toLocalIsoWithOffset(fakeNemTime),
-                                    kwh: kwhPerInterval,
-                                    perKwh: perKwh,
-                                    channelIdentifier: controlledLoadChannel.identifier,
-                                };
-
-                                controlledLoadChannel.usageData.push(fakeItem);
-                                controlledLoadChannel.totalKWh += kwhPerInterval;
-                                controlledLoadChannel.totalAmberCost += (perKwh / 100) * kwhPerInterval;
-                                controlledLoadChannel.totalCents += perKwh;
-                                controlledLoadChannel.count += 1;
-                            }
-                        }
-                        currentDate.setDate(currentDate.getDate() + 1);
-                    }
-                    // Re-sort after adding fake data
-                    controlledLoadChannel.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
-                }
-                // --- END: FAKE CONTROLLED LOAD DATA FOR TESTING ---
-
-
                 messageEl.textContent = 'Calculating costs...';
                 
                 calculateOtherSupplierCosts(channelTotals);
@@ -632,6 +699,10 @@
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
+                const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
+                const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
+                const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
+
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
                 
@@ -793,7 +864,6 @@
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
-                console.log("No general channel data for demand tariff calculation.");
                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
             }
 
@@ -802,7 +872,6 @@
             );
 
             if (demandWindowUsage.length === 0) {
-                console.log("No usage found within a demand window.");
                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
             }
 
@@ -850,8 +919,6 @@
             // Calculate the final cost
             const demandTariffCost = maxDemandKwh * 2 * (AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS / 100) * numberOfDemandDays;
 
-            console.log(`Demand Tariff Calculation: Max 30-min Demand=${maxDemandKwh.toFixed(4)}kWh at ${maxDemandTime}, Days=${numberOfDemandDays}, Cost=$${demandTariffCost.toFixed(2)}`);
-
             return {
                 cost: demandTariffCost,
                 maxDemandKwh: maxDemandKwh,
@@ -893,8 +960,8 @@
 
             const intervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
             
-            const startDate = new Date(document.getElementById('startDate').value);
-            const endDate = new Date(document.getElementById('endDate').value);
+            const startDate = new Date(document.getElementById('startDate').value + 'T00:00:00');
+            const endDate = new Date(document.getElementById('endDate').value + 'T00:00:00');
             const numDays = Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
             generalChannel.usageData.forEach(item => {
@@ -1497,3 +1564,5 @@
     </script>
 </body>
 </html>
+
+
