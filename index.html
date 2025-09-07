@@ -611,8 +611,12 @@
             });
 
             const dateChunks = [];
-            for (let i = 0; i < datesToFetch.length; i += 7) {
-                dateChunks.push(datesToFetch.slice(i, i + 7));
+            // The API returns an error for date ranges of 7 days, stating it's too large.
+            // To fix this, we'll fetch data in smaller chunks of 6 days. This increases
+            // the number of API requests slightly but ensures each request is within the valid range.
+            const MAX_DAYS_PER_REQUEST = 6;
+            for (let i = 0; i < datesToFetch.length; i += MAX_DAYS_PER_REQUEST) {
+                dateChunks.push(datesToFetch.slice(i, i + MAX_DAYS_PER_REQUEST));
             }
 
             for (const chunk of dateChunks) {
@@ -1073,4 +1077,3 @@
     </script>
 </body>
 </html>
-
