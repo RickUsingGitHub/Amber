@@ -43,69 +43,76 @@
                         <p class="text-xs text-gray-500 mt-1">Your key is stored only in your browser. Find it at <a href="https://app.amber.com.au/developers" target="_blank" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
                     </div>
 
+                    <!-- Modified Other Supplier Details Section -->
                     <div class="md:col-span-2 border-t pt-4">
-                         <label class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</label>
-
-                         <div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</label>
-                            <div class="flex items-center space-x-4" id="rateTypeSelector">
-                                <label class="flex items-center">
-                                    <input type="radio" name="rateType" value="flat" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked>
-                                    <span class="ml-2 text-sm text-gray-700">Flat Rate</span>
-                                </label>
-                                <label class="flex items-center">
-                                    <input type="radio" name="rateType" value="tou" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
-                                    <span class="ml-2 text-sm text-gray-700">Time of Use (TOU)</span>
-                                </label>
-                            </div>
+                         <div class="flex justify-between items-center mb-2">
+                            <label class="block text-base font-medium text-gray-800">Other Supplier Details</label>
+                            <button id="toggleSupplierDetailsBtn" class="text-sm text-indigo-600 hover:text-indigo-800 font-semibold focus:outline-none rounded px-2 py-1">
+                                Show
+                            </button>
                         </div>
-                        
-                        <!-- Daily Connection input for Flat and TOU -->
-                        <div class="mb-4">
-                            <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day)</label>
-                            <input type="number" id="dailyConnectionRate" value="102.83" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                            <p class="text-xs text-gray-500 mt-1">This is a fixed daily service fee.</p>
-                        </div>
-
-                        <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                             <div>
-                                <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh)</label>
-                                <input type="number" id="otherSupplierRate" value="36" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 36">
-                             </div>
-                             <div>
-                                <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
-                                <input type="number" id="otherSupplierFeedInRateFlat" value="5" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
-                            </div>
-                        </div>
-
-                        <div id="touRateSection" class="hidden">
-                            <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
-                            <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                <div class="bg-red-50 p-3 rounded-lg border border-red-200">
-                                    <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
-                                    <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
-                                    <input type="number" id="tou_peak_rate" value="57.93" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                </div>
-                                <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                                    <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
-                                    <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
-                                    <input type="number" id="tou_shoulder_rate" value="30.61" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                </div>
-                                <div class="bg-green-50 p-3 rounded-lg border border-green-200">
-                                    <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
-                                    <p class="text-xs text-gray-500">10pm - 7am every day</p>
-                                    <input type="number" id="tou_offpeak_rate" value="24.28" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                </div>
-                                <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                    <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load</label>
-                                    <p class="text-xs text-gray-500">e.g., Hot water</p>
-                                    <input type="number" id="tou_controlled_load_rate" value="14.6" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                        <div id="otherSupplierDetailsContainer" class="hidden transition-all duration-300">
+                             <div class="mb-4">
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</label>
+                                <div class="flex items-center space-x-4" id="rateTypeSelector">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="rateType" value="flat" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked>
+                                        <span class="ml-2 text-sm text-gray-700">Flat Rate</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="rateType" value="tou" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
+                                        <span class="ml-2 text-sm text-gray-700">Time of Use (TOU)</span>
+                                    </label>
                                 </div>
                             </div>
-                             <div>
-                                <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
-                                <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                            
+                            <!-- Daily Connection input for Flat and TOU -->
+                            <div class="mb-4">
+                                <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day)</label>
+                                <input type="number" id="dailyConnectionRate" value="102.83" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                <p class="text-xs text-gray-500 mt-1">This is a fixed daily service fee.</p>
+                            </div>
+
+                            <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                 <div>
+                                    <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh)</label>
+                                    <input type="number" id="otherSupplierRate" value="36" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 36">
+                                 </div>
+                                 <div>
+                                    <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
+                                    <input type="number" id="otherSupplierFeedInRateFlat" value="5" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                                </div>
+                            </div>
+
+                            <div id="touRateSection" class="hidden">
+                                <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
+                                <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                    <div class="bg-red-50 p-3 rounded-lg border border-red-200">
+                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
+                                        <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
+                                        <input type="number" id="tou_peak_rate" value="57.93" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
+                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
+                                        <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
+                                        <input type="number" id="tou_shoulder_rate" value="30.61" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div class="bg-green-50 p-3 rounded-lg border border-green-200">
+                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
+                                        <p class="text-xs text-gray-500">10pm - 7am every day</p>
+                                        <input type="number" id="tou_offpeak_rate" value="24.28" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load</label>
+                                        <p class="text-xs text-gray-500">e.g., Hot water</p>
+                                        <input type="number" id="tou_controlled_load_rate" value="14.6" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                </div>
+                                 <div>
+                                    <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
+                                    <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -128,7 +135,7 @@
 
             <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
                 <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
-                <p id="message" class="text-lg"></p>
+                <div id="message" class="text-left"></div>
             </div>
 
             <div id="resultsSection" class="hidden">
@@ -164,28 +171,115 @@
     </div>
 
     <script>
-        // --- Amber Electric Constants (Refactored) ---
+        // --- Amber Electric Constants ---
         const AMBER_CONNECTION_COST_PER_DAY_CENTS = 109.894;
         const AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS = 72.316;
         const AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS = 42.345;
         const AMBER_API_URL = 'https://api.amber.com.au/v1';
 
-        // --- Global cache for API data ---
-        let cachedChannelData = null;
+        // --- Global cache for API data and charts ---
+        let cachedChannelData = null; // Holds the aggregated data for the current period for recalculation/CSV
         let lastFetchedStartDate = null;
         let lastFetchedEndDate = null;
         let usageChart = null;
         let dailyUsageChart = null;
 
+        // --- IndexedDB Caching ---
+        let db;
+
+        function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('AmberDataCache', 1);
+
+                request.onupgradeneeded = event => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('usageData')) {
+                        // The store holds daily usage data objects. Key is 'YYYY-MM-DD'.
+                        db.createObjectStore('usageData', { keyPath: 'date' });
+                    }
+                };
+
+                request.onsuccess = event => {
+                    db = event.target.result;
+                    console.log("Database initialized successfully.");
+                    resolve(db);
+                };
+
+                request.onerror = event => {
+                    console.error("Database error:", event.target.errorCode);
+                    reject(event.target.errorCode);
+                };
+            });
+        }
+
+        function saveDataToCache(dailyData) {
+            if (!db) return Promise.reject("DB not initialized");
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['usageData'], 'readwrite');
+                const store = transaction.objectStore('usageData');
+                
+                if (dailyData.length === 0) {
+                    resolve();
+                    return;
+                }
+                
+                let completed = 0;
+                dailyData.forEach(dayObject => {
+                    const request = store.put(dayObject); // dayObject is { date: 'YYYY-MM-DD', channels: {...} }
+                    request.onsuccess = () => {
+                        completed++;
+                        if (completed === dailyData.length) {
+                            resolve();
+                        }
+                    };
+                    request.onerror = (event) => {
+                        console.error('Error saving data for date:', dayObject.date, event.target.error);
+                        reject(event.target.error);
+                    };
+                });
+
+                transaction.oncomplete = () => console.log(`Transaction complete: Saved ${dailyData.length} days to cache.`);
+                transaction.onerror = (event) => reject(event.target.error);
+            });
+        }
+
+        function getDataFromCache(dates) {
+            if (!db) return Promise.reject("DB not initialized");
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['usageData'], 'readonly');
+                const store = transaction.objectStore('usageData');
+                const results = {};
+                
+                if (dates.length === 0) {
+                    resolve({});
+                    return;
+                }
+
+                let completed = 0;
+                dates.forEach(date => {
+                    const request = store.get(date);
+                    request.onsuccess = (event) => {
+                        if (event.target.result) {
+                            results[date] = event.target.result.channels;
+                        }
+                        completed++;
+                        if (completed === dates.length) {
+                            resolve(results);
+                        }
+                    };
+                    request.onerror = (event) => reject(event.target.error);
+                });
+            });
+        }
+        
+        // --- Date & Formatting Helpers ---
         const formatForInput = (date) => {
             const year = date.getFullYear();
             const month = (date.getMonth() + 1).toString().padStart(2, '0');
             const day = date.getDate().toString().padStart(2, '0');
             return `${year}-${month}-${day}`;
         };
-
-        // Convert a Date object to a local ISO-like string with timezone offset (no milliseconds)
-        // e.g. "2025-08-02T23:55:00+10:00"
+        
         function toLocalIsoWithOffset(d) {
             function pad(n) { return String(n).padStart(2, '0'); }
             const year = d.getFullYear();
@@ -194,14 +288,11 @@
             const hours = pad(d.getHours());
             const minutes = pad(d.getMinutes());
             const seconds = pad(d.getSeconds());
-
-            // timezone offset in minutes, positive if local time is behind UTC (so we invert sign)
             const offsetMinutes = -d.getTimezoneOffset();
             const sign = offsetMinutes >= 0 ? '+' : '-';
             const absOffset = Math.abs(offsetMinutes);
             const offsetHours = pad(Math.floor(absOffset / 60));
             const offsetMins = pad(absOffset % 60);
-
             return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
         }
 
@@ -211,13 +302,9 @@
             const savedApiKey = localStorage.getItem('amberApiKey');
             if (savedApiKey) {
                 apiKeyInput.value = savedApiKey;
-                console.log("Loaded API key from local storage.");
             }
 
-            // Custom tooltip positioner to follow the cursor
-            Chart.Tooltip.positioners.cursor = function(items, eventPosition) {
-                return eventPosition;
-            };
+            Chart.Tooltip.positioners.cursor = (items, eventPosition) => eventPosition;
 
             const endDateInput = document.getElementById('endDate');
             const startDateInput = document.getElementById('startDate');
@@ -236,30 +323,22 @@
                 startDateInput.value = formatForInput(firstDayOfCurrentMonth);
                 endDateInput.value = formatForInput(lastDayOfCurrentMonth);
             }
-
-
+            
+            // --- UI Settings Persistence ---
             const rateTypeSelector = document.getElementById('rateTypeSelector');
             const flatRateSection = document.getElementById('flatRateSection');
             const touRateSection = document.getElementById('touRateSection');
 
-            // Load settings from localStorage
-            const savedRateType = localStorage.getItem('rateType');
-            if (savedRateType) {
-                document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
-                if (savedRateType === 'tou') {
-                    flatRateSection.classList.add('hidden');
-                    touRateSection.classList.remove('hidden');
-                } else {
-                    flatRateSection.classList.remove('hidden');
-                    touRateSection.classList.add('hidden');
-                }
+            const savedRateType = localStorage.getItem('rateType') || 'flat';
+            document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
+            if (savedRateType === 'tou') {
+                flatRateSection.classList.add('hidden');
+                touRateSection.classList.remove('hidden');
             }
-            
-            const savedFlatRate = localStorage.getItem('flatRate');
-            if (savedFlatRate) document.getElementById('otherSupplierRate').value = savedFlatRate;
-            
-            const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
-            if (savedFlatFeedIn) document.getElementById('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
+
+            document.getElementById('otherSupplierRate').value = localStorage.getItem('flatRate') || '36';
+            document.getElementById('otherSupplierFeedInRateFlat').value = localStorage.getItem('flatFeedInRate') || '5';
+            document.getElementById('dailyConnectionRate').value = localStorage.getItem('dailyConnectionRate') || '102.83';
             
             const savedTouRates = localStorage.getItem('touRates');
             if (savedTouRates) {
@@ -270,42 +349,16 @@
                 document.getElementById('tou_controlled_load_rate').value = rates.controlledLoad;
                 document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
             }
-
-            const savedDailyConnectionRate = localStorage.getItem('dailyConnectionRate');
-            if (savedDailyConnectionRate) {
-                document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
-            } else {
-                document.getElementById('dailyConnectionRate').value = '102.83'; // Set default value
-            }
-
-
-            // Add listeners to save settings on change
+            
             rateTypeSelector.addEventListener('change', (e) => {
                 localStorage.setItem('rateType', e.target.value);
-                if (e.target.value === 'tou') {
-                    flatRateSection.classList.add('hidden');
-                    touRateSection.classList.remove('hidden');
-                } else {
-                    flatRateSection.classList.remove('hidden');
-                    touRateSection.classList.add('hidden');
-                }
-            });
-
-            document.getElementById('otherSupplierRate').addEventListener('input', (e) => {
-                localStorage.setItem('flatRate', e.target.value);
-            });
-            document.getElementById('otherSupplierFeedInRateFlat').addEventListener('input', (e) => {
-                localStorage.setItem('flatFeedInRate', e.target.value);
-            });
-            document.getElementById('dailyConnectionRate').addEventListener('input', (e) => {
-                 localStorage.setItem('dailyConnectionRate', e.target.value);
+                flatRateSection.classList.toggle('hidden', e.target.value === 'tou');
+                touRateSection.classList.toggle('hidden', e.target.value !== 'tou');
             });
             
-            document.getElementById('tou_peak_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_shoulder_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_offpeak_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_controlled_load_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('otherSupplierFeedInRateTou').addEventListener('input', saveTouSettings);
+            document.getElementById('otherSupplierRate').addEventListener('input', (e) => localStorage.setItem('flatRate', e.target.value));
+            document.getElementById('otherSupplierFeedInRateFlat').addEventListener('input', (e) => localStorage.setItem('flatFeedInRate', e.target.value));
+            document.getElementById('dailyConnectionRate').addEventListener('input', (e) => localStorage.setItem('dailyConnectionRate', e.target.value));
             
             function saveTouSettings() {
                 const rates = {
@@ -317,13 +370,33 @@
                 };
                 localStorage.setItem('touRates', JSON.stringify(rates));
             }
+            ['tou_peak_rate', 'tou_shoulder_rate', 'tou_offpeak_rate', 'tou_controlled_load_rate', 'otherSupplierFeedInRateTou'].forEach(id => {
+                document.getElementById(id).addEventListener('input', saveTouSettings);
+            });
 
+            // --- Supplier Details Toggle ---
+            const toggleBtn = document.getElementById('toggleSupplierDetailsBtn');
+            const supplierDetailsContainer = document.getElementById('otherSupplierDetailsContainer');
 
+            const supplierDetailsVisible = localStorage.getItem('supplierDetailsVisible') === 'true';
+            supplierDetailsContainer.classList.toggle('hidden', !supplierDetailsVisible);
+            toggleBtn.textContent = supplierDetailsVisible ? 'Hide' : 'Show';
+
+            toggleBtn.addEventListener('click', () => {
+                const isHidden = supplierDetailsContainer.classList.toggle('hidden');
+                toggleBtn.textContent = isHidden ? 'Show' : 'Hide';
+                localStorage.setItem('supplierDetailsVisible', !isHidden);
+            });
+
+            // --- Main Buttons ---
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
             document.getElementById('showGraphButton').addEventListener('click', display24hrAverageGraph);
+            
+            // Initialize IndexedDB on load
+            initDB().catch(err => console.error("Failed to initialize DB:", err));
         });
 
-        // --- Main Fetch and Calculation Logic ---
+        // --- Main Fetch, Cache, and Calculation Logic ---
         document.getElementById('fetchData').addEventListener('click', async () => {
             const resultsSection = document.getElementById('resultsSection');
             const messageSection = document.getElementById('messageSection');
@@ -347,470 +420,345 @@
             const startDateValue = document.getElementById('startDate').value;
             const endDateValue = document.getElementById('endDate').value;
             
-            // Store the dates in localStorage for next time
-            localStorage.setItem('startDate', startDateValue);
-            localStorage.setItem('endDate', endDateValue);
-            
-            if (!apiKey) {
+            if (!apiKey || !startDateValue || !endDateValue) {
                 messageSection.classList.remove('hidden');
-                messageEl.textContent = 'Please enter your Amber API key.';
+                messageEl.textContent = 'Please enter your API key and select a start and end date.';
                 return;
             }
             
             localStorage.setItem('amberApiKey', apiKey);
-            console.log("Saved API key to local storage.");
-
-             if (!startDateValue || !endDateValue) {
-                messageSection.classList.remove('hidden');
-                messageEl.textContent = 'Please select a start and end date.';
-                return;
-            }
-            // Parse date strings as local time by appending T00:00:00
+            localStorage.setItem('startDate', startDateValue);
+            localStorage.setItem('endDate', endDateValue);
+            
             const overallStartDate = new Date(startDateValue + 'T00:00:00');
             const overallEndDate = new Date(endDateValue + 'T00:00:00');
-            overallEndDate.setHours(23, 59, 59, 999); // Ensure the entire end day is included
 
             if (overallEndDate < overallStartDate) {
                 messageSection.classList.remove('hidden');
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
-
-            // No need to add 1 as the dates cover the entire day. ie until 23:59:59:999
-            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
             
-            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const todayStr = formatForInput(today);
+            const yesterday = new Date(today);
+            yesterday.setDate(today.getDate() - 1);
+            const yesterdayStr = formatForInput(yesterday);
+            const dbyesterday = new Date(today);
+            dbyesterday.setDate(today.getDate() - 2);
+            const dbyesterdayStr = formatForInput(dbyesterday);
 
-            if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
-                console.log("Using cached data, recalculating costs...");
-                messageSection.classList.remove('hidden');
-                loader.classList.add('hidden');
-                messageEl.textContent = 'Recalculating with new rates...';
-
-                setTimeout(() => {
-                    calculateOtherSupplierCosts(cachedChannelData);
-                    
-                    const demandTariffInfo = calculateDemandTariff(cachedChannelData);
-                    const demandTariffCost = demandTariffInfo.cost;
-
-                    let overallAmberCost = 0;
-                    let overallOtherCost = 0;
-
-                    Object.values(cachedChannelData).forEach(c => {
-                        overallAmberCost += c.totalAmberCost;
-                        overallOtherCost += c.totalOtherCost;
-                    });
-                    
-                    overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
-                    overallOtherCost += otherDailyConnection / 100;
-
-                    messageSection.classList.add('hidden');
-                    resultsSection.classList.remove('hidden');
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
-                }, 200);
-
-                return;
+            const allDatesInSelectedRange = [];
+            let loopDate = new Date(overallStartDate);
+            while(loopDate <= overallEndDate) {
+                allDatesInSelectedRange.push(formatForInput(loopDate));
+                loopDate.setDate(loopDate.getDate() + 1);
             }
-
-            cachedChannelData = null;
+            
+            const datesToProcess = allDatesInSelectedRange.filter(d => new Date(d + "T00:00:00") <= today);
+            const futureDatesCount = allDatesInSelectedRange.length - datesToProcess.length;
 
             messageSection.classList.remove('hidden');
             loader.classList.remove('hidden');
-            messageEl.textContent = 'Fetching your site details...';
-
-            const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
+            messageEl.innerHTML = `<p>Processing ${datesToProcess.length} days...</p>`;
 
             try {
-                const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
-                 if (!sitesResponse.ok) {
-                    let detail = `Status: ${sitesResponse.status} ${sitesResponse.statusText}`;
-                    try { const errorText = await sitesResponse.text(); detail = JSON.parse(errorText).message || errorText; } catch (e) { /* ignore */ }
-                    if (sitesResponse.status === 403) { throw new Error(`Authentication failed. Your API Key appears to be invalid.`); }
-                    throw new Error(`Failed to fetch sites. ${detail}`);
-                }
-                const sites = await sitesResponse.json();
-                if (!sites || sites.length === 0) throw new Error('No sites found for this API key.');
+                // 1. Check Cache for the valid dates
+                const cachedResults = await getDataFromCache(datesToProcess);
+                const availableCachedDates = Object.keys(cachedResults);
+
+                // 2. Determine which dates to fetch/refresh
+                const datesToFetch = datesToProcess.filter(d =>
+                    d === todayStr ||                  // It's today
+                    d === yesterdayStr ||              // It's yesterday
+                    d === dbyesterdayStr ||            // It's day before yesterday
+                    !availableCachedDates.includes(d)  // It's not in the cache
+                );
+                const datesFromCache = datesToProcess.filter(d => !datesToFetch.includes(d));
+
+                // 3. Display enhanced Cache Status
+                let cacheStatusHTML = `<p class="text-lg font-medium">Range: ${startDateValue} to ${endDateValue}</p>`;
+                if (futureDatesCount > 0) cacheStatusHTML += `<p class="text-gray-500">⚪ Skipping ${futureDatesCount} future day(s).</p>`;
+                if (datesFromCache.length > 0) cacheStatusHTML += `<p class="text-green-600">✅ Using cache for ${datesFromCache.length} days.</p>`;
                 
-                const site = sites[0];
-                const siteId = site.id;
-                const channels = site.channels;
-                if (!channels || channels.length === 0) throw new Error('No channels found for this site.');
-
-                messageEl.textContent = `Site found: ${siteId}. Fetching usage data...`;
+                const refreshCount = datesToFetch.filter(d => d === todayStr || d === yesterdayStr || d === dbyesterdayStr).length;
+                if (refreshCount > 0) cacheStatusHTML += `<p class="text-yellow-600">🔄 Refreshing ${refreshCount} recent day(s).</p>`;
                 
-                let channelTotals = {};
-                channels.forEach(c => {
-                    channelTotals[c.identifier] = {
-                        identifier: c.identifier,
-                        type: c.type,
-                        totalKWh: 0,
-                        totalAmberCost: 0,
-                        totalCents: 0, 
-                        count: 0, 
-                        usageData: []
-                    };
-                });
+                const newDownloadCount = datesToFetch.filter(d => d !== todayStr && d !== yesterdayStr && d !== dbyesterdayStr).length;
+                if (newDownloadCount > 0) cacheStatusHTML += `<p class="text-blue-600">⬇️ Downloading ${newDownloadCount} new day(s).</p>`;
+                
+                if (datesToFetch.length === 0 && datesToProcess.length > 0) cacheStatusHTML += `<p>All data loaded from local cache.</p>`;
+                messageEl.innerHTML = cacheStatusHTML;
 
-                let loopStartDate = new Date(overallStartDate);
-                while (loopStartDate <= overallEndDate) {
-                    let loopEndDate = new Date(loopStartDate);
-                    loopEndDate.setDate(loopEndDate.getDate() + 6);
-                    if (loopEndDate > overallEndDate) loopEndDate = new Date(overallEndDate);
-
-                    const startDateStr = formatForInput(loopStartDate);
-                    const endDateStr = formatForInput(loopEndDate);
+                // 4. Fetch from API if needed
+                let newlyFetchedData = {};
+                if (datesToFetch.length > 0) {
+                    const siteDetails = await getSiteDetails(apiKey);
+                    newlyFetchedData = await fetchUsageFromApi(apiKey, siteDetails.id, siteDetails.channels, datesToFetch);
                     
-                    for (const channel of channels) {
-                        const channelId = channel.identifier;
-                        messageEl.textContent = `Fetching ${channelId} data for ${startDateStr} to ${endDateStr}...`;
-                        
-                        const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${startDateStr}&endDate=${endDateStr}&channel=${channelId}`;
-                        const usageResponse = await fetch(usageUrl, { headers });
-                        const responseText = await usageResponse.text();
+                    // 5. Save to cache, excluding today and yesterday
+                    const dataToSave = Object.keys(newlyFetchedData)
+                        .filter(date => date !== todayStr && date !== yesterdayStr && date !== dbyesterdayStr)
+                        .map(date => ({ date: date, channels: newlyFetchedData[date] }));
 
-                         if (!usageResponse.ok) {
-                            let detail = responseText;
-                            try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
-                            throw new Error(`Failed to fetch usage for ${channelId}. Status: ${usageResponse.status}. Message: ${detail}`);
-                        }
-                        
-                        const usageData = JSON.parse(responseText);
-                        
-                        if (usageData && usageData.length > 0) {
-                             usageData.forEach(item => {
-                             
-                                // Adjust timestamps from finish time to start time (subtract 5 minutes) 
-                                const itemDate = new Date(item.nemTime);
-                                itemDate.setMinutes(itemDate.getMinutes() - 5);
-                                item.nemTime = toLocalIsoWithOffset(itemDate);
-                     
-                                if (item.channelIdentifier !== channelId) return;
-                                const channelData = channelTotals[channelId];
-                                const kwh = parseFloat(item.kwh) || 0;
-                                const perKwh = parseFloat(item.perKwh) || 0;
-                                channelData.totalKWh += kwh;
-                                channelData.totalAmberCost += (perKwh / 100) * kwh;
-                                channelData.usageData.push(item);
-                                channelData.totalCents += perKwh;
-                                channelData.count += 1;
-                            });
-                        }
+                    if (dataToSave.length > 0) {
+                        await saveDataToCache(dataToSave);
                     }
-                    loopStartDate.setDate(loopStartDate.getDate() + 7);
                 }
 
-                // Sort all usage data by date after fetching is complete
-                Object.values(channelTotals).forEach(c => {
-                    c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
+                // 6. Combine and Aggregate Data
+                messageEl.textContent = 'Combining data and calculating costs...';
+                const combinedDataByDay = { ...cachedResults, ...newlyFetchedData };
+                
+                const masterChannelTotals = {};
+                Object.values(combinedDataByDay).forEach(dayData => {
+                    if (!dayData) return;
+                    Object.values(dayData).forEach(channelInfo => {
+                        if (channelInfo && channelInfo.identifier && !masterChannelTotals[channelInfo.identifier]) {
+                             masterChannelTotals[channelInfo.identifier] = {
+                                identifier: channelInfo.identifier, type: channelInfo.type,
+                                totalKWh: 0, totalAmberCost: 0, totalCents: 0, count: 0, usageData: []
+                            };
+                        }
+                    });
+                });
+
+                datesToProcess.forEach(date => {
+                    const dayData = combinedDataByDay[date];
+                    if (!dayData) return;
+                    Object.keys(dayData).forEach(channelId => {
+                        if(masterChannelTotals[channelId]) {
+                            const { totalKWh, totalAmberCost, totalCents, count, usageData } = dayData[channelId];
+                            masterChannelTotals[channelId].totalKWh += totalKWh;
+                            masterChannelTotals[channelId].totalAmberCost += totalAmberCost;
+                            masterChannelTotals[channelId].totalCents += totalCents;
+                            masterChannelTotals[channelId].count += count;
+                            masterChannelTotals[channelId].usageData.push(...usageData);
+                        }
+                    });
                 });
                 
-                // --- START: FAKE CONTROLLED LOAD DATA FOR TESTING ---
-                // To disable, set to false.
-                const addFakeControlledLoad = false;
-                if (addFakeControlledLoad) {
-                    console.log("Injecting FAKE controlled load data for testing...");
-                    let controlledLoadChannel = Object.values(channelTotals).find(c => c.type === 'controlledLoad');
-                    if (!controlledLoadChannel) {
-                        const controlledLoadId = 'B3'; // A common identifier
-                        channelTotals[controlledLoadId] = {
-                            identifier: controlledLoadId,
-                            type: 'controlledLoad',
-                            totalKWh: 0,
-                            totalAmberCost: 0,
-                            totalCents: 0,
-                            count: 0,
-                            usageData: []
-                        };
-                        controlledLoadChannel = channelTotals[controlledLoadId];
-                    }
-
-                    const dailyKwh = 12; // 3kWh per day
-                    const durationHours = 4; // from 10am to 1pm
-                    const intervalsPerHour = 12; // 5-minute intervals
-                    const kwhPerInterval = dailyKwh / (durationHours * intervalsPerHour);
-
-                    let currentDate = new Date(overallStartDate);
-                    while (currentDate <= overallEndDate) {
-                        for (let hour = 10; hour < 10+durationHours; hour++) {
-                            for (let minute = 0; minute < 60; minute += 5) {
-                                const fakeNemTime = new Date(currentDate);
-                                fakeNemTime.setHours(hour, minute, 0, 0);
-
-                                // Find a corresponding general channel item to get a realistic price
-                                const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
-                                let perKwh = 20; // fallback price
-                                if (generalChannel) {
-                                    const correspondingGeneralData = generalChannel.usageData.find(item => new Date(item.nemTime).getTime() === fakeNemTime.getTime());
-                                    if (correspondingGeneralData) {
-                                        perKwh = correspondingGeneralData.perKwh;
-                                    }
-                                }
-
-                                const fakeItem = {
-                                    // use local-ISO-with-offset format (no ms) so fake items match E5-style timestamps
-                                    nemTime: toLocalIsoWithOffset(fakeNemTime),
-                                    kwh: kwhPerInterval,
-                                    perKwh: perKwh,
-                                    channelIdentifier: controlledLoadChannel.identifier,
-                                };
-
-                                controlledLoadChannel.usageData.push(fakeItem);
-                                controlledLoadChannel.totalKWh += kwhPerInterval;
-                                controlledLoadChannel.totalAmberCost += (perKwh / 100) * kwhPerInterval;
-                                controlledLoadChannel.totalCents += perKwh;
-                                controlledLoadChannel.count += 1;
-                            }
-                        }
-                        currentDate.setDate(currentDate.getDate() + 1);
-                    }
-                    // Re-sort after adding fake data
-                    controlledLoadChannel.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
-                }
-                // --- END: FAKE CONTROLLED LOAD DATA FOR TESTING ---
-
-
-                messageEl.textContent = 'Calculating costs...';
+                Object.values(masterChannelTotals).forEach(c => c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime)));
                 
-                calculateOtherSupplierCosts(channelTotals);
-
+                // 7. Run calculations and display
+                cachedChannelData = JSON.parse(JSON.stringify(masterChannelTotals));
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
-                cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
+
+                calculateOtherSupplierCosts(cachedChannelData);
                 
+                const numDays = datesToProcess.length;
+                const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
+                const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                 const demandTariffCost = demandTariffInfo.cost;
                 
-                let overallAmberCost = 0;
-                let overallOtherCost = 0;
+                const { totalAmber: overallAmberCost, totalOther: overallOtherCost } = Object.values(cachedChannelData).reduce((acc, c) => ({
+                    totalAmber: acc.totalAmber + c.totalAmberCost,
+                    totalOther: acc.totalOther + c.totalOtherCost
+                }), { totalAmber: 0, totalOther: 0 });
 
-                Object.values(cachedChannelData).forEach(c => {
-                    overallAmberCost += c.totalAmberCost;
-                    overallOtherCost += c.totalOtherCost;
-                });
-
-                overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
-                overallOtherCost += otherDailyConnection / 100;
+                const finalAmberCost = overallAmberCost + (demandTariffCost + amberDailyCosts / 100);
+                const finalOtherCost = overallOtherCost + (otherDailyConnection / 100);
 
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
+                displayResults(cachedChannelData, finalAmberCost, finalOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
                 cachedChannelData = null;
                 loader.classList.add('hidden');
-                messageEl.textContent = `Error: ${error.message}`;
+                messageEl.innerHTML = `Error: ${error.message}`;
             }
         });
 
-        // --- Helper Functions ---
-        
-        /**
-         * Generates and downloads a CSV of all channels' usage (nemTime, channelIdentifier, kWh, perKwh).
-         */
-        function generateAndDownloadCSV() {
-            if (!cachedChannelData) {
-                // Custom modal or message box instead of alert()
-                const messageBox = document.createElement('div');
-                messageBox.innerHTML = `
-                    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" id="my-modal">
-                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                            <div class="mt-3 text-center">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900">No Data Available</h3>
-                                <div class="mt-2 px-7 py-3">
-                                    <p class="text-sm text-gray-500">No data available to export. Please fetch data first.</p>
-                                </div>
-                                <div class="items-center px-4 py-3">
-                                    <button id="close-modal" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                        OK
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(messageBox);
-                document.getElementById('close-modal').addEventListener('click', () => {
-                    messageBox.remove();
-                });
-                return;
-            }
+        // --- API Fetching Helpers ---
+        async function getSiteDetails(apiKey) {
+            const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
+            const sitesResponse = await fetch(`${AMBER_API_URL}/sites`, { headers });
+            const responseText = await sitesResponse.text();
 
-            let csvContent = "nemTime,channelIdentifier,kWh,SpotPrice_cents_per_kWh\n";
-            
-            Object.values(cachedChannelData).forEach(channel => {
-                if (!channel.usageData || channel.usageData.length === 0) return;
-                channel.usageData.forEach(item => {
-                    const nemTime = item.nemTime || '';
-                    const kwh = (item.kwh !== undefined && item.kwh !== null) ? item.kwh : '';
-                    const perKwh = (item.perKwh !== undefined && item.perKwh !== null) ? item.perKwh : '';
-                    const row = `"${nemTime}",${channel.identifier},${kwh},${perKwh}\n`;
-                    csvContent += row;
-                });
+            if (!sitesResponse.ok) {
+                let detail = `Status ${sitesResponse.status}: ${sitesResponse.statusText}`;
+                 try {
+                    const errorJson = JSON.parse(responseText);
+                    detail = errorJson.message || responseText;
+                } catch (e) {
+                    detail = responseText || detail;
+                }
+
+                if (sitesResponse.status === 403) throw new Error(`Authentication failed. API Key may be invalid. <br>Reason: ${detail}`);
+                throw new Error(`Failed to fetch site details. <br>Reason: ${detail}`);
+            }
+            const sites = JSON.parse(responseText);
+            if (!sites || sites.length === 0) throw new Error('No sites found for this API key.');
+            const site = sites[0];
+            if (!site.channels || site.channels.length === 0) throw new Error('No channels found for this site.');
+            return { id: site.id, channels: site.channels };
+        }
+
+        async function fetchUsageFromApi(apiKey, siteId, channels, datesToFetch) {
+            const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
+            const messageEl = document.getElementById('message');
+            const allFetchedData = {}; // Structured as { 'YYYY-MM-DD': { 'channelId': {...} } }
+
+            // Pre-initialize all dates to ensure they get an entry in the cache, even if no data is returned.
+            datesToFetch.forEach(date => {
+                allFetchedData[date] = {};
             });
 
+            const dateChunks = [];
+            for (let i = 0; i < datesToFetch.length; i += 7) {
+                dateChunks.push(datesToFetch.slice(i, i + 7));
+            }
+
+            for (const chunk of dateChunks) {
+                const startDateStr = chunk[0];
+                const endDateStr = chunk[chunk.length - 1];
+
+                for (const channel of channels) {
+                    const channelId = channel.identifier;
+                    messageEl.innerHTML += `<p class="text-sm italic">Fetching ${channelId} for ${startDateStr} to ${endDateStr}...</p>`;
+                    
+                    const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${startDateStr}&endDate=${endDateStr}&channel=${channelId}`;
+                    const usageResponse = await fetch(usageUrl, { headers });
+                    const responseText = await usageResponse.text();
+
+                    if (!usageResponse.ok) {
+                        let detail = `Status ${usageResponse.status}: ${usageResponse.statusText}`;
+                        try {
+                            const errorJson = JSON.parse(responseText);
+                            detail = errorJson.message || responseText;
+                        } catch (e) {
+                            detail = responseText || detail;
+                        }
+                         throw new Error(`Failed to fetch usage for channel <strong>${channelId}</strong> from <strong>${startDateStr}</strong> to <strong>${endDateStr}</strong>. <br>Reason: ${detail}`);
+                    }
+                    
+                    const usageDataForPeriod = JSON.parse(responseText);
+                    
+                    if (usageDataForPeriod && usageDataForPeriod.length > 0) {
+                        usageDataForPeriod.forEach(item => {
+                            if (item.channelIdentifier !== channelId) return;
+
+                            const itemDate = new Date(item.nemTime);
+                            itemDate.setMinutes(itemDate.getMinutes() - 5);
+                            const itemDateStr = formatForInput(itemDate);
+                            item.nemTime = toLocalIsoWithOffset(itemDate);
+
+                            if (!allFetchedData[itemDateStr]) allFetchedData[itemDateStr] = {};
+                            if (!allFetchedData[itemDateStr][channelId]) {
+                                allFetchedData[itemDateStr][channelId] = {
+                                    identifier: channel.identifier, type: channel.type,
+                                    totalKWh: 0, totalAmberCost: 0, totalCents: 0, count: 0, usageData: []
+                                };
+                            }
+                            
+                            const dayChannelData = allFetchedData[itemDateStr][channelId];
+                            const kwh = parseFloat(item.kwh) || 0;
+                            const perKwh = parseFloat(item.perKwh) || 0;
+                            dayChannelData.totalKWh += kwh;
+                            dayChannelData.totalAmberCost += (perKwh / 100) * kwh;
+                            dayChannelData.usageData.push(item);
+                            dayChannelData.totalCents += perKwh;
+                            dayChannelData.count += 1;
+                        });
+                    }
+                }
+            }
+            return allFetchedData;
+        }
+
+        // --- Calculation and Display Functions (Largely Unchanged) ---
+        
+        function generateAndDownloadCSV() {
+            if (!cachedChannelData) {
+                // Using a simple message for now, as custom modals add complexity.
+                console.warn("No data available to export. Please fetch data first.");
+                return;
+            }
+            let csvContent = "nemTime,channelIdentifier,kWh,SpotPrice_cents_per_kWh\n";
+            Object.values(cachedChannelData).forEach(channel => {
+                if (!channel.usageData) return;
+                channel.usageData.forEach(item => {
+                    csvContent += `"${item.nemTime || ''}",${channel.identifier},${item.kwh || ''},${item.perKwh || ''}\n`;
+                });
+            });
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
-            const url = URL.createObjectURL(blob);
-            link.setAttribute("href", url);
-            
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            link.setAttribute("download", `amber_usage_all_channels_${startDate}_to_${endDate}.csv`);
-            
-            link.style.visibility = 'hidden';
+            link.href = URL.createObjectURL(blob);
+            link.download = `amber_usage_${lastFetchedStartDate}_to_${lastFetchedEndDate}.csv`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
         }
 
-        /**
-         * Determines the TOU rate for a given timestamp based on a standard structure.
-         */
         function getTouRate(date, rates) {
-            const day = date.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+            const day = date.getDay();
             const hour = date.getHours();
             const isWeekday = day >= 1 && day <= 5;
-
-            if (hour >= 22 || hour < 7) {
-                return rates.offpeak;
-            }
-            if (isWeekday) {
-                if (hour >= 14 && hour < 20) {
-                    return rates.peak;
-                }
-                return rates.shoulder;
-            } else {
-                return rates.shoulder;
-            }
+            if (hour >= 22 || hour < 7) return rates.offpeak;
+            if (isWeekday) return (hour >= 14 && hour < 20) ? rates.peak : rates.shoulder;
+            return rates.shoulder;
         }
         
-        /**
-         * Calculates the 'Other Supplier' cost for each channel based on the selected rate type.
-         */
         function calculateOtherSupplierCosts(channelTotals) {
             const rateType = document.querySelector('input[name="rateType"]:checked').value;
-
             if (rateType === 'flat') {
-                const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
+                const otherRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
-                
                 Object.values(channelTotals).forEach(c => {
-                    if (c.type === 'feedIn') {
-                        c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
-                    } else {
-                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
-                    }
+                    c.totalOtherCost = c.type === 'feedIn' ? -1 * (c.totalKWh * feedInRate) / 100 : (c.totalKWh * otherRate) / 100;
                 });
-            } else { // 'tou'
+            } else {
                 const touRates = {
                     peak: parseFloat(document.getElementById('tou_peak_rate').value) || 0,
                     shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value) || 0,
                     offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value) || 0
                 };
-                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
-                 const controlledLoadRate = parseFloat(document.getElementById('tou_controlled_load_rate').value) || 0;
-
+                const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
+                const controlledLoadRate = parseFloat(document.getElementById('tou_controlled_load_rate').value) || 0;
                 Object.values(channelTotals).forEach(c => {
-                    let channelOtherCost = 0;
-                    if (c.type === 'feedIn') {
-                        channelOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
-                    } else if (c.type === 'controlledLoad') {
-                        channelOtherCost = (c.totalKWh * controlledLoadRate) / 100;
-                    }
-                    else { // Assumes 'general' or other consumption types fall under standard TOU
-                        channelOtherCost = c.usageData.reduce((total, item) => {
-                            const itemDate = new Date(item.nemTime);
-                            const rateForInterval = getTouRate(itemDate, touRates);
-                            return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
+                    if (c.type === 'feedIn') c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                    else if (c.type === 'controlledLoad') c.totalOtherCost = (c.totalKWh * controlledLoadRate) / 100;
+                    else {
+                        c.totalOtherCost = c.usageData.reduce((total, item) => {
+                            return total + ((parseFloat(item.kwh) || 0) * getTouRate(new Date(item.nemTime), touRates) / 100);
                         }, 0);
                     }
-                    c.totalOtherCost = channelOtherCost;
                 });
             }
         }
         
-        /**
-         * Calculates the Demand Tariff based on peak usage in demand windows.
-         */
         function calculateDemandTariff(channelTotals) {
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+            const demandWindowUsage = generalChannel.usageData.filter(item => item.tariffInformation?.demandWindow);
+            if (demandWindowUsage.length === 0) return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
 
-            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
-                console.log("No general channel data for demand tariff calculation.");
-                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
-            }
-
-            const demandWindowUsage = generalChannel.usageData.filter(item =>
-                item.tariffInformation && item.tariffInformation.demandWindow === true
-            );
-
-            if (demandWindowUsage.length === 0) {
-                console.log("No usage found within a demand window.");
-                return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
-            }
-
-            // Group 5-min intervals into 30-min chunks and sum their kWh
-            const thirtyMinChunks = {};
-            demandWindowUsage.forEach(item => {
+            const thirtyMinChunks = demandWindowUsage.reduce((acc, item) => {
                 const itemDate = new Date(item.nemTime);
-                const minutes = itemDate.getMinutes();
-                itemDate.setSeconds(0, 0);
-
-                if (minutes < 30) {
-                    itemDate.setMinutes(0);
-                } else {
-                    itemDate.setMinutes(30);
-                }
+                itemDate.setMinutes(itemDate.getMinutes() < 30 ? 0 : 30, 0, 0);
                 const blockStartTime = itemDate.toISOString();
+                acc[blockStartTime] = (acc[blockStartTime] || 0) + (parseFloat(item.kwh) || 0);
+                return acc;
+            }, {});
 
-                if (!thirtyMinChunks[blockStartTime]) {
-                    thirtyMinChunks[blockStartTime] = 0;
-                }
-                thirtyMinChunks[blockStartTime] += (parseFloat(item.kwh) || 0);
-            });
-
-            // Find the 30-min chunk with the highest usage
-            let maxDemandKwh = 0;
-            let maxDemandTime = null;
-
-            for (const startTime in thirtyMinChunks) {
-                if (thirtyMinChunks[startTime] > maxDemandKwh) {
-                    maxDemandKwh = thirtyMinChunks[startTime];
-                    maxDemandTime = startTime;
-                }
-            }
+            const [maxDemandTime, maxDemandKwh] = Object.entries(thirtyMinChunks).reduce((max, curr) => curr[1] > max[1] ? curr : max, [null, 0]);
+            if (maxDemandKwh === 0) return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
             
-            if (maxDemandKwh === 0) {
-                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
-            }
-
-            // Find the unique days that had a demand window
-            const demandDaysSet = new Set(
-                demandWindowUsage.map(item => item.nemTime.substring(0, 10))
-            );
-            const numberOfDemandDays = demandDaysSet.size;
-
-            // Calculate the final cost
+            const numberOfDemandDays = new Set(demandWindowUsage.map(item => item.nemTime.substring(0, 10))).size;
             const demandTariffCost = maxDemandKwh * 2 * (AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS / 100) * numberOfDemandDays;
 
-            console.log(`Demand Tariff Calculation: Max 30-min Demand=${maxDemandKwh.toFixed(4)}kWh at ${maxDemandTime}, Days=${numberOfDemandDays}, Cost=$${demandTariffCost.toFixed(2)}`);
-
-            return {
-                cost: demandTariffCost,
-                maxDemandKwh: maxDemandKwh,
-                demandDays: numberOfDemandDays,
-                maxDemandTime: maxDemandTime
-            };
+            return { cost: demandTariffCost, maxDemandKwh: maxDemandKwh, demandDays: numberOfDemandDays, maxDemandTime: maxDemandTime };
         }
 
-        /**
-         * Renders an interactive chart of average 24hr usage and pricing.
-         */
+        // --- Charting and Display Functions (Unchanged from original logic) ---
         function display24hrAverageGraph() {
-            const graphContainer = document.getElementById('graphContainer');
+             const graphContainer = document.getElementById('graphContainer');
             const showGraphButton = document.getElementById('showGraphButton');
 
             if (graphContainer.classList.contains('hidden')) {
@@ -819,11 +767,10 @@
             } else {
                 graphContainer.classList.add('hidden');
                 showGraphButton.textContent = 'Show 24hr Avg Graph';
-                return; // Just hide it and exit
+                return;
             }
 
             if (!cachedChannelData) {
-                console.error("No data available for graph.");
                 graphContainer.innerHTML = '<p class="text-center text-red-500">No data available to render graph.</p>';
                 return;
             }
@@ -832,7 +779,6 @@
             const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
-                console.error("No general usage data for graph.");
                  graphContainer.innerHTML = '<p class="text-center text-red-500">No general usage data found to render graph.</p>';
                 return;
             }
@@ -884,505 +830,214 @@
                 });
             }
 
-            const labels = [];
-            for (let i = 0; i < 48; i++) {
-                const hour = Math.floor(i / 2);
-                const minute = (i % 2 === 0) ? '00' : '30';
-                labels.push(`${hour.toString().padStart(2, '0')}:${minute}`);
-            }
+            const labels = Array.from({ length: 48 }, (_, i) => `${Math.floor(i / 2).toString().padStart(2, '0')}:${(i % 2) * 30 === 0 ? '00' : '30'}`);
             
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
-            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0); // Made negative and scaled
+            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0);
             const avgControlledLoadData = controlledLoadIntervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
             
-            if (usageChart) {
-                usageChart.destroy();
-            }
+            if (usageChart) usageChart.destroy();
             
-            // --- ONLY show controlled load dataset when channel exists AND has non-zero totalKWh ---
             const chartDatasets = [];
-            
             const avgDailyGeneralKwh = (generalChannel?.totalKWh || 0) / numDays;
             const avgDailyFeedInKwh = (feedInChannel?.totalKWh || 0) / numDays;
             const avgDailyControlledLoadKwh = (controlledLoadChannel?.totalKWh || 0) / numDays;
-
-            // NEW: Calculate average price based on total cost / total usage
             const generalAvgPrice = (generalChannel?.totalKWh > 0 ? ((generalChannel.totalAmberCost * 100) / generalChannel.totalKWh) : 0).toFixed(2);
             const feedInAvgPrice = (feedInChannel?.totalKWh > 0 ? ((-feedInChannel.totalAmberCost * 100) / feedInChannel.totalKWh) : 0).toFixed(2);
             const controlledLoadAvgPrice = (controlledLoadChannel?.totalKWh > 0 ? ((controlledLoadChannel.totalAmberCost * 100) / controlledLoadChannel.totalKWh) : 0).toFixed(2);
 
-
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
-                    label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(2)} kWh, Price: ${controlledLoadAvgPrice} c/kWh`,
-                    data: avgControlledLoadData,
-                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
-                    borderColor: 'rgba(13, 110, 253, 1)',
-                    yAxisID: 'yUsage',
-                    order: 2,
-                    barPercentage: 1.0,
-                    categoryPercentage: 1.0
+                    label: `Avg Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(2)} kWh, Price: ${controlledLoadAvgPrice} c/kWh`,
+                    data: avgControlledLoadData, backgroundColor: 'rgba(13, 110, 253, 0.6)', yAxisID: 'yUsage', order: 2
                 });
             }
-
             chartDatasets.push({
-                label: `Average Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(2)} kWh, Price: ${generalAvgPrice} c/kWh`,
-                data: avgUsageData,
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                yAxisID: 'yUsage',
-                order: 2,
-                barPercentage: 1.0,
-                categoryPercentage: 1.0
+                label: `Avg Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(2)} kWh, Price: ${generalAvgPrice} c/kWh`,
+                data: avgUsageData, backgroundColor: 'rgba(54, 162, 235, 0.6)', yAxisID: 'yUsage', order: 2
             });
-
             if (feedInChannel) {
                 chartDatasets.push({
-                    label: `Average Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(2)} kWh, Price: ${feedInAvgPrice} c/kWh`,
-                    data: avgFeedInData,
-                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                    borderColor: 'rgba(40, 167, 69, 1)',
-                    yAxisID: 'yUsage',
-                    order: 2,
-                    barPercentage: 1.0,
-                    categoryPercentage: 1.0
+                    label: `Avg Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(2)} kWh, Price: ${feedInAvgPrice} c/kWh`,
+                    data: avgFeedInData, backgroundColor: 'rgba(40, 167, 69, 0.6)', yAxisID: 'yUsage', order: 2
                 });
             }
-
             chartDatasets.push({
-                label: 'Average Spot Price (c/kWh)',
-                data: avgPriceData,
-                type: 'line',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                fill: false,
-                yAxisID: 'yPrice',
-                order: 1
+                label: 'Avg Spot Price (c/kWh)', data: avgPriceData, type: 'line', borderColor: 'rgba(255, 99, 132, 1)',
+                fill: false, yAxisID: 'yPrice', order: 1
             });
 
             const allUsage = [...avgUsageData, ...avgFeedInData, ...avgControlledLoadData];
             const usageMin = Math.min(...allUsage);
             const usageMax = Math.max(...allUsage);
             const priceMax = Math.max(...avgPriceData.filter(p => p !== null));
-
-            let priceAxisOptions = {
-                type: 'linear',
-                display: true,
-                position: 'right',
-                title: { display: true, text: 'Average Spot Price (c/kWh)' },
-                grid: { drawOnChartArea: false },
-            };
-
+            let priceAxisOptions = { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Avg Spot Price (c/kWh)' }, grid: { drawOnChartArea: false } };
             if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
                 const ratio = -usageMin / (usageMax - usageMin);
-                const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
+                priceAxisOptions.min = Math.floor(((ratio * priceMax) / (ratio - 1)) / 5) * 5;
                 priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
             }
 
             usageChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: chartDatasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+                type: 'bar', data: { labels: labels, datasets: chartDatasets },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: {
-                            stacked: true,
-                            ticks: {
-                                callback: function(value, index, ticks) {
-                                    const label = this.getLabelForValue(value);
-                                    if (index % 4 === 0) return label; // Every 2 hours
-                                    if (index === ticks.length - 1) return '24:00';
-                                    return '';
-                                },
-                                autoSkip: false,
-                                maxRotation: 45,
-                                minRotation: 45
-                            },
-                            grid: {
-                                color: function(context) {
-                                    if (context.index % 2 === 0) { // Darker for hourly
-                                        return 'rgba(0, 0, 0, 0.2)';
-                                    }
-                                    return 'rgba(0, 0, 0, 0.05)'; // Lighter for 30-min
-                                },
-                            }
-                        },
-                        yUsage: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: { display: true, text: 'Average Power (kW)' },
-                            stacked: true
-                        },
+                        x: { stacked: true, ticks: { callback: (v, i) => i % 4 === 0 ? labels[i] : (i === labels.length - 1 ? '24:00' : ''), autoSkip: false, maxRotation: 45, minRotation: 45 },
+                            grid: { color: c => c.index % 2 === 0 ? 'rgba(0,0,0,0.2)' : 'rgba(0,0,0,0.05)' } },
+                        yUsage: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Avg Power (kW)' }, stacked: true },
                         yPrice: priceAxisOptions
                     },
                     plugins: {
-                        title: {
-                            display: true,
-                            text: `Average 24-Hour Usage vs. Spot Price (${document.getElementById('startDate').value} to ${document.getElementById('endDate').value})`
-                        },
-                        tooltip: {
-                            position: 'cursor',
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (context.parsed.y !== null) {
-                                        if (context.dataset.yAxisID === 'yPrice') {
-                                            label = `Price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
-                                        } else {
-                                            label = `Usage: ${parseFloat(context.parsed.y).toFixed(4)} kW`;
-                                        }
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
+                        title: { display: true, text: `Avg 24-Hour Usage vs. Spot Price (${document.getElementById('startDate').value} to ${document.getElementById('endDate').value})`},
+                        tooltip: { position: 'cursor', callbacks: { label: c => c.dataset.yAxisID === 'yPrice' ? `Price: ${parseFloat(c.parsed.y).toFixed(2)} c/kWh` : `Usage: ${parseFloat(c.parsed.y).toFixed(4)} kW` } }
                     }
                 }
             });
         }
         
-        /**
-         * Renders an interactive chart of usage and pricing for a single selected day.
-         */
         function displayDailyGraph(selectedDateStr) {
             if (!cachedChannelData) return;
+
+            const chartContainer = document.getElementById('dailyChart').parentElement;
+            if (dailyUsageChart) {
+                dailyUsageChart.destroy();
+            }
+            // Reset the container to clear any previous messages and recreate the canvas
+            chartContainer.innerHTML = '<canvas id="dailyChart"></canvas>';
 
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
             const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
             const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
 
-            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
-                console.error("No general usage data for daily graph.");
+            const dayData = generalChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
+            const dayDataFeedIn = feedInChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
+            const dayDataControlled = controlledLoadChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
+
+            // If there's no data for any channel on this day, show a message and stop.
+            if (dayData.length === 0 && dayDataFeedIn.length === 0 && dayDataControlled.length === 0) {
+                const noDataMessage = document.createElement('div');
+                noDataMessage.className = "absolute inset-0 flex items-center justify-center text-gray-500 bg-gray-50 rounded-lg";
+                noDataMessage.innerHTML = `<p>No usage data recorded for this day.</p>`;
+                chartContainer.appendChild(noDataMessage);
                 return;
             }
 
-            const dayData = generalChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
-            
             const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0 }));
-
             dayData.forEach(item => {
-                const nemTimeStr = item.nemTime;
-                const hours = parseInt(nemTimeStr.substring(11, 13));
-                const minutes = parseInt(nemTimeStr.substring(14, 16));
-                const intervalIndex = hours * 12 + Math.floor(minutes / 5);
-                
-                if(intervals[intervalIndex]) {
-                    intervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
-                    intervals[intervalIndex].price = (intervals[intervalIndex].price || 0) + (parseFloat(item.perKwh) || 0);
-                    intervals[intervalIndex].count += 1;
-                }
+                const i = parseInt(item.nemTime.substring(11, 13)) * 12 + Math.floor(parseInt(item.nemTime.substring(14, 16)) / 5);
+                if(intervals[i]) { intervals[i].kwh += parseFloat(item.kwh) || 0; intervals[i].price = (intervals[i].price || 0) + (parseFloat(item.perKwh) || 0); intervals[i].count += 1; }
             });
-
             const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
-            if (feedInChannel && feedInChannel.usageData) {
-                const dayDataFeedIn = feedInChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
-                dayDataFeedIn.forEach(item => {
-                    const nemTimeStr = item.nemTime;
-                    const hours = parseInt(nemTimeStr.substring(11, 13));
-                    const minutes = parseInt(nemTimeStr.substring(14, 16));
-                    const intervalIndex = hours * 12 + Math.floor(minutes / 5);
-
-                    if (feedInIntervals[intervalIndex]) {
-                        feedInIntervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
-                    }
-                });
-            }
-            
+            dayDataFeedIn.forEach(item => {
+                const i = parseInt(item.nemTime.substring(11, 13)) * 12 + Math.floor(parseInt(item.nemTime.substring(14, 16)) / 5);
+                if (feedInIntervals[i]) feedInIntervals[i].kwh += parseFloat(item.kwh) || 0;
+            });
             const controlledLoadIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
-            if (controlledLoadChannel && controlledLoadChannel.usageData) {
-                const dayDataControlled = controlledLoadChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
-                dayDataControlled.forEach(item => {
-                    const nemTimeStr = item.nemTime;
-                    const hours = parseInt(nemTimeStr.substring(11, 13));
-                    const minutes = parseInt(nemTimeStr.substring(14, 16));
-                    const intervalIndex = hours * 12 + Math.floor(minutes / 5);
-
-                    if (controlledLoadIntervals[intervalIndex]) {
-                        controlledLoadIntervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
-                    }
-                });
-            }
-
-            const labels = intervals.map((_, i) => {
-                const hour = Math.floor(i / 12).toString().padStart(2, '0');
-                const minute = ((i % 12) * 5).toString().padStart(2, '0');
-                return `${hour}:${minute}`;
+            dayDataControlled.forEach(item => {
+                const i = parseInt(item.nemTime.substring(11, 13)) * 12 + Math.floor(parseInt(item.nemTime.substring(14, 16)) / 5);
+                if (controlledLoadIntervals[i]) controlledLoadIntervals[i].kwh += parseFloat(item.kwh) || 0;
             });
 
+            const labels = intervals.map((_, i) => `${Math.floor(i / 12).toString().padStart(2, '0')}:${((i % 12) * 5).toString().padStart(2, '0')}`);
             const usageData = intervals.map(i => i.kwh * 12);
-            const feedInData = feedInIntervals.map(i => -i.kwh * 12); // Made negative and scaled
+            const feedInData = feedInIntervals.map(i => -i.kwh * 12);
             const controlledLoadData = controlledLoadIntervals.map(i => i.kwh * 12);
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
-
+            
             const ctx = document.getElementById('dailyChart').getContext('2d');
-            if (dailyUsageChart) {
-                dailyUsageChart.destroy();
-            }
             
-            // --- ONLY include controlled load dataset when channel exists AND has non-zero totalKWh ---
             const chartDatasets = [];
-
-            // Calculate daily totals for accurate average price
-            const dailyGeneralKwh = dayData.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
-            const dailyGeneralCost = dayData.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
-            const dailyGeneralAvgPrice = (dailyGeneralKwh > 0 ? (dailyGeneralCost / dailyGeneralKwh) * 100 : 0).toFixed(2);
             
-            const dayDataFeedIn = feedInChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
-            const dailyFeedInKwh = dayDataFeedIn.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
-            const dailyFeedInCost = dayDataFeedIn.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
-            const dailyFeedInAvgPrice = (dailyFeedInKwh > 0 ? ((-dailyFeedInCost) / dailyFeedInKwh) * 100 : 0).toFixed(2);
+            const sumKwh = data => data.reduce((t, i) => t + (parseFloat(i.kwh) || 0), 0);
+            const sumCost = data => data.reduce((t, i) => t + ((parseFloat(i.perKwh) || 0) / 100) * (parseFloat(i.kwh) || 0), 0);
+            const dailyGeneralKwh = sumKwh(dayData), dailyFeedInKwh = sumKwh(dayDataFeedIn), dailyControlledLoadKwh = sumKwh(dayDataControlled);
+            const dailyGeneralAvgPrice = (dailyGeneralKwh > 0 ? (sumCost(dayData) / dailyGeneralKwh) * 100 : 0).toFixed(2);
+            const dailyFeedInAvgPrice = (dailyFeedInKwh > 0 ? ((-sumCost(dayDataFeedIn)) / dailyFeedInKwh) * 100 : 0).toFixed(2);
+            const dailyControlledLoadAvgPrice = (dailyControlledLoadKwh > 0 ? (sumCost(dayDataControlled) / dailyControlledLoadKwh) * 100 : 0).toFixed(2);
 
-            const dayDataControlled = controlledLoadChannel?.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
-            const dailyControlledLoadKwh = dayDataControlled.reduce((total, item) => total + (parseFloat(item.kwh) || 0), 0);
-            const dailyControlledLoadCost = dayDataControlled.reduce((total, item) => total + ((parseFloat(item.perKwh) || 0) / 100) * (parseFloat(item.kwh) || 0), 0);
-            const dailyControlledLoadAvgPrice = (dailyControlledLoadKwh > 0 ? (dailyControlledLoadCost / dailyControlledLoadKwh) * 100 : 0).toFixed(2);
-
-
-            if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
-                 chartDatasets.push({
-                    label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(2)} kWh, Avg Price: ${dailyControlledLoadAvgPrice} c/kWh`,
-                    data: controlledLoadData,
-                    backgroundColor: 'rgba(13, 110, 253, 0.6)',
-                    borderColor: 'rgba(13, 110, 253, 1)',
-                    yAxisID: 'yUsage',
-                    order: 2,
-                    barPercentage: 1.0,
-                    categoryPercentage: 1.0
-                });
-            }
-
-            chartDatasets.push({
-                label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(2)} kWh, Avg Price: ${dailyGeneralAvgPrice} c/kWh`,
-                data: usageData,
-                backgroundColor: 'rgba(54, 162, 235, 0.6)',
-                borderColor: 'rgba(54, 162, 235, 1)',
-                yAxisID: 'yUsage',
-                order: 2,
-                barPercentage: 1.0,
-                categoryPercentage: 1.0
-            });
-
-            if (feedInChannel) {
-                chartDatasets.push({
-                    label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(2)} kWh, Avg Price: ${dailyFeedInAvgPrice} c/kWh`,
-                    data: feedInData,
-                    backgroundColor: 'rgba(40, 167, 69, 0.6)',
-                    borderColor: 'rgba(40, 167, 69, 1)',
-                    yAxisID: 'yUsage',
-                    order: 2,
-                    barPercentage: 1.0,
-                    categoryPercentage: 1.0
-                });
-            }
+            if (dailyControlledLoadKwh > 0) chartDatasets.push({ label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(2)} kWh, Avg Price: ${dailyControlledLoadAvgPrice} c/kWh`, data: controlledLoadData, backgroundColor: 'rgba(13, 110, 253, 0.6)', yAxisID: 'yUsage', order: 2 });
+            if (dailyGeneralKwh > 0) chartDatasets.push({ label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(2)} kWh, Avg Price: ${dailyGeneralAvgPrice} c/kWh`, data: usageData, backgroundColor: 'rgba(54, 162, 235, 0.6)', yAxisID: 'yUsage', order: 2 });
+            if (dailyFeedInKwh > 0) chartDatasets.push({ label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(2)} kWh, Avg Price: ${dailyFeedInAvgPrice} c/kWh`, data: feedInData, backgroundColor: 'rgba(40, 167, 69, 0.6)', yAxisID: 'yUsage', order: 2 });
             
-            chartDatasets.push({
-                label: 'Spot Price (c/kWh)',
-                data: priceData,
-                type: 'line',
-                borderColor: 'rgba(255, 99, 132, 1)',
-                backgroundColor: 'rgba(255, 99, 132, 0.2)',
-                pointRadius: 0,
-                borderWidth: 2,
-                fill: false,
-                yAxisID: 'yPrice',
-                order: 1,
-                spanGaps: true,
-            });
+            if (dailyGeneralKwh > 0) {
+                chartDatasets.push({ label: 'Spot Price (c/kWh)', data: priceData, type: 'line', borderColor: 'rgba(255, 99, 132, 1)', pointRadius: 0, borderWidth: 2, fill: false, yAxisID: 'yPrice', order: 1, spanGaps: true, });
+            }
             
             const allUsage = [...usageData, ...feedInData, ...controlledLoadData];
-            const usageMin = Math.min(...allUsage);
-            const usageMax = Math.max(...allUsage);
-            const priceMax = Math.max(...priceData.filter(p => p !== null));
+            const usageMin = Math.min(...allUsage), usageMax = Math.max(...allUsage), priceMax = Math.max(...priceData.filter(p => p !== null));
+            let priceAxisOptions = { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Spot Price (c/kWh)' }, grid: { drawOnChartArea: false }, };
+            if (usageMin < 0 && usageMax > 0 && priceMax > 0) { const ratio = -usageMin / (usageMax - usageMin); priceAxisOptions.min = Math.floor(((ratio * priceMax) / (ratio - 1)) / 5) * 5; priceAxisOptions.max = Math.ceil(priceMax / 5) * 5; }
 
-            let priceAxisOptions = {
-                type: 'linear',
-                display: true,
-                position: 'right',
-                title: { display: true, text: 'Spot Price (c/kWh)' },
-                grid: { drawOnChartArea: false },
-            };
-
-            if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
-                const ratio = -usageMin / (usageMax - usageMin);
-                const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
-                priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
-            }
-
-            dailyUsageChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: chartDatasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
+            dailyUsageChart = new Chart(ctx, { type: 'bar', data: { labels: labels, datasets: chartDatasets },
+                options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
                     scales: {
-                        x: { 
-                            stacked: true,
-                            ticks: { 
-                                callback: function(value, index, ticks) {
-                                    const label = this.getLabelForValue(value);
-                                    if (index % 24 === 0) return label; // Every 2 hours
-                                    return '';
-                                },
-                                autoSkip: false,
-                                maxRotation: 45,
-                                minRotation: 45
-                            },
-                            grid: {
-                                color: function(context) {
-                                    if (context.index % 12 === 0) { // Darker for hourly
-                                        return 'rgba(0, 0, 0, 0.2)';
-                                    }
-                                     if (context.index % 6 === 0) { // Lighter for 30-min
-                                        return 'rgba(0, 0, 0, 0.05)';
-                                    }
-                                    return 'transparent';
-                                },
-                            }
-                        },
-                        yUsage: {
-                            type: 'linear',
-                            display: true,
-                            position: 'left',
-                            title: { display: true, text: 'Power (kW)' },
-                            stacked: true,
-                        },
+                        x: { stacked: true, ticks: { callback: (v, i) => i % 24 === 0 ? labels[i] : '', autoSkip: false, maxRotation: 45, minRotation: 45 }, grid: { color: c => c.index % 12 === 0 ? 'rgba(0,0,0,0.2)' : (c.index % 6 === 0 ? 'rgba(0,0,0,0.05)' : 'transparent') } },
+                        yUsage: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Power (kW)' }, stacked: true, },
                         yPrice: priceAxisOptions
                     },
-                    plugins: {
-                        title: { display: true, text: `Usage vs. Spot Price for ${selectedDateStr}` },
-                        tooltip: {
-                            position: 'cursor',
-                            callbacks: {
-                                label: function(context) {
-                                    let label = context.dataset.label || '';
-                                    if (context.parsed.y !== null) {
-                                        if (context.dataset.yAxisID === 'yPrice') {
-                                            label = `Price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
-                                        } else {
-                                            label = `Usage: ${parseFloat(context.parsed.y).toFixed(4)} kW`;
-                                        }
-                                    }
-                                    return label;
-                                }
-                            }
-                        }
-                    }
+                    plugins: { title: { display: true, text: `Usage vs. Spot Price for ${selectedDateStr}` }, tooltip: { position: 'cursor', callbacks: { label: c => c.dataset.yAxisID === 'yPrice' ? `Price: ${parseFloat(c.parsed.y).toFixed(2)} c/kWh` : `Usage: ${parseFloat(c.parsed.y).toFixed(4)} kW` } } }
                 }
             });
         }
 
-        /**
-         * Renders the final results table and summary.
-         */
         function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const showGraphButton = document.getElementById('showGraphButton');
-            const period = `(${startDateStr} to ${endDateStr})`;
             const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-
-            let tableHTML = `
-                <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
+            
+            let tableHTML = `<p class="text-sm text-gray-500 mb-4">Period: (${startDateStr} to ${endDateStr}, ${numDays} days)</p>
                 <table class="min-w-full divide-y divide-gray-200">
-                    <thead class="bg-gray-50">
-                        <tr>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber Cost</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other Supplier Cost</th>
-                        </tr>
-                    </thead>
-                    <tbody class="bg-white divide-y divide-gray-200">
-            `;
-
-            Object.values(channelTotals).forEach(c => {
-                if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) {
-                    return; // Skip this line if all values are zero
-                }
-                const totalKWhText = (c.totalKWh || 0).toFixed(2);
-                const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
-                const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
-                tableHTML += `
-                    <tr>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${totalKWhText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalAmberCostText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalOtherCostText}</td>
-                    </tr>
-                `;
+                    <thead class="bg-gray-50"><tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber Cost</th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other Supplier Cost</th>
+                    </tr></thead><tbody class="bg-white divide-y divide-gray-200">`;
+            
+            Object.values(channelTotals).filter(c=>c.totalKWh !== 0 || c.totalAmberCost !== 0 || c.totalOtherCost !== 0).forEach(c => {
+                tableHTML += `<tr>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${(c.totalKWh || 0).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${(c.totalAmberCost || 0).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${(c.totalOtherCost || 0).toFixed(2)}</td></tr>`;
             });
             
-            if (demandTariffInfo && demandTariffInfo.cost > 0) {
+            if (demandTariffInfo?.cost > 0) {
                 const maxDemandKw = ((demandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
                 const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
-                
-                tableHTML += `
-                    <tr class="font-semibold border-t">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Demand Tariff</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div class="text-xs">Max: ${maxDemandKw} kW</div>
-                            <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
-                            <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
-                        </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(demandTariffInfo.cost || 0).toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A?</td>
-                    </tr>
-                `;
+                tableHTML += `<tr class="font-semibold border-t">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Demand Tariff</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <div class="text-xs">Max: ${maxDemandKw} kW on ${maxDemandDateTime}</div>
+                        <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(demandTariffInfo.cost || 0).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A?</td></tr>`;
             }
-
-            tableHTML += `
-                <tr class="font-semibold border-t">
+            tableHTML += `<tr class="font-semibold border-t">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_CONNECTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(otherDailyConnection / 100).toFixed(2)}</td>
-                </tr>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(otherDailyConnection / 100).toFixed(2)}</td></tr>
                 <tr class="font-semibold">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td>
-                </tr>
-            `;
-
-             tableHTML += `
-                    <tr class="bg-gray-50 font-bold">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallAmberCost || 0).toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallOtherCost || 0).toFixed(2)}</td>
-                    </tr>
-                </tbody>
-                </table>
-            `;
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td></tr>
+                <tr class="bg-gray-50 font-bold">
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallAmberCost || 0).toFixed(2)}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallOtherCost || 0).toFixed(2)}</td>
+                </tr></tbody></table>`;
             
             const savings = (overallOtherCost || 0) - (overallAmberCost || 0);
-            let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
-            if (savings > 0) {
-                savingsSummaryHTML += 'bg-green-100">';
-                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber this period!</p>`;
-            } else {
-                 savingsSummaryHTML += 'bg-red-100">';
-                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with the other supplier.</p>`;
-            }
-            savingsSummaryHTML += '</div>';
-
-            resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
+            const savingsClass = savings > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800';
+            const savingsText = savings > 0 ? `You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber!` : `It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with the other supplier.`;
+            resultsOutput.innerHTML = tableHTML + `<div class="mt-6 p-4 rounded-lg text-center ${savingsClass}"><p class="text-lg font-medium">${savingsText}</p></div>`;
             
             downloadCsvButton.disabled = false;
             showGraphButton.disabled = false;
@@ -1392,46 +1047,22 @@
             const prevDayBtn = document.getElementById('prevDayBtn');
             const nextDayBtn = document.getElementById('nextDayBtn');
             
-            daySelector.innerHTML = ''; 
-
-            // Parse date strings as local time by appending T00:00:00
-            const start = new Date(startDateStr + 'T00:00:00');
-            const end = new Date(endDateStr + 'T00:00:00');
-            let current = new Date(start);
-
-            while (current <= end) {
-                const dateValue = formatForInput(current);
-                const option = document.createElement('option');
-                option.value = dateValue;
-                option.textContent = dateValue;
-                daySelector.appendChild(option);
-                current.setDate(current.getDate() + 1);
-            }
-
-            daySelector.onchange = () => {
-                displayDailyGraph(daySelector.value);
-                updateNavButtons();
-            };
-
-            prevDayBtn.onclick = () => {
-                if (daySelector.selectedIndex > 0) {
-                    daySelector.selectedIndex--;
-                    daySelector.dispatchEvent(new Event('change'));
-                }
-            };
-
-            nextDayBtn.onclick = () => {
-                 if (daySelector.selectedIndex < daySelector.options.length - 1) {
-                    daySelector.selectedIndex++;
-                    daySelector.dispatchEvent(new Event('change'));
-                }
-            };
+            daySelector.innerHTML = '';
             
-            function updateNavButtons() {
+            const datesForSelector = allDatesInSelectedRange.filter(d => new Date(d + "T00:00:00") <= new Date(todayStr + "T00:00:00"));
+
+            datesForSelector.forEach(dateValue => {
+                daySelector.innerHTML += `<option value="${dateValue}">${dateValue}</option>`;
+            });
+
+            const updateNavButtons = () => {
                 prevDayBtn.disabled = daySelector.selectedIndex === 0;
                 nextDayBtn.disabled = daySelector.selectedIndex === daySelector.options.length - 1;
-            }
-
+            };
+            daySelector.onchange = () => { displayDailyGraph(daySelector.value); updateNavButtons(); };
+            prevDayBtn.onclick = () => { if (daySelector.selectedIndex > 0) { daySelector.selectedIndex--; daySelector.dispatchEvent(new Event('change')); } };
+            nextDayBtn.onclick = () => { if (daySelector.selectedIndex < daySelector.options.length - 1) { daySelector.selectedIndex++; daySelector.dispatchEvent(new Event('change')); } };
+            
             if (daySelector.options.length > 0) {
                 dailyGraphSection.classList.remove('hidden');
                 daySelector.dispatchEvent(new Event('change'));
@@ -1439,7 +1070,7 @@
                 dailyGraphSection.classList.add('hidden');
             }
         }
-
     </script>
 </body>
 </html>
+
