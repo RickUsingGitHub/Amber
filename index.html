@@ -54,10 +54,27 @@
                             <p class="text-xs text-gray-500 mt-1">Your key is stored only in your browser. Find it at <a href="https://app.amber.com.au/developers" target="_blank" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
                         </div>
 
-                        <div class="md:col-span-2 border-t pt-4">
-                             <label class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</label>
+                         <div class="md:col-span-2 border-t pt-4">
+                             <h3 id="otherSupplierHeading" class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div>
+                                    <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1">State</label>
+                                    <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                                </div>
+                                <div>
+                                    <label for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan Templates</label>
+                                    <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <option value="">-- Custom --</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="mt-4">
+                                <label for="planName" class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
+                                <input type="text" id="planName" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., Energy Australia TOU 2025">
+                            </div>
 
-                             <div class="mb-4">
+                             <div class="my-4 pt-4 border-t">
                                 <label class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</label>
                                 <div class="flex items-center space-x-4" id="rateTypeSelector">
                                     <label class="flex items-center">
@@ -118,6 +135,28 @@
                                     <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
                                     <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
                                 </div>
+                            </div>
+
+                             <div id="demandTariffSection" class="mt-4 pt-4 border-t">
+                                <div class="flex items-center mb-2">
+                                    <input type="checkbox" id="enableDemandTariff" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+                                    <label for="enableDemandTariff" class="ml-2 block text-sm font-medium text-gray-800">Enable Demand Tariff for Other Supplier</label>
+                                </div>
+                                <div id="demandTariffInputs" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div>
+                                        <label for="demandRate" class="block text-sm font-medium text-gray-700">Demand Rate (c/kW/day)</label>
+                                        <input type="number" id="demandRate" value="30" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label for="demandWindowStart" class="block text-sm font-medium text-gray-700">Window Start</label>
+                                        <input type="time" id="demandWindowStart" value="16:00" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div>
+                                        <label for="demandWindowEnd" class="block text-sm font-medium text-gray-700">Window End</label>
+                                        <input type="time" id="demandWindowEnd" value="21:00" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                </div>
+                                <p class="text-xs text-gray-500 mt-1">Calculates a charge on your highest 30-min usage during the daily window (weekdays only) across the entire period.</p>
                             </div>
                         </div>
                     </div>
@@ -194,6 +233,39 @@
         let lastFetchedEndDate = null;
         let usageChart = null;
         let dailyUsageChart = null;
+
+        // --- Supplier Templates ---
+        const supplierTemplates = {
+            "NSW": {
+                "EnergyAustralia - Total Plan": { rateType: 'tou', daily: 121.58, peak: 51.55, shoulder: 27.24, offpeak: 20.35, cl: 17.88, feedIn: 7.6, demand: { e: true, r: 33.55, s: '17:00', f: '20:00' } },
+                "AGL - Standard": { rateType: 'flat', daily: 102.8, flat: 36.5, feedIn: 5.0, demand: { e: false } },
+                "Origin - Go Variable": { rateType: 'tou', daily: 110.0, peak: 55.2, shoulder: 30.1, offpeak: 22.5, cl: 18.0, feedIn: 6.0, demand: { e: false } },
+                "Red Energy - Living Energy Saver": { rateType: 'flat', daily: 95.0, flat: 34.2, feedIn: 6.5, demand: { e: false } },
+                "OVO Energy - The One Plan": { rateType: 'tou', daily: 105.0, peak: 49.9, shoulder: 25.0, offpeak: 18.9, cl: 16.5, feedIn: 8.0, demand: { e: false } }
+            },
+            "VIC": {
+                "EnergyAustralia - Flexi Plan": { rateType: 'tou', daily: 115.3, peak: 48.9, shoulder: 33.1, offpeak: 24.6, cl: 20.1, feedIn: 4.9, demand: { e: true, r: 29.8, s: '15:00', f: '21:00' } },
+                "AGL - Victorian Default Offer": { rateType: 'flat', daily: 120.0, flat: 31.5, feedIn: 4.9, demand: { e: false } },
+                "Origin - Basic": { rateType: 'flat', daily: 118.0, flat: 30.8, feedIn: 4.9, demand: { e: false } },
+                "Red Energy - Red Wildlife Saver": { rateType: 'tou', daily: 109.0, peak: 45.0, shoulder: 31.0, offpeak: 22.0, cl: 19.5, feedIn: 5.2, demand: { e: false } },
+                "Alinta Energy - Home Deal": { rateType: 'flat', daily: 112.5, flat: 29.9, feedIn: 5.2, demand: { e: false } }
+            },
+            "QLD": {
+                "EnergyAustralia - Basic Home": { rateType: 'tou', daily: 130.1, peak: 44.5, shoulder: 24.3, offpeak: 19.8, cl: 18.2, feedIn: 5.0, demand: { e: true, r: 35.1, s: '16:00', f: '21:00' } },
+                "AGL - Standard": { rateType: 'flat', daily: 125.6, flat: 28.9, feedIn: 5.0, demand: { e: false } },
+                "Origin - Saver": { rateType: 'tou', daily: 122.0, peak: 42.1, shoulder: 23.5, offpeak: 18.9, cl: 17.5, feedIn: 5.0, demand: { e: false } },
+                "Alinta Energy - Carbon Neutral": { rateType: 'flat', daily: 119.0, flat: 27.5, feedIn: 5.2, demand: { e: false } },
+                "OVO Energy - The One Plan": { rateType: 'flat', daily: 115.0, flat: 26.8, feedIn: 6.0, demand: { e: false } }
+            },
+            "SA": {
+                "EnergyAustralia - Total Plan": { rateType: 'tou', daily: 145.2, peak: 60.1, shoulder: 40.5, offpeak: 30.2, cl: 22.1, feedIn: 6.0, demand: { e: true, r: 40.2, s: '17:00', f: '21:00' } },
+                "AGL - Standard": { rateType: 'flat', daily: 138.0, flat: 42.3, feedIn: 6.0, demand: { e: false } },
+                "Origin - Go Variable": { rateType: 'tou', daily: 140.0, peak: 58.5, shoulder: 38.9, offpeak: 28.5, cl: 21.0, feedIn: 6.0, demand: { e: false } },
+                "Simply Energy - SA Saver": { rateType: 'flat', daily: 135.5, flat: 41.8, feedIn: 6.5, demand: { e: false } },
+                "OVO Energy - The One Plan": { rateType: 'flat', daily: 132.0, flat: 40.9, feedIn: 7.0, demand: { e: false } }
+            }
+        };
+
 
         // --- IndexedDB Helper Functions ---
         const DB_NAME = 'AmberDataCacheDB';
@@ -309,9 +381,8 @@
                 }
             };
 
-            // Load initial state from localStorage
             const isConfigHidden = localStorage.getItem('configHidden') === 'true';
-            updateConfigVisibility(isConfigHidden, false); // Set initial state without animation
+            updateConfigVisibility(isConfigHidden, false); 
 
             const toggleHandler = () => {
                 const isCurrentlyHidden = configContent.classList.contains('hidden');
@@ -328,7 +399,6 @@
                 apiKeyInput.value = savedApiKey;
             }
 
-            // Custom tooltip positioner to follow the cursor
             Chart.Tooltip.positioners.cursor = function(items, eventPosition) {
                 return eventPosition;
             };
@@ -359,82 +429,205 @@
             const rateTypeSelector = document.getElementById('rateTypeSelector');
             const flatRateSection = document.getElementById('flatRateSection');
             const touRateSection = document.getElementById('touRateSection');
+            
+            // --- NEW: Template Selectors ---
+            const stateSelector = document.getElementById('stateSelector');
+            const planSelector = document.getElementById('planSelector');
+            const planNameInput = document.getElementById('planName');
 
-            // Load settings from localStorage
-            const savedRateType = localStorage.getItem('rateType');
-            if (savedRateType) {
-                document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
-                if (savedRateType === 'tou') {
-                    flatRateSection.classList.add('hidden');
-                    touRateSection.classList.remove('hidden');
-                } else {
-                    flatRateSection.classList.remove('hidden');
-                    touRateSection.classList.add('hidden');
+            // --- NEW: Demand Tariff Elements ---
+            const enableDemandCheckbox = document.getElementById('enableDemandTariff');
+            const demandInputsDiv = document.getElementById('demandTariffInputs');
+            
+            // Populate States
+            Object.keys(supplierTemplates).forEach(state => {
+                const option = document.createElement('option');
+                option.value = state;
+                option.textContent = state;
+                stateSelector.appendChild(option);
+            });
+            
+            function updatePlanSelector(selectedState) {
+                planSelector.innerHTML = '<option value="">-- Custom --</option>';
+                if (supplierTemplates[selectedState]) {
+                    Object.keys(supplierTemplates[selectedState]).forEach(planName => {
+                        const option = document.createElement('option');
+                        option.value = planName;
+                        option.textContent = planName;
+                        planSelector.appendChild(option);
+                    });
                 }
             }
             
-            const savedFlatRate = localStorage.getItem('flatRate');
-            if (savedFlatRate) document.getElementById('otherSupplierRate').value = savedFlatRate;
-            
-            const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
-            if (savedFlatFeedIn) document.getElementById('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
-            
-            const savedTouRates = localStorage.getItem('touRates');
-            if (savedTouRates) {
-                const rates = JSON.parse(savedTouRates);
-                document.getElementById('tou_peak_rate').value = rates.peak;
-                document.getElementById('tou_shoulder_rate').value = rates.shoulder;
-                document.getElementById('tou_offpeak_rate').value = rates.offpeak;
-                document.getElementById('tou_controlled_load_rate').value = rates.controlledLoad;
-                document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
-            }
+            function applyPlanTemplate() {
+                const state = stateSelector.value;
+                const planName = planSelector.value;
+                if (!state || !planName) return;
 
-            const savedDailyConnectionRate = localStorage.getItem('dailyConnectionRate');
-            if (savedDailyConnectionRate) {
-                document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
-            } else {
-                document.getElementById('dailyConnectionRate').value = '102.83'; // Set default value
-            }
+                const template = supplierTemplates[state][planName];
+                if (!template) return;
+                
+                planNameInput.value = planName;
+                updateOtherSupplierHeading();
 
-
-            // Add listeners to save settings on change
-            rateTypeSelector.addEventListener('change', (e) => {
-                localStorage.setItem('rateType', e.target.value);
-                if (e.target.value === 'tou') {
+                // Set Rate Type
+                document.querySelector(`input[name="rateType"][value="${template.rateType}"]`).checked = true;
+                if (template.rateType === 'tou') {
                     flatRateSection.classList.add('hidden');
                     touRateSection.classList.remove('hidden');
+                    document.getElementById('tou_peak_rate').value = template.peak || 0;
+                    document.getElementById('tou_shoulder_rate').value = template.shoulder || 0;
+                    document.getElementById('tou_offpeak_rate').value = template.offpeak || 0;
+                    document.getElementById('tou_controlled_load_rate').value = template.cl || 0;
+                    document.getElementById('otherSupplierFeedInRateTou').value = template.feedIn || 0;
                 } else {
                     flatRateSection.classList.remove('hidden');
                     touRateSection.classList.add('hidden');
+                    document.getElementById('otherSupplierRate').value = template.flat || 0;
+                    document.getElementById('otherSupplierFeedInRateFlat').value = template.feedIn || 0;
                 }
-            });
-
-            document.getElementById('otherSupplierRate').addEventListener('input', (e) => {
-                localStorage.setItem('flatRate', e.target.value);
-            });
-            document.getElementById('otherSupplierFeedInRateFlat').addEventListener('input', (e) => {
-                localStorage.setItem('flatFeedInRate', e.target.value);
-            });
-            document.getElementById('dailyConnectionRate').addEventListener('input', (e) => {
-                 localStorage.setItem('dailyConnectionRate', e.target.value);
-            });
+                
+                document.getElementById('dailyConnectionRate').value = template.daily || 0;
+                
+                // Set Demand Tariff
+                const demand = template.demand || { e: false };
+                enableDemandCheckbox.checked = demand.e;
+                if (demand.e) {
+                    demandInputsDiv.classList.remove('hidden');
+                    document.getElementById('demandRate').value = demand.r || 0;
+                    document.getElementById('demandWindowStart').value = demand.s || '16:00';
+                    document.getElementById('demandWindowEnd').value = demand.f || '21:00';
+                } else {
+                    demandInputsDiv.classList.add('hidden');
+                }
+                
+                // Save all settings after applying
+                saveAllSettings();
+            }
             
-            document.getElementById('tou_peak_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_shoulder_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_offpeak_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('tou_controlled_load_rate').addEventListener('input', saveTouSettings);
-            document.getElementById('otherSupplierFeedInRateTou').addEventListener('input', saveTouSettings);
+            function updateOtherSupplierHeading() {
+                const heading = document.getElementById('otherSupplierHeading');
+                const planName = planNameInput.value.trim();
+                heading.textContent = planName ? `${planName} Details` : 'Other Supplier Details';
+            }
             
-            function saveTouSettings() {
-                const rates = {
+            // --- Save All Settings ---
+            function saveAllSettings() {
+                localStorage.setItem('rateType', document.querySelector('input[name="rateType"]:checked').value);
+                localStorage.setItem('flatRate', document.getElementById('otherSupplierRate').value);
+                localStorage.setItem('flatFeedInRate', document.getElementById('otherSupplierFeedInRateFlat').value);
+                localStorage.setItem('dailyConnectionRate', document.getElementById('dailyConnectionRate').value);
+                
+                const touRates = {
                     peak: document.getElementById('tou_peak_rate').value,
                     shoulder: document.getElementById('tou_shoulder_rate').value,
                     offpeak: document.getElementById('tou_offpeak_rate').value,
                     controlledLoad: document.getElementById('tou_controlled_load_rate').value,
                     feedIn: document.getElementById('otherSupplierFeedInRateTou').value
                 };
-                localStorage.setItem('touRates', JSON.stringify(rates));
+                localStorage.setItem('touRates', JSON.stringify(touRates));
+                
+                localStorage.setItem('selectedState', stateSelector.value);
+                localStorage.setItem('selectedPlan', planSelector.value);
+                localStorage.setItem('planName', planNameInput.value);
+                
+                const demandSettings = {
+                    enabled: enableDemandCheckbox.checked,
+                    rate: document.getElementById('demandRate').value,
+                    start: document.getElementById('demandWindowStart').value,
+                    end: document.getElementById('demandWindowEnd').value,
+                };
+                localStorage.setItem('demandSettings', JSON.stringify(demandSettings));
             }
+            
+            // --- Load All Settings ---
+            function loadAllSettings() {
+                const savedState = localStorage.getItem('selectedState') || 'NSW';
+                stateSelector.value = savedState;
+                updatePlanSelector(savedState);
+                
+                const savedPlan = localStorage.getItem('selectedPlan');
+                if(savedPlan) planSelector.value = savedPlan;
+                
+                const savedPlanName = localStorage.getItem('planName');
+                if(savedPlanName) {
+                    planNameInput.value = savedPlanName;
+                    updateOtherSupplierHeading();
+                }
+
+                const savedRateType = localStorage.getItem('rateType');
+                if (savedRateType) {
+                    document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
+                    if (savedRateType === 'tou') {
+                        flatRateSection.classList.add('hidden');
+                        touRateSection.classList.remove('hidden');
+                    } else {
+                        flatRateSection.classList.remove('hidden');
+                        touRateSection.classList.add('hidden');
+                    }
+                }
+                
+                const savedFlatRate = localStorage.getItem('flatRate');
+                if (savedFlatRate) document.getElementById('otherSupplierRate').value = savedFlatRate;
+                
+                const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
+                if (savedFlatFeedIn) document.getElementById('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
+                
+                const savedTouRates = localStorage.getItem('touRates');
+                if (savedTouRates) {
+                    const rates = JSON.parse(savedTouRates);
+                    document.getElementById('tou_peak_rate').value = rates.peak;
+                    document.getElementById('tou_shoulder_rate').value = rates.shoulder;
+                    document.getElementById('tou_offpeak_rate').value = rates.offpeak;
+                    document.getElementById('tou_controlled_load_rate').value = rates.controlledLoad;
+                    document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
+                }
+
+                const savedDailyConnectionRate = localStorage.getItem('dailyConnectionRate');
+                if (savedDailyConnectionRate) {
+                    document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
+                }
+                
+                const savedDemandSettings = localStorage.getItem('demandSettings');
+                if (savedDemandSettings) {
+                    const settings = JSON.parse(savedDemandSettings);
+                    enableDemandCheckbox.checked = settings.enabled;
+                    document.getElementById('demandRate').value = settings.rate;
+                    document.getElementById('demandWindowStart').value = settings.start;
+                    document.getElementById('demandWindowEnd').value = settings.end;
+                    if (settings.enabled) {
+                        demandInputsDiv.classList.remove('hidden');
+                    }
+                }
+            }
+            
+            loadAllSettings();
+            
+            // --- ADD EVENT LISTENERS ---
+            stateSelector.addEventListener('change', (e) => {
+                updatePlanSelector(e.target.value);
+                localStorage.setItem('selectedState', e.target.value);
+                planSelector.value = ''; // Reset plan selection
+            });
+            planSelector.addEventListener('change', applyPlanTemplate);
+            planNameInput.addEventListener('input', () => {
+                updateOtherSupplierHeading();
+                saveAllSettings();
+            });
+
+            // Toggle demand tariff inputs
+            enableDemandCheckbox.addEventListener('change', (e) => {
+                demandInputsDiv.classList.toggle('hidden', !e.target.checked);
+                saveAllSettings();
+            });
+
+            // Add listeners to save all settings on any change
+            document.querySelectorAll('#configContent input, #configContent select').forEach(el => {
+                if (el.id !== 'stateSelector' && el.id !== 'planSelector' && el.id !== 'planName') {
+                     el.addEventListener('input', saveAllSettings);
+                }
+            });
+            rateTypeSelector.addEventListener('change', saveAllSettings);
 
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
@@ -503,17 +696,19 @@
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
-            
+            const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
+
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
                 messageSection.classList.remove('hidden');
                 loader.classList.add('hidden');
                 messageEl.textContent = 'Recalculating with new rates...';
                 
                 setTimeout(() => {
-                    const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
                     const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
                     const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-                    calculateOtherSupplierCosts(cachedChannelData);
+                    
+                    const otherDemandTariffInfo = calculateOtherDemandTariff(cachedChannelData, numDays);
+                    calculateOtherSupplierCosts(cachedChannelData, otherDemandTariffInfo.cost);
                     
                     const demandTariffInfo = calculateDemandTariff(cachedChannelData);
                     const demandTariffCost = demandTariffInfo.cost;
@@ -531,7 +726,7 @@
 
                     messageSection.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
+                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
                 }, 200);
 
                 return;
@@ -693,13 +888,13 @@
                 
                 messageEl.textContent = 'Calculating costs...';
                 
-                calculateOtherSupplierCosts(channelTotals);
+                const otherDemandTariffInfo = calculateOtherDemandTariff(channelTotals, numDays);
+                calculateOtherSupplierCosts(channelTotals, otherDemandTariffInfo.cost);
 
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
                 
-                const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
                 const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
                 const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
 
@@ -720,7 +915,7 @@
                 loader.classList.add('hidden');
                 messageSection.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo);
+                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -815,7 +1010,7 @@
         /**
          * Calculates the 'Other Supplier' cost for each channel based on the selected rate type.
          */
-        function calculateOtherSupplierCosts(channelTotals) {
+        function calculateOtherSupplierCosts(channelTotals, otherDemandCost) {
             const rateType = document.querySelector('input[name="rateType"]:checked').value;
 
             if (rateType === 'flat') {
@@ -825,8 +1020,11 @@
                 Object.values(channelTotals).forEach(c => {
                     if (c.type === 'feedIn') {
                         c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                    } else if (c.type === 'general') {
+                        // Add demand cost to the general channel
+                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100 + otherDemandCost;
                     } else {
-                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
+                         c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
                     }
                 });
             } else { // 'tou'
@@ -845,12 +1043,14 @@
                     } else if (c.type === 'controlledLoad') {
                         channelOtherCost = (c.totalKWh * controlledLoadRate) / 100;
                     }
-                    else { // Assumes 'general' or other consumption types fall under standard TOU
+                    else if (c.type === 'general') { 
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
                             const rateForInterval = getTouRate(itemDate, touRates);
                             return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
                         }, 0);
+                        // Add demand cost to general channel
+                        channelOtherCost += otherDemandCost;
                     }
                     c.totalOtherCost = channelOtherCost;
                 });
@@ -858,7 +1058,7 @@
         }
         
         /**
-         * Calculates the Demand Tariff based on peak usage in demand windows.
+         * Calculates Amber's Demand Tariff based on peak usage in demand windows from API.
          */
         function calculateDemandTariff(channelTotals) {
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
@@ -926,6 +1126,92 @@
                 maxDemandTime: maxDemandTime
             };
         }
+        
+        /**
+         * NEW: Calculates the Demand Tariff for the other supplier based on form inputs.
+         */
+        function calculateOtherDemandTariff(channelTotals, numDays) {
+            const isEnabled = document.getElementById('enableDemandTariff').checked;
+            if (!isEnabled) {
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+            }
+
+            const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+            }
+            
+            const demandRate = parseFloat(document.getElementById('demandRate').value) || 0;
+            const startTime = document.getElementById('demandWindowStart').value;
+            const endTime = document.getElementById('demandWindowEnd').value;
+
+            const [startHour, startMin] = startTime.split(':').map(Number);
+            const [endHour, endMin] = endTime.split(':').map(Number);
+
+            // Filter for weekdays within the demand window
+            const demandWindowUsage = generalChannel.usageData.filter(item => {
+                const d = new Date(item.nemTime);
+                const day = d.getDay(); // 0=Sun, 6=Sat
+                if (day === 0 || day === 6) return false;
+
+                const hour = d.getHours();
+                const min = d.getMinutes();
+                
+                const timeInMins = hour * 60 + min;
+                const startInMins = startHour * 60 + startMin;
+                const endInMins = endHour * 60 + endMin;
+
+                return timeInMins >= startInMins && timeInMins < endInMins;
+            });
+            
+            if (demandWindowUsage.length === 0) {
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+            }
+
+            // Group into 30-min chunks
+            const thirtyMinChunks = {};
+            demandWindowUsage.forEach(item => {
+                const itemDate = new Date(item.nemTime);
+                const minutes = itemDate.getMinutes();
+                itemDate.setSeconds(0, 0);
+
+                if (minutes < 30) {
+                    itemDate.setMinutes(0);
+                } else {
+                    itemDate.setMinutes(30);
+                }
+                const blockStartTime = itemDate.toISOString();
+
+                if (!thirtyMinChunks[blockStartTime]) {
+                    thirtyMinChunks[blockStartTime] = 0;
+                }
+                thirtyMinChunks[blockStartTime] += (parseFloat(item.kwh) || 0);
+            });
+            
+            // Find the highest 30-min usage across the whole period
+            let maxDemandKwh = 0;
+            let maxDemandTime = null;
+            for (const startTime in thirtyMinChunks) {
+                if (thirtyMinChunks[startTime] > maxDemandKwh) {
+                    maxDemandKwh = thirtyMinChunks[startTime];
+                    maxDemandTime = startTime;
+                }
+            }
+            
+            if (maxDemandKwh === 0) {
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+            }
+            
+            // Cost = (Max kWh in 30min * 2 to get kW) * (Rate in c/kW/day) * (Number of Days) / 100 (to get $)
+            const demandCost = (maxDemandKwh * 2) * (demandRate / 100) * numDays;
+            
+            return {
+                cost: demandCost,
+                maxDemandKwh: maxDemandKwh,
+                maxDemandTime: maxDemandTime
+            };
+        }
+
 
         /**
          * Renders an interactive chart of average 24hr usage and pricing.
@@ -1410,14 +1696,14 @@
         /**
          * Renders the final results table and summary.
          */
-        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo) {
+        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const showGraphButton = document.getElementById('showGraphButton');
+            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
             const period = `(${startDateStr} to ${endDateStr})`;
             const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-            const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-
+            
             let tableHTML = `
                 <p class="text-sm text-gray-500 mb-4">Period: ${period}</p>
                 <table class="min-w-full divide-y divide-gray-200">
@@ -1427,7 +1713,7 @@
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber Cost</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Other Supplier Cost</th>
+                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${planName} Cost</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -1457,17 +1743,36 @@
                 
                 tableHTML += `
                     <tr class="font-semibold border-t">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Demand Tariff</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Amber Demand Tariff</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div class="text-xs">Max: ${maxDemandKw} kW</div>
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
                             <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(demandTariffInfo.cost || 0).toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">N/A?</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
                     </tr>
                 `;
             }
+            
+             if (otherDemandTariffInfo && otherDemandTariffInfo.cost > 0) {
+                const maxDemandKw = ((otherDemandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
+                const maxDemandDateTime = new Date(otherDemandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
+                
+                tableHTML += `
+                    <tr class="font-semibold border-t">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">${planName} Demand Tariff</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <div class="text-xs">Max: ${maxDemandKw} kW</div>
+                            <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
+                            <div class="text-xs">X ${numDays} days</div>
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">$${(otherDemandTariffInfo.cost || 0).toFixed(2)}</td>
+                    </tr>
+                `;
+            }
+
 
             tableHTML += `
                 <tr class="font-semibold border-t">
@@ -1496,10 +1801,10 @@
             let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
             if (savings > 0) {
                 savingsSummaryHTML += 'bg-green-100">';
-                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber this period!</p>`;
+                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">You saved <span class="font-bold">$${savings.toFixed(2)}</span> with Amber compared to ${planName}!</p>`;
             } else {
                  savingsSummaryHTML += 'bg-red-100">';
-                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with the other supplier.</p>`;
+                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with ${planName}.</p>`;
             }
             savingsSummaryHTML += '</div>';
 
@@ -1564,5 +1869,3 @@
     </script>
 </body>
 </html>
-
-
