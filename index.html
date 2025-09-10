@@ -36,7 +36,6 @@
 
         <main>
             <div id="configSection" class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <!-- Header with Toggle Button -->
                 <div class="flex justify-between items-center cursor-pointer" id="configHeader">
                     <h2 class="text-lg font-bold text-gray-900">Configuration</h2>
                     <button id="toggleConfigBtn" class="flex items-center text-indigo-600 hover:underline focus:outline-none font-medium">
@@ -45,7 +44,6 @@
                     </button>
                 </div>
                 
-                <!-- Collapsible Content -->
                 <div id="configContent" class="mt-4 pt-4 border-t">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div class="md:col-span-2">
@@ -88,7 +86,6 @@
                                 </div>
                             </div>
                             
-                            <!-- Daily Connection input for Flat and TOU -->
                             <div class="mb-4">
                                 <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day)</label>
                                 <input type="number" id="dailyConnectionRate" value="102.83" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
@@ -162,7 +159,6 @@
                     </div>
                 </div>
 
-                <!-- Always Visible Date Content -->
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6 border-t pt-4 mt-4">
                      <div>
                         <label for="startDate" class="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -876,7 +872,16 @@
                     // Group by day to store in cache
                     const dailyData = {};
                     apiResponseData.forEach(item => {
-                        const dateStr = item.nemTime.substring(0, 10);
+                        let dateStr = item.nemTime.substring(0, 10);
+                        
+                        // Correctly associate the midnight interval with the previous day for caching.
+                        // The usage interval ending at 00:00 on day 'Y' belongs to day 'Y-1'.
+                        if (item.nemTime.endsWith('T00:00:00Z') || item.nemTime.endsWith('T00:00:00.000Z')) {
+                            const date = new Date(dateStr + 'T12:00:00Z'); // Use midday to avoid DST issues
+                            date.setDate(date.getDate() - 1);
+                            dateStr = date.toISOString().substring(0, 10);
+                        }
+
                         if (!dailyData[dateStr]) dailyData[dateStr] = [];
                         dailyData[dateStr].push(item);
                     });
@@ -1896,4 +1901,3 @@
     </script>
 </body>
 </html>
-
