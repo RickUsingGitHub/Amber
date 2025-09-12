@@ -403,6 +403,40 @@
                 return eventPosition;
             };
 
+            // --- Custom Chart.js Plugin to Highlight Hovered Column ---
+            const verticalHighlightPlugin = {
+                id: 'verticalHighlight',
+                beforeDatasetsDraw: (chart) => {
+                    // Use the public method to get active elements.
+                    const activeElements = chart.tooltip?.getActiveElements();
+                    if (activeElements && activeElements.length > 0) {
+                        const ctx = chart.ctx;
+                        const activeElement = activeElements[0];
+                        const index = activeElement.index;
+                        const xAxis = chart.scales.x;
+                        
+                        // Proceed only if the scale and index are valid
+                        if (xAxis && index !== undefined) {
+                            const x = xAxis.getPixelForValue(index);
+                            const topY = chart.chartArea.top;
+                            const bottomY = chart.chartArea.bottom;
+                            
+                            // Calculate the width of one category on the x-axis.
+                            // This is more reliable than using ticks.
+                            const categoryWidth = xAxis.getPixelForValue(1) - xAxis.getPixelForValue(0);
+
+                            ctx.save();
+                            ctx.fillStyle = 'rgba(220, 220, 220, 0.4)';
+                            // Draw the rectangle, offsetting by half the width to center it on the category.
+                            ctx.fillRect(x - categoryWidth / 2, topY, categoryWidth, bottomY - topY);
+                            ctx.restore();
+                        }
+                    }
+                }
+            };
+            Chart.register(verticalHighlightPlugin);
+
+
             const endDateInput = document.getElementById('endDate');
             const startDateInput = document.getElementById('startDate');
             
@@ -1172,7 +1206,7 @@
             }
 
             const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
-            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+            if (!generalChannel || !generalChannel.usageData || !generalChannel.usageData.length === 0) {
                 return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
             }
             
@@ -1901,3 +1935,4 @@
     </script>
 </body>
 </html>
+
