@@ -906,19 +906,25 @@
                     // Group by day to store in cache
                     const dailyData = {};
                     apiResponseData.forEach(item => {
-                        let dateStr = item.nemTime.substring(0, 10);
+                        const itemDate = new Date(item.nemTime);
+                        // Subtract 1 second to correctly handle the midnight boundary.
+                        // An interval ending at 00:00:00 belongs to the previous day.
+                        itemDate.setSeconds(itemDate.getSeconds() - 1);
                         
-                        // Correctly associate the midnight interval with the previous day for caching.
-                        // The usage interval ending at 00:00 on day 'Y' belongs to day 'Y-1'.
-                        if (item.nemTime.endsWith('T00:00:00Z') || item.nemTime.endsWith('T00:00:00.000Z')) {
-                            const date = new Date(dateStr + 'T12:00:00Z'); // Use midday to avoid DST issues
-                            date.setDate(date.getDate() - 1);
-                            dateStr = date.toISOString().substring(0, 10);
-                        }
+                        // Use local date for grouping, to align with the requested date range.
+                        const usageDateStr = formatForInput(itemDate);
 
-                        if (!dailyData[dateStr]) dailyData[dateStr] = [];
-                        dailyData[dateStr].push(item);
+                        // Only cache data that falls within the requested fetch range.
+                        // This prevents an extra interval from the API (e.g., 00:05 on the next day)
+                        // from overwriting a valid day's cache with incomplete data.
+                        if (usageDateStr >= range.start && usageDateStr <= range.end) {
+                            if (!dailyData[usageDateStr]) {
+                                dailyData[usageDateStr] = [];
+                            }
+                            dailyData[usageDateStr].push(item);
+                        }
                     });
+
 
                     for (const dateStr in dailyData) {
                         const dayDate = new Date(dateStr + 'T00:00:00');
