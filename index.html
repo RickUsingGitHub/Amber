@@ -185,24 +185,22 @@
             </div>
 
             <div id="resultsSection" class="hidden">
-                 <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                    <div class="flex space-x-2">
-                        <button id="showAverageGraphButton" disabled class="bg-blue-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                            Average Graph
-                        </button>
-                        <button id="showDailyGraphButton" disabled class="bg-teal-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
-                            Daily Graph
-                        </button>
+                 <!-- Reordered sections -->
+                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
                         <button id="downloadCsvButton" disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
                             Download CSV
                         </button>
                     </div>
+                    <div id="results-table-container"></div>
                  </div>
 
                  <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[80vh]">
+                    <h3 class="text-xl font-bold text-gray-900 mb-4">Average 24-Hour Usage & Price</h3>
                     <canvas id="usagePriceChart"></canvas>
                 </div>
+
                 <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
                     <h3 class="text-xl font-bold text-gray-900 mb-4">Daily Usage & Price Graph</h3>
                     <div class="flex items-center space-x-2 sm:space-x-4 mb-4">
@@ -214,8 +212,6 @@
                         <canvas id="dailyChart"></canvas>
                     </div>
                 </div>
-                 <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto">
-                 </div>
             </div>
         </main>
     </div>
@@ -665,23 +661,6 @@
 
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
-            document.getElementById('showAverageGraphButton').addEventListener('click', displayAverageGraph);
-            document.getElementById('showDailyGraphButton').addEventListener('click', () => {
-                const dailyGraphSection = document.getElementById('dailyGraphSection');
-                const showDailyGraphButton = document.getElementById('showDailyGraphButton');
-
-                if (dailyGraphSection.classList.contains('hidden')) {
-                    dailyGraphSection.classList.remove('hidden');
-                    showDailyGraphButton.textContent = 'Hide Daily Graph';
-                    // Ensure the graph is drawn if it's the first time showing
-                    if (!dailyUsageChart && cachedChannelData) {
-                        document.getElementById('daySelector').dispatchEvent(new Event('change'));
-                    }
-                } else {
-                    dailyGraphSection.classList.add('hidden');
-                    showDailyGraphButton.textContent = 'Daily Graph';
-                }
-            });
         });
 
         // --- Main Fetch and Calculation Logic ---
@@ -693,8 +672,6 @@
             const progressLog = document.getElementById('progressLog');
             const resultsOutput = document.getElementById('results-output');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
-            const showAverageGraphButton = document.getElementById('showAverageGraphButton');
-            const showDailyGraphButton = document.getElementById('showDailyGraphButton');
             const averageGraphContainer = document.getElementById('averageGraphContainer');
             const dailyGraphSection = document.getElementById('dailyGraphSection');
 
@@ -702,14 +679,10 @@
             averageGraphContainer.classList.add('hidden');
             dailyGraphSection.classList.add('hidden');
             downloadCsvButton.disabled = true;
-            showAverageGraphButton.disabled = true;
-            showDailyGraphButton.disabled = true;
-            resultsOutput.innerHTML = '';
+            document.getElementById('results-table-container').innerHTML = '';
             messageEl.textContent = '';
             progressLog.innerHTML = '';
             
-            showAverageGraphButton.textContent = 'Average Graph';
-            showDailyGraphButton.textContent = 'Daily Graph';
             if (dailyUsageChart) { dailyUsageChart.destroy(); dailyUsageChart = null; }
 
 
@@ -1293,17 +1266,7 @@
          */
         function displayAverageGraph() {
             const averageGraphContainer = document.getElementById('averageGraphContainer');
-            const showAverageGraphButton = document.getElementById('showAverageGraphButton');
-
-            if (averageGraphContainer.classList.contains('hidden')) {
-                averageGraphContainer.classList.remove('hidden');
-                showAverageGraphButton.textContent = 'Hide Average Graph';
-            } else {
-                averageGraphContainer.classList.add('hidden');
-                showAverageGraphButton.textContent = 'Average Graph';
-                return; // Just hide it and exit
-            }
-
+            
             if (!cachedChannelData) {
                 console.error("No data available for graph.");
                 averageGraphContainer.innerHTML = '<p class="text-center text-red-500">No data available to render graph.</p>';
@@ -1772,10 +1735,11 @@
          * Renders the final results table and summary.
          */
         function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
-            const resultsOutput = document.getElementById('results-output');
+            const resultsTableContainer = document.getElementById('results-table-container');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
-            const showAverageGraphButton = document.getElementById('showAverageGraphButton');
-            const showDailyGraphButton = document.getElementById('showDailyGraphButton');
+            const averageGraphContainer = document.getElementById('averageGraphContainer');
+            const dailyGraphSection = document.getElementById('dailyGraphSection');
+
             const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
             const period = `(${startDateStr} to ${endDateStr})`;
             const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
@@ -1884,11 +1848,14 @@
             }
             savingsSummaryHTML += '</div>';
 
-            resultsOutput.innerHTML = tableHTML + savingsSummaryHTML;
+            resultsTableContainer.innerHTML = tableHTML + savingsSummaryHTML;
             
             downloadCsvButton.disabled = false;
-            showAverageGraphButton.disabled = false;
-            showDailyGraphButton.disabled = false;
+
+            // Make graphs visible and render them
+            averageGraphContainer.classList.remove('hidden');
+            dailyGraphSection.classList.remove('hidden');
+            displayAverageGraph(); // Call the average graph renderer
 
             const daySelector = document.getElementById('daySelector');
             const prevDayBtn = document.getElementById('prevDayBtn');
