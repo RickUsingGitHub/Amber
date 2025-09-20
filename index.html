@@ -178,12 +178,6 @@
                                 </div>
             </div>
 
-            <div id="messageSection" class="hidden text-center p-6 bg-white rounded-lg shadow-md">
-                <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
-                <p id="message" class="text-lg"></p>
-                <div id="progressLog" class="text-left text-sm text-gray-600 mt-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded"></div>
-            </div>
-
             <div id="resultsSection" class="hidden">
                  <!-- Reordered sections -->
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
@@ -213,6 +207,26 @@
                     <div class="h-[70vh] relative">
                         <canvas id="dailyChart"></canvas>
                     </div>
+                </div>
+            </div>
+            
+            <!-- Data Status & Cache Management Section -->
+            <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Data Status & Cache Management</h2>
+    
+                <!-- This container will show loading messages, replacing the old messageSection -->
+                <div id="messageContainer" class="hidden text-center mb-4 p-4 border rounded-lg bg-gray-50">
+                    <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
+                    <p id="message" class="text-lg"></p>
+                    <div id="progressLog" class="text-left text-sm text-gray-600 mt-4 max-h-40 overflow-y-auto bg-gray-50 p-2 rounded"></div>
+                </div>
+
+                <div class="mt-4 pt-4 border-t text-center">
+                    <p class="text-sm text-gray-600 mb-2">Usage data is cached in your browser to speed up future requests. You can clear this cache if you suspect data is stale.</p>
+                    <button id="clearCacheBtn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        Clear Cached Data
+                    </button>
+                    <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
                 </div>
             </div>
         </main>
@@ -663,12 +677,48 @@
 
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
+            
+            // --- Clear Cache Button ---
+            const clearCacheBtn = document.getElementById('clearCacheBtn');
+            clearCacheBtn.addEventListener('click', () => {
+                const cacheMessageEl = document.getElementById('cacheMessage');
+                cacheMessageEl.textContent = 'Clearing cache...';
+                cacheMessageEl.className = 'text-sm mt-2 font-medium text-yellow-600';
+
+                const request = indexedDB.deleteDatabase(DB_NAME);
+
+                request.onsuccess = function() {
+                    console.log("Deleted database successfully");
+                    // Clear in-memory cache as well
+                    cachedChannelData = null; 
+                    lastFetchedStartDate = null;
+                    lastFetchedEndDate = null;
+                    
+                    cacheMessageEl.textContent = 'Cache cleared successfully!';
+                    cacheMessageEl.className = 'text-sm mt-2 font-medium text-green-600';
+                    setTimeout(() => { cacheMessageEl.textContent = ''; }, 3000);
+                };
+
+                request.onerror = function() {
+                    console.error("Couldn't delete database");
+                    cacheMessageEl.textContent = 'Error clearing cache.';
+                    cacheMessageEl.className = 'text-sm mt-2 font-medium text-red-600';
+                    setTimeout(() => { cacheMessageEl.textContent = ''; }, 3000);
+                };
+
+                request.onblocked = function() {
+                    console.warn("Couldn't delete database due to connections still open.");
+                    cacheMessageEl.textContent = 'Cache is busy. Please refresh the page and try again.';
+                    cacheMessageEl.className = 'text-sm mt-2 font-medium text-orange-600';
+                     setTimeout(() => { cacheMessageEl.textContent = ''; }, 5000);
+                };
+            });
         });
 
         // --- Main Fetch and Calculation Logic ---
         document.getElementById('fetchData').addEventListener('click', async () => {
             const resultsSection = document.getElementById('resultsSection');
-            const messageSection = document.getElementById('messageSection');
+            const messageContainer = document.getElementById('messageContainer');
             const messageEl = document.getElementById('message');
             const loader = document.getElementById('loader');
             const progressLog = document.getElementById('progressLog');
@@ -684,6 +734,7 @@
             document.getElementById('results-table-container').innerHTML = '';
             messageEl.textContent = '';
             progressLog.innerHTML = '';
+            messageContainer.classList.add('hidden');
             
             if (dailyUsageChart) { dailyUsageChart.destroy(); dailyUsageChart = null; }
 
@@ -697,7 +748,7 @@
             localStorage.setItem('endDate', endDateValue);
             
             if (!apiKey) {
-                messageSection.classList.remove('hidden');
+                messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'Please enter your Amber API key.';
                 return;
             }
@@ -705,7 +756,7 @@
             localStorage.setItem('amberApiKey', apiKey);
 
              if (!startDateValue || !endDateValue) {
-                messageSection.classList.remove('hidden');
+                messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'Please select a start and end date.';
                 return;
             }
@@ -724,14 +775,14 @@
             overallEndDate.setHours(23, 59, 59, 999); // Ensure the entire end day is included
 
             if (overallEndDate < overallStartDate) {
-                messageSection.classList.remove('hidden');
+                messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
             }
             const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
 
             if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
-                messageSection.classList.remove('hidden');
+                messageContainer.classList.remove('hidden');
                 loader.classList.add('hidden');
                 messageEl.textContent = 'Recalculating with new rates...';
                 
@@ -756,7 +807,7 @@
                     overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
                     overallOtherCost += otherDailyConnection / 100;
 
-                    messageSection.classList.add('hidden');
+                    messageContainer.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
                     displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
                 }, 200);
@@ -766,7 +817,7 @@
 
             cachedChannelData = null;
 
-            messageSection.classList.remove('hidden');
+            messageContainer.classList.remove('hidden');
             loader.classList.remove('hidden');
             
             const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
@@ -962,7 +1013,7 @@
                 overallOtherCost += otherDailyConnection / 100;
 
                 loader.classList.add('hidden');
-                messageSection.classList.add('hidden');
+                messageContainer.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
                 displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
 
@@ -970,7 +1021,7 @@
                 console.error('Error:', error);
                 cachedChannelData = null;
                 loader.classList.add('hidden');
-                messageSection.classList.remove('hidden');
+                messageContainer.classList.remove('hidden');
                 messageEl.textContent = `Error: ${error.message}`;
             }
         });
@@ -1910,4 +1961,3 @@
     </script>
 </body>
 </html>
-
