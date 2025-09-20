@@ -1983,6 +1983,26 @@
                     }
                 });
             });
+
+            // Ensure all days in the selected range have a summary object
+            const startDateValue = document.getElementById('startDate').value;
+            const endDateValue = document.getElementById('endDate').value;
+            if (startDateValue && endDateValue) {
+                const start = new Date(startDateValue + 'T00:00:00');
+                const end = new Date(endDateValue + 'T00:00:00');
+                let loopDate = new Date(start);
+                while (loopDate <= end) {
+                    const dateStr = formatForInput(loopDate);
+                    if (!summaries[dateStr]) {
+                        summaries[dateStr] = {
+                            totalInKwh: 0, totalOutKwh: 0,
+                            amberCost: 0, otherCost: 0,
+                            channels: {}
+                        };
+                    }
+                    loopDate.setDate(loopDate.getDate() + 1);
+                }
+            }
             
             const amberDemandDays = new Set();
             const generalChannel = Object.values(channelData).find(c => c.type === 'general');
@@ -2018,12 +2038,11 @@
         function displayCalendar() {
             const container = document.getElementById('calendar-container');
             container.innerHTML = '';
-            
-            const allDates = Object.keys(dailySummaries).sort();
-            if (allDates.length === 0) return;
 
-            const startDateStr = allDates[0];
-            const endDateStr = allDates[allDates.length - 1];
+            const startDateStr = document.getElementById('startDate').value;
+            const endDateStr = document.getElementById('endDate').value;
+            
+            if (!startDateStr || !endDateStr) return;
             
             const start = new Date(startDateStr + 'T00:00:00');
             const end = new Date(endDateStr + 'T00:00:00');
@@ -2032,17 +2051,25 @@
             let monthGrid;
 
             const monthlyTotals = {};
-            for (const dateStr in dailySummaries) {
-                 const monthKey = dateStr.substring(0, 7);
-                 if (!monthlyTotals[monthKey]) {
-                     monthlyTotals[monthKey] = { amber: 0, other: 0 };
-                 }
-                 const summary = dailySummaries[dateStr];
-                 const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
-                 const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-                 const totalOtherCharges = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
-                 monthlyTotals[monthKey].amber += totalAmberCost;
-                 monthlyTotals[monthKey].other += totalOtherCharges;
+            let loopDateForTotals = new Date(start);
+            while (loopDateForTotals <= end) {
+                const dateStr = formatForInput(loopDateForTotals);
+                const summary = dailySummaries[dateStr];
+                
+                if (summary) {
+                    const monthKey = dateStr.substring(0, 7);
+                    if (!monthlyTotals[monthKey]) {
+                        monthlyTotals[monthKey] = { amber: 0, other: 0 };
+                    }
+                
+                    const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                    const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                    const totalOtherCharges = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                    monthlyTotals[monthKey].amber += totalAmberCost;
+                    monthlyTotals[monthKey].other += totalOtherCharges;
+                }
+                
+                loopDateForTotals.setDate(loopDateForTotals.getDate() + 1);
             }
 
             let date = new Date(start);
@@ -2089,7 +2116,7 @@
                 const summary = dailySummaries[dateStr];
                 
                 let dayHtml;
-                 if(summary) {
+                 if(summary && (summary.totalInKwh > 0 || summary.totalOutKwh > 0)) {
                     const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                     const costColor = totalAmberCost > 0 ? 'text-red-600' : 'text-green-600';
                     dayHtml = `
