@@ -1912,6 +1912,31 @@
 
         function precalculateDailySummaries(channelData, amberDemandInfo, otherDemandInfo) {
             const summaries = {};
+            
+            const allDatesWithData = new Set();
+            Object.values(channelData).forEach(channel => {
+                channel.usageData.forEach(item => {
+                    allDatesWithData.add(item.nemTime.substring(0, 10));
+                });
+            });
+
+            // Ensure the summaries object covers the entire span of available data
+            const sortedDates = [...allDatesWithData].sort();
+            if (sortedDates.length > 0) {
+                const start = new Date(sortedDates[0]);
+                const end = new Date(sortedDates[sortedDates.length - 1]);
+                let loopDate = new Date(start);
+                while (loopDate <= end) {
+                    const dateStr = formatForInput(loopDate);
+                    summaries[dateStr] = {
+                        totalInKwh: 0, totalOutKwh: 0,
+                        amberCost: 0, otherCost: 0,
+                        channels: {}
+                    };
+                    loopDate.setDate(loopDate.getDate() + 1);
+                }
+            }
+
 
             const getOtherRateForItem = (item, type) => {
                 const rateType = document.querySelector('input[name="rateType"]:checked').value;
@@ -1934,13 +1959,7 @@
             Object.values(channelData).forEach(channel => {
                 channel.usageData.forEach(item => {
                     const dateStr = item.nemTime.substring(0, 10);
-                    if (!summaries[dateStr]) {
-                        summaries[dateStr] = {
-                            totalInKwh: 0, totalOutKwh: 0,
-                            amberCost: 0, otherCost: 0,
-                            channels: {}
-                        };
-                    }
+                    if (!summaries[dateStr]) return; // Should not happen with the pre-population step
 
                     const kwh = parseFloat(item.kwh) || 0;
                     const perKwh = parseFloat(item.perKwh) || 0;
@@ -2005,8 +2024,7 @@
             container.innerHTML = '';
             container.className = 'space-y-6 max-h-[80vh] overflow-y-auto pr-2';
 
-            const db = await openDb();
-            const cachedDateSet = new Set(await getAllCachedDates(db, currentSiteId));
+            const availableDateSet = new Set(Object.keys(dailySummaries));
             
             const selectedDateSet = new Set();
             const startDateValue = document.getElementById('startDate').value;
@@ -2020,10 +2038,10 @@
                 }
             }
 
-            const allDates = [...cachedDateSet].sort();
+            const allDates = [...availableDateSet].sort();
             
             if (allDates.length === 0) {
-                 if (currentSiteId) container.innerHTML = '<p class="text-center text-gray-500">No cached data found.</p>';
+                 if (currentSiteId) container.innerHTML = '<p class="text-center text-gray-500">No data available to display.</p>';
                  return;
             }
 
@@ -2099,7 +2117,7 @@
                 const day = date.getDate();
                 let dayHtml;
 
-                if (cachedDateSet.has(dateStr)) {
+                if (availableDateSet.has(dateStr)) {
                     const summary = dailySummaries[dateStr];
                     const isSelected = selectedDateSet.has(dateStr);
                     const borderClass = isSelected ? 'border-4 border-indigo-500' : 'border border-gray-200';
@@ -2119,10 +2137,10 @@
                                 </div>
                             </div>
                         `;
-                    } else { // Cached but no usage data, or summary is missing
-                        dayHtml = `<div class="calendar-day has-data ${borderClass} bg-gray-50 rounded-md p-2 flex flex-col justify-center items-center" data-date="${dateStr}"><div class="font-bold text-gray-800">${day}</div><div class="text-xs mt-1 text-center text-gray-500 leading-tight">Cached<br>No Usage</div></div>`;
+                    } else { 
+                        dayHtml = `<div class="calendar-day has-data ${borderClass} bg-gray-50 rounded-md p-2 flex flex-col justify-center items-center" data-date="${dateStr}"><div class="font-bold text-gray-800">${day}</div><div class="text-xs mt-1 text-center text-gray-500 leading-tight">No Usage</div></div>`;
                     }
-                } else { // Not cached at all
+                } else {
                      dayHtml = `<div class="bg-gray-100 border border-gray-200 rounded-md p-2 flex items-center justify-center"><span class="text-gray-400">${day}</span></div>`;
                 }
                 monthGrid.insertAdjacentHTML('beforeend', dayHtml);
