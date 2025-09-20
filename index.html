@@ -1364,7 +1364,7 @@
             }
             
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
-            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0);
+            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKWh / numDays) * 2 : 0);
             const avgControlledLoadData = controlledLoadIntervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
@@ -2149,12 +2149,14 @@
                                 <tbody class="divide-y divide-gray-200">`;
             
             Object.entries(summary.channels).forEach(([id, data]) => {
-                contentHtml += `<tr>
-                                    <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
-                                    <td class="px-2 py-1 text-right">${data.kwh.toFixed(2)} kWh</td>
-                                    <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
-                                    <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
-                                 </tr>`;
+                if (Math.abs(data.amberCost) > 0.001 || Math.abs(data.otherCost) > 0.001) {
+                    contentHtml += `<tr>
+                                        <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
+                                        <td class="px-2 py-1 text-right">${data.kwh.toFixed(2)} kWh</td>
+                                        <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
+                                        <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
+                                    </tr>`;
+                }
             });
             contentHtml += `<tr class="border-t"></tr>`; // Visual separator
 
@@ -2182,11 +2184,13 @@
                 hasDemandRow = true;
             }
 
-            contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}"> 
-                                <td class="px-2 py-1 font-semibold" colspan="2">Daily Charges</td>
-                                <td class="px-2 py-1 text-right font-semibold">$${amberDaily.toFixed(2)}</td>
-                                <td class="px-2 py-1 text-right font-semibold">$${otherDaily.toFixed(2)}</td>
-                            </tr>`;
+            if (Math.abs(amberDaily) > 0.001 || Math.abs(otherDaily) > 0.001) {
+                 contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}"> 
+                                    <td class="px-2 py-1 font-semibold" colspan="2">Daily Charges</td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${amberDaily.toFixed(2)}</td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${otherDaily.toFixed(2)}</td>
+                                </tr>`;
+            }
 
             contentHtml += `<tr class="bg-gray-50 font-bold">
                                 <td class="px-2 py-1" colspan="2">Total</td>
