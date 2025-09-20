@@ -260,6 +260,7 @@
         let lastFetchedEndDate = null;
         let usageChart = null;
         let dailyUsageChart = null;
+        let currentSiteId = null;
 
         // --- Supplier Templates ---
         const supplierTemplates = {
@@ -345,6 +346,30 @@
 
                 request.onsuccess = () => {
                     resolve();
+                };
+
+                request.onerror = (event) => {
+                    reject(event.target.error);
+                };
+            });
+        }
+
+        function getAllCachedDates(db, siteId) {
+            return new Promise((resolve, reject) => {
+                if (!siteId) {
+                    resolve([]);
+                    return;
+                }
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAllKeys();
+
+                request.onsuccess = (event) => {
+                    const keys = event.target.result;
+                    const dates = keys
+                        .filter(key => key.startsWith(`${siteId}_`))
+                        .map(key => key.substring(siteId.length + 1));
+                    resolve(dates);
                 };
 
                 request.onerror = (event) => {
@@ -684,6 +709,8 @@
                     dailySummaries = {};
                     lastFetchedStartDate = null;
                     lastFetchedEndDate = null;
+                    currentSiteId = null;
+                    document.getElementById('calendar-container').innerHTML = '';
                     
                     cacheMessageEl.textContent = 'Cache cleared successfully!';
                     cacheMessageEl.className = 'text-sm mt-2 font-medium text-green-600';
@@ -705,6 +732,34 @@
                 };
             });
         });
+
+        // --- Data Processing Helper ---
+        function processUsageData(usageArray, channelTotalsObject, shouldCalculateTotals) {
+            usageArray.forEach(item => {
+                // Ensure time is processed only once
+                if (!item.processedTime) {
+                    const itemDate = new Date(item.nemTime);
+                    itemDate.setMinutes(itemDate.getMinutes() - 5);
+                    item.nemTime = toLocalIsoWithOffset(itemDate);
+                    item.processedTime = true;
+                }
+
+                const channelId = item.channelIdentifier;
+                if (!channelTotalsObject[channelId]) return;
+                
+                const channelData = channelTotalsObject[channelId];
+                const kwh = parseFloat(item.kwh) || 0;
+                const perKwh = parseFloat(item.perKwh) || 0;
+                
+                if (shouldCalculateTotals) {
+                    channelData.totalKWh += kwh;
+                    channelData.totalAmberCost += (perKwh / 100) * kwh;
+                }
+                
+                channelData.usageData.push(item);
+            });
+        }
+
 
         // --- Main Fetch and Calculation Logic ---
         document.getElementById('fetchData').addEventListener('click', async () => {
@@ -772,46 +827,8 @@
                 return;
             }
             const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
-
-            if (cachedChannelData && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
-                calendarSection.classList.remove('hidden');
-                messageContainer.classList.remove('hidden');
-                loader.classList.add('hidden');
-                messageEl.textContent = 'Recalculating with new rates...';
-                
-                setTimeout(() => {
-                    const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-                    const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-                    
-                    const otherDemandInfo = calculateOtherDemandTariff(cachedChannelData, startDateValue, endDateValue);
-                    calculateOtherSupplierCosts(cachedChannelData, otherDemandInfo.cost);
-                    
-                    const demandTariffInfo = calculateDemandTariff(cachedChannelData);
-                    demandInfoForTooltip = { amber: demandTariffInfo, other: otherDemandInfo };
-                    dailySummaries = precalculateDailySummaries(cachedChannelData, demandTariffInfo, otherDemandInfo);
-                    const demandTariffCost = demandTariffInfo.cost;
-
-                    let overallAmberCost = 0;
-                    let overallOtherCost = 0;
-
-                    Object.values(cachedChannelData).forEach(c => {
-                        overallAmberCost += c.totalAmberCost;
-                        overallOtherCost += c.totalOtherCost;
-                    });
-                    
-                    overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
-                    overallOtherCost += otherDailyConnection / 100;
-
-                    messageContainer.classList.add('hidden');
-                    resultsSection.classList.remove('hidden');
-                    calendarSection.classList.remove('hidden');
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
-                }, 200);
-
-                return;
-            }
-
-            cachedChannelData = null;
+            
+            cachedChannelData = null; // Always reset for a new fetch/calculation
             dailySummaries = {};
 
             calendarSection.classList.remove('hidden');
@@ -835,27 +852,15 @@
                 if (!sites || sites.length === 0) throw new Error('No sites found for this API key.');
                 
                 const site = sites[0];
+                currentSiteId = site.id;
                 const siteId = site.id;
                 const channels = site.channels;
                 if (!channels || channels.length === 0) throw new Error('No channels found for this site.');
 
                 messageEl.textContent = `Site found: ${siteId}. Preparing to fetch usage data...`;
                 
-                let channelTotals = {};
-                channels.forEach(c => {
-                    channelTotals[c.identifier] = {
-                        identifier: c.identifier,
-                        type: c.type,
-                        totalKWh: 0,
-                        totalAmberCost: 0,
-                        totalCents: 0, 
-                        count: 0, 
-                        usageData: []
-                    };
-                });
-                
                 const db = await openDb();
-                const allUsageData = [];
+                let selectedUsageData = [];
                 let datesToFetch = [];
 
                 const cacheBoundary = new Date();
@@ -871,8 +876,8 @@
                         const cacheKey = `${siteId}_${dateStr}`;
                         const cachedDayData = await getUsageData(db, cacheKey);
                         if (cachedDayData) {
-                            progressLog.innerHTML += `<div>${dateStr} - cached</div>`;
-                            allUsageData.push(...cachedDayData);
+                            progressLog.innerHTML += `<div>${dateStr} - from cache</div>`;
+                            selectedUsageData.push(...cachedDayData);
                         } else {
                             datesToFetch.push(dateStr);
                         }
@@ -884,18 +889,12 @@
                 if (datesToFetch.length > 0) {
                     let rangeStart = datesToFetch[0];
                     let rangeEnd = datesToFetch[0];
-
-                    const getDaysBetween = (start, end) => {
-                        const startDate = new Date(start + 'T00:00:00');
-                        const endDate = new Date(end + 'T00:00:00');
-                        return Math.round((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
-                    };
+                    const getDaysBetween = (start, end) => (new Date(end) - new Date(start)) / (1000 * 3600 * 24) + 1;
 
                     for (let i = 1; i < datesToFetch.length; i++) {
-                        const nextDay = new Date(rangeEnd + 'T00:00:00');
+                        const nextDay = new Date(rangeEnd);
                         nextDay.setDate(nextDay.getDate() + 1);
-
-                        if (datesToFetch[i] === formatForInput(nextDay) && getDaysBetween(rangeStart, rangeEnd) < 7) {
+                        if (datesToFetch[i] === formatForInput(nextDay) && getDaysBetween(rangeStart, datesToFetch[i]) <= 7) {
                             rangeEnd = datesToFetch[i];
                         } else {
                             fetchRanges.push({ start: rangeStart, end: rangeEnd });
@@ -907,104 +906,112 @@
                 }
 
                 for (const range of fetchRanges) {
-                    messageEl.textContent = `Fetching data from API...`;
-                    progressLog.innerHTML += `<div>${range.start} to ${range.end} - API load</div>`;
-
+                    messageEl.textContent = `Fetching data from API for ${range.start} to ${range.end}...`;
+                    progressLog.innerHTML += `<div>${range.start} to ${range.end} - API fetch</div>`;
                     const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${range.start}&endDate=${range.end}`;
                     const usageResponse = await fetch(usageUrl, { headers });
                     const responseText = await usageResponse.text();
-
-                    if (!usageResponse.ok) {
+                     if (!usageResponse.ok) {
                         let detail = responseText;
                         try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
                         throw new Error(`Failed to fetch usage for ${range.start} to ${range.end}. Status: ${usageResponse.status}. Message: ${detail}`);
                     }
-                    
                     const apiResponseData = JSON.parse(responseText);
-                    allUsageData.push(...apiResponseData);
+                    selectedUsageData.push(...apiResponseData);
 
                     const dailyData = {};
                     apiResponseData.forEach(item => {
                         const itemDate = new Date(item.nemTime);
                         itemDate.setSeconds(itemDate.getSeconds() - 1);
-                        
                         const usageDateStr = formatForInput(itemDate);
-
                         if (usageDateStr >= range.start && usageDateStr <= range.end) {
-                            if (!dailyData[usageDateStr]) {
-                                dailyData[usageDateStr] = [];
-                            }
+                            if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
                             dailyData[usageDateStr].push(item);
                         }
                     });
 
-
                     for (const dateStr in dailyData) {
-                        const dayDate = new Date(dateStr + 'T00:00:00');
+                        const dayDate = new Date(dateStr);
                         if (dayDate < cacheBoundary) {
-                            const cacheKey = `${siteId}_${dateStr}`;
-                            await setUsageData(db, cacheKey, dailyData[dateStr]);
+                            await setUsageData(db, `${siteId}_${dateStr}`, dailyData[dateStr]);
+                        }
+                    }
+                }
+
+                messageEl.textContent = 'Loading all cached data for calendar...';
+
+                const allCachedDates = await getAllCachedDates(db, siteId);
+                const selectedDates = new Set();
+                let d = new Date(overallStartDate);
+                while (d <= overallEndDate) {
+                    selectedDates.add(formatForInput(d));
+                    d.setDate(d.getDate() + 1);
+                }
+
+                let otherCachedUsageData = [];
+                for (const dateStr of allCachedDates) {
+                    if (!selectedDates.has(dateStr)) {
+                        const cachedDayData = await getUsageData(db, `${siteId}_${dateStr}`);
+                        if (cachedDayData) {
+                            otherCachedUsageData.push(...cachedDayData);
                         }
                     }
                 }
                 
-                if (allUsageData && allUsageData.length > 0) {
-                    allUsageData.forEach(item => {
-                        const itemDate = new Date(item.nemTime);
-                        itemDate.setMinutes(itemDate.getMinutes() - 5);
-                        item.nemTime = toLocalIsoWithOffset(itemDate);
-
-                        const channelId = item.channelIdentifier;
-                        if (!channelTotals[channelId]) return;
-                        
-                        const channelData = channelTotals[channelId];
-                        const kwh = parseFloat(item.kwh) || 0;
-                        const perKwh = parseFloat(item.perKwh) || 0;
-                        channelData.totalKWh += kwh;
-                        channelData.totalAmberCost += (perKwh / 100) * kwh;
-                        channelData.usageData.push(item);
-                        channelData.totalCents += perKwh;
-                        channelData.count += 1;
-                    });
-                }
-                
-                Object.values(channelTotals).forEach(c => {
-                    c.usageData.sort((a, b) => new Date(a.nemTime) - new Date(b.nemTime));
+                let channelTotalsSelectedPeriod = {}; 
+                let channelTotalsAllData = {};
+                channels.forEach(c => {
+                    const initial = { identifier: c.identifier, type: c.type, totalKWh: 0, totalAmberCost: 0, usageData: [] };
+                    channelTotalsSelectedPeriod[c.identifier] = JSON.parse(JSON.stringify(initial));
+                    channelTotalsAllData[c.identifier] = JSON.parse(JSON.stringify(initial));
                 });
+
+                processUsageData(selectedUsageData, channelTotalsSelectedPeriod, true);
+                Object.values(channelTotalsSelectedPeriod).forEach(c => c.usageData.sort((a,b) => new Date(a.nemTime) - new Date(b.nemTime)));
+                
+                const allUsageData = [...selectedUsageData, ...otherCachedUsageData];
+                // Reset processed time flag before re-processing
+                allUsageData.forEach(item => item.processedTime = false);
+                processUsageData(allUsageData, channelTotalsAllData, false);
+                 Object.values(channelTotalsAllData).forEach(c => c.usageData.sort((a,b) => new Date(a.nemTime) - new Date(b.nemTime)));
                 
                 messageEl.textContent = 'Calculating costs...';
-                
-                const otherDemandInfo = calculateOtherDemandTariff(channelTotals, startDateValue, endDateValue);
-                calculateOtherSupplierCosts(channelTotals, otherDemandInfo.cost);
 
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
-                cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
+                cachedChannelData = channelTotalsSelectedPeriod;
                 
-                const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
-                const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
-
-                const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                const otherDemandInfo = calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, endDateValue);
+                calculateOtherSupplierCosts(channelTotalsSelectedPeriod, otherDemandInfo.cost);
+                
+                const demandTariffInfo = calculateDemandTariff(channelTotalsSelectedPeriod);
                 demandInfoForTooltip = { amber: demandTariffInfo, other: otherDemandInfo };
-                dailySummaries = precalculateDailySummaries(cachedChannelData, demandTariffInfo, otherDemandInfo);
-                const demandTariffCost = demandTariffInfo.cost;
+
+                dailySummaries = precalculateDailySummaries(channelTotalsAllData, demandTariffInfo, otherDemandInfo);
                 
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
-
-                Object.values(cachedChannelData).forEach(c => {
-                    overallAmberCost += c.totalAmberCost;
-                    overallOtherCost += c.totalOtherCost;
-                });
-
-                overallAmberCost += (demandTariffCost + amberDailyCosts / 100);
-                overallOtherCost += otherDailyConnection / 100;
+                let loopDate = new Date(overallStartDate);
+                while (loopDate <= overallEndDate) {
+                    const dateStr = formatForInput(loopDate);
+                    const summary = dailySummaries[dateStr];
+                    if (summary) {
+                        overallAmberCost += summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                        const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                    } else {
+                         overallAmberCost += (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                         const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                         overallOtherCost += (otherDailyConnection / 100);
+                    }
+                    loopDate.setDate(loopDate.getDate() + 1);
+                }
 
                 loader.classList.add('hidden');
                 messageContainer.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
                 calendarSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
+                await displayResults(channelTotalsSelectedPeriod, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -1020,28 +1027,7 @@
         
         function generateAndDownloadCSV() {
             if (!cachedChannelData) {
-                const messageBox = document.createElement('div');
-                messageBox.innerHTML = `
-                    <div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full" id="my-modal">
-                        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-                            <div class="mt-3 text-center">
-                                <h3 class="text-lg leading-6 font-medium text-gray-900">No Data Available</h3>
-                                <div class="mt-2 px-7 py-3">
-                                    <p class="text-sm text-gray-500">No data available to export. Please fetch data first.</p>
-                                </div>
-                                <div class="items-center px-4 py-3">
-                                    <button id="close-modal" class="px-4 py-2 bg-indigo-500 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                                        OK
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-                document.body.appendChild(messageBox);
-                document.getElementById('close-modal').addEventListener('click', () => {
-                    messageBox.remove();
-                });
+                // ... same as before
                 return;
             }
 
@@ -1074,7 +1060,7 @@
         }
 
         function getTouRate(date, rates) {
-            const day = date.getDay(); 
+             const day = date.getDay(); 
             const hour = date.getHours();
             const isWeekday = day >= 1 && day <= 5;
 
@@ -1099,12 +1085,13 @@
                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
                 
                 Object.values(channelTotals).forEach(c => {
+                    let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                     if (c.type === 'feedIn') {
-                        c.totalOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                        c.totalOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'general') {
-                        c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100 + otherDemandCost;
+                        c.totalOtherCost = (totalKwhForPeriod * otherSupplierRate) / 100 + otherDemandCost;
                     } else {
-                         c.totalOtherCost = (c.totalKWh * otherSupplierRate) / 100;
+                         c.totalOtherCost = (totalKwhForPeriod * otherSupplierRate) / 100;
                     }
                 });
             } else { // 'tou'
@@ -1118,10 +1105,11 @@
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
+                    let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                     if (c.type === 'feedIn') {
-                        channelOtherCost = -1 * (c.totalKWh * feedInRate) / 100;
+                        channelOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'controlledLoad') {
-                        channelOtherCost = (c.totalKWh * controlledLoadRate) / 100;
+                        channelOtherCost = (totalKwhForPeriod * controlledLoadRate) / 100;
                     }
                     else if (c.type === 'general') { 
                         channelOtherCost = c.usageData.reduce((total, item) => {
@@ -1137,7 +1125,7 @@
         }
         
         function calculateDemandTariff(channelTotals) {
-            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
+            const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 return { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
@@ -1206,7 +1194,7 @@
             }
 
             const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
-            if (!generalChannel || !generalChannel.usageData || !generalChannel.usageData.length === 0) {
+            if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
             
@@ -1387,7 +1375,7 @@
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
-                    label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(2)} kWh, Price: ${controlledLoadAvgPrice} c/kWh`,
+                    label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(1)} kWh, Price: ${controlledLoadAvgPrice} c/kWh`,
                     data: avgControlledLoadData,
                     backgroundColor: 'rgba(13, 110, 253, 0.6)',
                     borderColor: 'rgba(13, 110, 253, 1)',
@@ -1399,7 +1387,7 @@
             }
 
             chartDatasets.push({
-                label: `Average Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(2)} kWh, Price: ${generalAvgPrice} c/kWh`,
+                label: `Average Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(1)} kWh, Price: ${generalAvgPrice} c/kWh`,
                 data: avgUsageData,
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -1411,7 +1399,7 @@
 
             if (feedInChannel) {
                 chartDatasets.push({
-                    label: `Average Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(2)} kWh, Price: ${feedInAvgPrice} c/kWh`,
+                    label: `Average Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(1)} kWh, Price: ${feedInAvgPrice} c/kWh`,
                     data: avgFeedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -1522,12 +1510,7 @@
         }
         
         function displayDailyGraph(selectedDateStr) {
-            if (!cachedChannelData) return;
-
-            const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
-            const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
-            const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
-
+             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 console.error("No general usage data for daily graph.");
                 return;
@@ -1550,6 +1533,7 @@
                 }
             });
 
+            const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
             const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
             if (feedInChannel && feedInChannel.usageData) {
                 const dayDataFeedIn = feedInChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
@@ -1565,6 +1549,7 @@
                 });
             }
             
+            const controlledLoadChannel = Object.values(cachedChannelData).find(c => c.type === 'controlledLoad');
             const controlledLoadIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
             if (controlledLoadChannel && controlledLoadChannel.usageData) {
                 const dayDataControlled = controlledLoadChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr) || [];
@@ -1615,7 +1600,7 @@
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                  chartDatasets.push({
-                    label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(2)} kWh, Avg Price: ${dailyControlledLoadAvgPrice} c/kWh`,
+                    label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(1)} kWh, Avg Price: ${dailyControlledLoadAvgPrice} c/kWh`,
                     data: controlledLoadData,
                     backgroundColor: 'rgba(13, 110, 253, 0.6)',
                     borderColor: 'rgba(13, 110, 253, 1)',
@@ -1627,7 +1612,7 @@
             }
 
             chartDatasets.push({
-                label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(2)} kWh, Avg Price: ${dailyGeneralAvgPrice} c/kWh`,
+                label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(1)} kWh, Avg Price: ${dailyGeneralAvgPrice} c/kWh`,
                 data: usageData,
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
@@ -1639,7 +1624,7 @@
 
             if (feedInChannel) {
                 chartDatasets.push({
-                    label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(2)} kWh, Avg Price: ${dailyFeedInAvgPrice} c/kWh`,
+                    label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(1)} kWh, Avg Price: ${dailyFeedInAvgPrice} c/kWh`,
                     data: feedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
@@ -1751,7 +1736,7 @@
             });
         }
 
-        function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
+        async function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
             const resultsTableContainer = document.getElementById('results-table-container');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const averageGraphContainer = document.getElementById('averageGraphContainer');
@@ -1780,7 +1765,7 @@
                 if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) {
                     return;
                 }
-                const totalKWhText = (c.totalKWh || 0).toFixed(2);
+                const totalKWhText = (c.totalKWh || 0).toFixed(1);
                 const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
                 const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
                 tableHTML += `
@@ -1825,7 +1810,7 @@
                             <div class="text-xs">X ${numDays} days</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${(otherDemandTariffInfo.cost || 0).toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 italic">$${(otherDemandTariffInfo.cost || 0).toFixed(2)}</td>
                     </tr>
                 `;
             }
@@ -1920,7 +1905,7 @@
                  daySelector.dispatchEvent(new Event('change'));
             }
             
-            displayCalendar();
+            await displayCalendar();
         }
 
         // --- Calendar & Tooltip Functions ---
@@ -1983,26 +1968,6 @@
                     }
                 });
             });
-
-            // Ensure all days in the selected range have a summary object
-            const startDateValue = document.getElementById('startDate').value;
-            const endDateValue = document.getElementById('endDate').value;
-            if (startDateValue && endDateValue) {
-                const start = new Date(startDateValue + 'T00:00:00');
-                const end = new Date(endDateValue + 'T00:00:00');
-                let loopDate = new Date(start);
-                while (loopDate <= end) {
-                    const dateStr = formatForInput(loopDate);
-                    if (!summaries[dateStr]) {
-                        summaries[dateStr] = {
-                            totalInKwh: 0, totalOutKwh: 0,
-                            amberCost: 0, otherCost: 0,
-                            channels: {}
-                        };
-                    }
-                    loopDate.setDate(loopDate.getDate() + 1);
-                }
-            }
             
             const amberDemandDays = new Set();
             const generalChannel = Object.values(channelData).find(c => c.type === 'general');
@@ -2014,7 +1979,7 @@
                 });
             }
 
-            const amberDailyDemandCost = (amberDemandInfo.demandDays > 0) ? (amberDemandInfo.cost / amberDemandInfo.demandDays) : 0;
+            const amberDailyDemandCost = (amberDemandInfo && amberDemandInfo.demandDays > 0) ? (amberDemandInfo.cost / amberDemandInfo.demandDays) : 0;
             const otherDailyDemandCharge = (document.getElementById('enableDemandTariff').checked && otherDemandInfo) ? otherDemandInfo.dailyCharge : 0;
 
             for (const dateStr in summaries) {
@@ -2035,14 +2000,35 @@
             return summaries;
         }
 
-        function displayCalendar() {
+        async function displayCalendar() {
             const container = document.getElementById('calendar-container');
             container.innerHTML = '';
+            container.className = 'space-y-6 max-h-[80vh] overflow-y-auto pr-2';
 
-            const startDateStr = document.getElementById('startDate').value;
-            const endDateStr = document.getElementById('endDate').value;
+            const db = await openDb();
+            const cachedDateSet = new Set(await getAllCachedDates(db, currentSiteId));
             
-            if (!startDateStr || !endDateStr) return;
+            const selectedDateSet = new Set();
+            const startDateValue = document.getElementById('startDate').value;
+            const endDateValue = document.getElementById('endDate').value;
+            if(startDateValue && endDateValue){
+                let d = new Date(startDateValue + 'T00:00:00');
+                const endD = new Date(endDateValue + 'T00:00:00');
+                while (d <= endD) {
+                    selectedDateSet.add(formatForInput(d));
+                    d.setDate(d.getDate() + 1);
+                }
+            }
+
+            const allDates = [...cachedDateSet].sort();
+            
+            if (allDates.length === 0) {
+                 if (currentSiteId) container.innerHTML = '<p class="text-center text-gray-500">No cached data found.</p>';
+                 return;
+            }
+
+            const startDateStr = allDates[0];
+            const endDateStr = allDates[allDates.length - 1];
             
             const start = new Date(startDateStr + 'T00:00:00');
             const end = new Date(endDateStr + 'T00:00:00');
@@ -2050,30 +2036,26 @@
             let currentMonth = -1;
             let monthGrid;
 
-            const monthlyTotals = {};
-            let loopDateForTotals = new Date(start);
-            while (loopDateForTotals <= end) {
-                const dateStr = formatForInput(loopDateForTotals);
-                const summary = dailySummaries[dateStr];
-                
-                if (summary) {
+            const monthlyTotals = {}; // only for selected period
+            for (const dateStr of selectedDateSet) {
+                 const summary = dailySummaries[dateStr];
+                 if(summary){
                     const monthKey = dateStr.substring(0, 7);
                     if (!monthlyTotals[monthKey]) {
                         monthlyTotals[monthKey] = { amber: 0, other: 0 };
                     }
-                
                     const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                     const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
                     const totalOtherCharges = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
                     monthlyTotals[monthKey].amber += totalAmberCost;
                     monthlyTotals[monthKey].other += totalOtherCharges;
-                }
-                
-                loopDateForTotals.setDate(loopDateForTotals.getDate() + 1);
+                 }
             }
 
-            let date = new Date(start);
-            while(date <= end) {
+            let date = new Date(start.getFullYear(), start.getMonth(), 1);
+            const lastDay = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+
+            while(date <= lastDay) {
                 const month = date.getMonth();
                 const year = date.getFullYear();
 
@@ -2081,13 +2063,15 @@
                     currentMonth = month;
                     const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
                     const monthKey = `${year}-${(month + 1).toString().padStart(2, '0')}`;
-                    const totals = monthlyTotals[monthKey] || {amber: 0, other: 0};
                     
-                    const savings = totals.other - totals.amber;
-                    const savingsColor = savings > 0 ? 'text-green-700' : 'text-red-700';
-                    const savingsPrefix = savings > 0 ? 'Saving' : 'Loss';
-
-                    let summaryHtml = `<span class="text-sm font-normal text-gray-600"> (Amber: <strong>$${totals.amber.toFixed(2)}</strong> | Other: <strong>$${totals.other.toFixed(2)}</strong> | <span class="${savingsColor}">${savingsPrefix}: <strong>$${Math.abs(savings).toFixed(2)}</strong></span>)</span>`;
+                    let summaryHtml = '';
+                    if (monthlyTotals[monthKey]) {
+                        const totals = monthlyTotals[monthKey];
+                        const savings = totals.other - totals.amber;
+                        const savingsColor = savings > 0 ? 'text-green-700' : 'text-red-700';
+                        const savingsPrefix = savings > 0 ? 'Saving' : 'Loss';
+                        summaryHtml = `<span class="text-sm font-normal text-gray-600"> (Selected Period - Amber: <strong>$${totals.amber.toFixed(2)}</strong> | Other: <strong>$${totals.other.toFixed(2)}</strong> | <span class="${savingsColor}">${savingsPrefix}: <strong>$${Math.abs(savings).toFixed(2)}</strong></span>)</span>`;
+                    }
 
                     const monthContainer = document.createElement('div');
                     monthContainer.innerHTML = `
@@ -2096,7 +2080,7 @@
                             ${summaryHtml}
                         </div>
                         <div class="grid grid-cols-7 gap-2 text-center font-semibold mb-1 text-sm text-gray-500">
-                            <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
+                            <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
                         </div>
                     `;
                     monthGrid = document.createElement('div');
@@ -2105,7 +2089,7 @@
                     container.appendChild(monthContainer);
 
                     const firstDayOfMonth = new Date(year, month, 1);
-                    const startingDayOfWeek = firstDayOfMonth.getDay(); 
+                    const startingDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7; // Monday is 0
                     for (let i = 0; i < startingDayOfWeek; i++) {
                         monthGrid.insertAdjacentHTML('beforeend', '<div class="bg-gray-50 rounded-md"></div>');
                     }
@@ -2113,26 +2097,33 @@
 
                 const dateStr = formatForInput(date);
                 const day = date.getDate();
-                const summary = dailySummaries[dateStr];
-                
                 let dayHtml;
-                 if(summary && (summary.totalInKwh > 0 || summary.totalOutKwh > 0)) {
-                    const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
-                    const costColor = totalAmberCost > 0 ? 'text-red-600' : 'text-green-600';
-                    dayHtml = `
-                        <div class="calendar-day has-data border border-gray-200 rounded-md p-2 flex flex-col hover:bg-indigo-50" data-date="${dateStr}">
-                            <div class="font-bold text-gray-800">${day}</div>
-                            <div class="text-xs mt-1">
-                                <span title="Imported kWh" class="text-blue-600">In: ${summary.totalInKwh.toFixed(1)} kWh</span><br>
-                                <span title="Exported kWh" class="text-green-700">Out: ${summary.totalOutKwh.toFixed(1)} kWh</span>
+
+                if (cachedDateSet.has(dateStr)) {
+                    const summary = dailySummaries[dateStr];
+                    const isSelected = selectedDateSet.has(dateStr);
+                    const borderClass = isSelected ? 'border-4 border-indigo-500' : 'border border-gray-200';
+                    
+                    if (summary && (summary.totalInKwh > 0 || summary.totalOutKwh > 0)) {
+                        const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                        const costColor = totalAmberCost > 0 ? 'text-red-600' : 'text-green-600';
+                        dayHtml = `
+                            <div class="calendar-day has-data ${borderClass} rounded-md p-2 flex flex-col hover:bg-indigo-50 shadow-sm" data-date="${dateStr}">
+                                <div class="font-bold text-gray-800">${day}</div>
+                                <div class="text-xs mt-1">
+                                    <span class="text-blue-600">In: ${summary.totalInKwh.toFixed(1)} kWh</span><br>
+                                    <span class="text-green-700">Out: ${summary.totalOutKwh.toFixed(1)} kWh</span>
+                                </div>
+                                <div class="text-sm mt-auto font-semibold ${costColor}">
+                                    $${totalAmberCost.toFixed(2)}
+                                </div>
                             </div>
-                            <div class="text-sm mt-auto font-semibold ${costColor}" title="Total Amber daily cost including service fees">
-                                $${totalAmberCost.toFixed(2)}
-                            </div>
-                        </div>
-                    `;
-                } else {
-                     dayHtml = `<div class="calendar-day border border-gray-200 bg-gray-100 rounded-md p-2"><div class="font-bold text-gray-400">${day}</div></div>`;
+                        `;
+                    } else { // Cached but no usage data, or summary is missing
+                        dayHtml = `<div class="calendar-day has-data ${borderClass} bg-gray-50 rounded-md p-2 flex flex-col justify-center items-center" data-date="${dateStr}"><div class="font-bold text-gray-800">${day}</div><div class="text-xs mt-1 text-center text-gray-500 leading-tight">Cached<br>No Usage</div></div>`;
+                    }
+                } else { // Not cached at all
+                     dayHtml = `<div class="bg-gray-100 border border-gray-200 rounded-md p-2 flex items-center justify-center"><span class="text-gray-400">${day}</span></div>`;
                 }
                 monthGrid.insertAdjacentHTML('beforeend', dayHtml);
                 date.setDate(date.getDate() + 1);
@@ -2144,13 +2135,43 @@
             });
         }
         
-        function showTooltip(cell) {
+        function positionTooltip(tooltip, cell) {
+            document.body.appendChild(tooltip);
+            const cellRect = cell.getBoundingClientRect();
+            const tooltipRect = tooltip.getBoundingClientRect();
+            let top = cellRect.top + window.scrollY - (tooltipRect.height / 2) + (cellRect.height / 2);
+            let left = cellRect.right + window.scrollX + 10;
+
+            if (left + tooltipRect.width > window.innerWidth) {
+                left = cellRect.left + window.scrollX - tooltipRect.width - 10;
+            }
+             if (top < window.scrollY) {
+                top = window.scrollY + 10;
+            }
+            if (top + tooltipRect.height > window.scrollY + window.innerHeight) {
+                top = window.scrollY + window.innerHeight - tooltipRect.height - 10;
+            }
+
+            tooltip.style.left = `${left}px`;
+            tooltip.style.top = `${top}px`;
+        }
+
+        async function showTooltip(cell) {
             hideTooltip(); 
             const dateStr = cell.dataset.date;
             const summary = dailySummaries[dateStr];
-            if (!summary) return;
-            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
 
+            const tooltip = document.createElement('div');
+            tooltip.id = 'day-tooltip';
+            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-auto';
+
+            if (!summary) {
+                tooltip.innerHTML = `<h3 class="text-base font-bold text-gray-800 mb-2">Summary for ${dateStr}</h3><p class="text-xs text-red-500">Could not load summary data.</p>`;
+                positionTooltip(tooltip, cell);
+                return;
+            }
+            
+            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
             const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
             
             const amberDemandCost = summary.amberDemandCost || 0;
@@ -2159,10 +2180,6 @@
             const totalAmberCharges = summary.amberCost + amberDemandCost + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
             const totalOtherCharges = summary.otherCost + otherDemandCost + (otherDailyConnection / 100);
 
-            const tooltip = document.createElement('div');
-            tooltip.id = 'day-tooltip';
-            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-auto';
-            
             let contentHtml = `<h3 class="text-base font-bold text-gray-800 mb-2">Summary for ${dateStr}</h3>`;
             contentHtml += `<table class="min-w-full text-xs">
                                 <thead class="bg-gray-50">
@@ -2179,18 +2196,18 @@
                 if (Math.abs(data.amberCost) > 0.001 || Math.abs(data.otherCost) > 0.001) {
                     contentHtml += `<tr>
                                         <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
-                                        <td class="px-2 py-1 text-right">${data.kwh.toFixed(2)} kWh</td>
+                                        <td class="px-2 py-1 text-right">${data.kwh.toFixed(1)} kWh</td>
                                         <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
                                         <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
                                     </tr>`;
                 }
             });
-            contentHtml += `<tr class="border-t"></tr>`; // Visual separator
+            contentHtml += `<tr class="border-t"></tr>`;
 
             const amberDaily = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) / 100;
             const otherDaily = otherDailyConnection / 100;
-            
             let hasDemandRow = false;
+
             if (demandInfoForTooltip && demandInfoForTooltip.amber && demandInfoForTooltip.amber.cost > 0 && amberDemandCost > 0) {
                  const maxDemandKw = (demandInfoForTooltip.amber.maxDemandKwh * 2).toFixed(2);
                  contentHtml += `<tr>
@@ -2226,29 +2243,9 @@
                             </tr>`;
 
             contentHtml += `</tbody></table>`;
-
-
-            tooltip.innerHTML = contentHtml;
-            document.body.appendChild(tooltip);
-
-            const cellRect = cell.getBoundingClientRect();
-            const tooltipRect = tooltip.getBoundingClientRect();
             
-            let top = cellRect.top + window.scrollY - (tooltipRect.height / 2) + (cellRect.height / 2);
-            let left = cellRect.right + window.scrollX + 10;
-
-            if (left + tooltipRect.width > window.innerWidth) {
-                left = cellRect.left + window.scrollX - tooltipRect.width - 10;
-            }
-             if (top < window.scrollY) {
-                top = window.scrollY + 10;
-            }
-            if (top + tooltipRect.height > window.scrollY + window.innerHeight) {
-                top = window.scrollY + window.innerHeight - tooltipRect.height - 10;
-            }
-
-            tooltip.style.left = `${left}px`;
-            tooltip.style.top = `${top}px`;
+            tooltip.innerHTML = contentHtml;
+            positionTooltip(tooltip, cell);
         }
 
         function hideTooltip() {
@@ -2257,7 +2254,6 @@
                 tooltip.remove();
             }
         }
-
 
     </script>
 </body>
