@@ -221,7 +221,12 @@
             </div>
             
             <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
-                 <h2 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Daily Summary Calendar</h2>
+                 <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
+                    <button id="clearCacheBtn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+                        Clear Cached Data
+                    </button>
+                 </div>
     
                 <div id="messageContainer" class="hidden text-center mb-4 p-4 border rounded-lg bg-gray-50">
                     <div id="loader" class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto mb-4 hidden"></div>
@@ -234,10 +239,6 @@
                 </div>
                 
                 <div class="mt-4 pt-4 border-t text-center">
-                    <p class="text-sm text-gray-600 mb-2">Usage data is cached in your browser to speed up future requests. You can clear this cache if you suspect data is stale.</p>
-                    <button id="clearCacheBtn" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                        Clear Cached Data
-                    </button>
                     <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
                 </div>
             </div>
@@ -254,6 +255,7 @@
         // --- Global cache for API data ---
         let cachedChannelData = null;
         let dailySummaries = {};
+        let demandInfoForTooltip = null;
         let lastFetchedStartDate = null;
         let lastFetchedEndDate = null;
         let usageChart = null;
@@ -781,10 +783,12 @@
                     const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
                     const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
                     
-                    const otherDemandTariffInfo = calculateOtherDemandTariff(cachedChannelData, numDays);
-                    calculateOtherSupplierCosts(cachedChannelData, otherDemandTariffInfo.cost);
+                    const otherDemandInfo = calculateOtherDemandTariff(cachedChannelData, startDateValue, endDateValue);
+                    calculateOtherSupplierCosts(cachedChannelData, otherDemandInfo.cost);
                     
                     const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                    demandInfoForTooltip = { amber: demandTariffInfo, other: otherDemandInfo };
+                    dailySummaries = precalculateDailySummaries(cachedChannelData, demandTariffInfo, otherDemandInfo);
                     const demandTariffCost = demandTariffInfo.cost;
 
                     let overallAmberCost = 0;
@@ -801,8 +805,7 @@
                     messageContainer.classList.add('hidden');
                     resultsSection.classList.remove('hidden');
                     calendarSection.classList.remove('hidden');
-                    dailySummaries = precalculateDailySummaries(cachedChannelData);
-                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
+                    displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
                 }, 200);
 
                 return;
@@ -971,18 +974,19 @@
                 
                 messageEl.textContent = 'Calculating costs...';
                 
-                const otherDemandTariffInfo = calculateOtherDemandTariff(channelTotals, numDays);
-                calculateOtherSupplierCosts(channelTotals, otherDemandTariffInfo.cost);
+                const otherDemandInfo = calculateOtherDemandTariff(channelTotals, startDateValue, endDateValue);
+                calculateOtherSupplierCosts(channelTotals, otherDemandInfo.cost);
 
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = JSON.parse(JSON.stringify(channelTotals));
-                dailySummaries = precalculateDailySummaries(cachedChannelData);
                 
                 const amberDailyCosts = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) * numDays;
                 const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
 
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+                demandInfoForTooltip = { amber: demandTariffInfo, other: otherDemandInfo };
+                dailySummaries = precalculateDailySummaries(cachedChannelData, demandTariffInfo, otherDemandInfo);
                 const demandTariffCost = demandTariffInfo.cost;
                 
                 let overallAmberCost = 0;
@@ -1000,7 +1004,7 @@
                 messageContainer.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
                 calendarSection.classList.remove('hidden');
-                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandTariffInfo);
+                displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
 
             } catch (error) {
                 console.error('Error:', error);
@@ -1194,16 +1198,16 @@
                 maxDemandTime: maxDemandTime
             };
         }
-        
-        function calculateOtherDemandTariff(channelTotals, numDays) {
+
+        function calculateOtherDemandTariff(channelTotals, startDateStr, endDateStr) {
             const isEnabled = document.getElementById('enableDemandTariff').checked;
             if (!isEnabled) {
-                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
 
             const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
             if (!generalChannel || !generalChannel.usageData || !generalChannel.usageData.length === 0) {
-                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
             
             const demandRate = parseFloat(document.getElementById('demandRate').value) || 0;
@@ -1229,7 +1233,7 @@
             });
             
             if (demandWindowUsage.length === 0) {
-                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
 
             const thirtyMinChunks = {};
@@ -1261,17 +1265,31 @@
             }
             
             if (maxDemandKwh === 0) {
-                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null };
+                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
+            }
+
+            let weekdays = 0;
+            let currentDate = new Date(startDateStr + 'T00:00:00');
+            const endDate = new Date(endDateStr + 'T00:00:00');
+            while (currentDate <= endDate) {
+                const day = currentDate.getDay();
+                if (day >= 1 && day <= 5) { // Mon-Fri
+                    weekdays++;
+                }
+                currentDate.setDate(currentDate.getDate() + 1);
             }
             
-            const demandCost = (maxDemandKwh * 2) * (demandRate / 100) * numDays;
+            const dailyCharge = (maxDemandKwh * 2) * (demandRate / 100);
+            const totalDemandCost = dailyCharge * weekdays;
             
             return {
-                cost: demandCost,
+                cost: totalDemandCost,
                 maxDemandKwh: maxDemandKwh,
-                maxDemandTime: maxDemandTime
+                maxDemandTime: maxDemandTime,
+                dailyCharge: dailyCharge
             };
         }
+
 
         function displayAverageGraph() {
             const averageGraphContainer = document.getElementById('averageGraphContainer');
@@ -1570,7 +1588,7 @@
 
             const usageData = intervals.map(i => i.kwh * 12);
             const feedInData = feedInIntervals.map(i => -i.kwh * 12);
-            const controlledLoadData = controlledLoadIntervals.map(i => i.kwh * 12);
+            const controlledLoadData = intervals.map(i => i.kwh * 12);
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
 
             const ctx = document.getElementById('dailyChart').getContext('2d');
@@ -1902,12 +1920,12 @@
                  daySelector.dispatchEvent(new Event('change'));
             }
             
-            displayCalendar(startDateStr, endDateStr);
+            displayCalendar();
         }
 
         // --- Calendar & Tooltip Functions ---
 
-        function precalculateDailySummaries(channelData) {
+        function precalculateDailySummaries(channelData, amberDemandInfo, otherDemandInfo) {
             const summaries = {};
 
             const getOtherRateForItem = (item, type) => {
@@ -1952,29 +1970,80 @@
                     summaries[dateStr].channels[channel.identifier].kwh += kwh;
                     summaries[dateStr].channels[channel.identifier].amberCost += amberItemCost;
                     
+                    summaries[dateStr].amberCost += amberItemCost;
+
                     if (channel.type === 'feedIn') {
                         summaries[dateStr].totalOutKwh += kwh;
                         summaries[dateStr].otherCost -= otherItemCost;
+                        summaries[dateStr].channels[channel.identifier].otherCost -= otherItemCost;
                     } else {
                         summaries[dateStr].totalInKwh += kwh;
                         summaries[dateStr].otherCost += otherItemCost;
+                        summaries[dateStr].channels[channel.identifier].otherCost += otherItemCost;
                     }
-                    summaries[dateStr].amberCost += amberItemCost;
                 });
             });
+            
+            const amberDemandDays = new Set();
+            const generalChannel = Object.values(channelData).find(c => c.type === 'general');
+            if (generalChannel) {
+                generalChannel.usageData.forEach(item => {
+                    if (item.tariffInformation && item.tariffInformation.demandWindow) {
+                        amberDemandDays.add(item.nemTime.substring(0, 10));
+                    }
+                });
+            }
+
+            const amberDailyDemandCost = (amberDemandInfo.demandDays > 0) ? (amberDemandInfo.cost / amberDemandInfo.demandDays) : 0;
+            const otherDailyDemandCharge = (document.getElementById('enableDemandTariff').checked && otherDemandInfo) ? otherDemandInfo.dailyCharge : 0;
+
+            for (const dateStr in summaries) {
+                summaries[dateStr].amberDemandCost = 0;
+                summaries[dateStr].otherDemandCost = 0;
+
+                if (amberDemandDays.has(dateStr)) {
+                    summaries[dateStr].amberDemandCost = amberDailyDemandCost;
+                }
+
+                const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
+                if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Monday to Friday
+                    summaries[dateStr].otherDemandCost = otherDailyDemandCharge;
+                }
+            }
+
 
             return summaries;
         }
 
-        function displayCalendar(startDateStr, endDateStr) {
+        function displayCalendar() {
             const container = document.getElementById('calendar-container');
             container.innerHTML = '';
+            
+            const allDates = Object.keys(dailySummaries).sort();
+            if (allDates.length === 0) return;
+
+            const startDateStr = allDates[0];
+            const endDateStr = allDates[allDates.length - 1];
             
             const start = new Date(startDateStr + 'T00:00:00');
             const end = new Date(endDateStr + 'T00:00:00');
             
             let currentMonth = -1;
             let monthGrid;
+
+            const monthlyTotals = {};
+            for (const dateStr in dailySummaries) {
+                 const monthKey = dateStr.substring(0, 7);
+                 if (!monthlyTotals[monthKey]) {
+                     monthlyTotals[monthKey] = { amber: 0, other: 0 };
+                 }
+                 const summary = dailySummaries[dateStr];
+                 const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                 const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                 const totalOtherCharges = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                 monthlyTotals[monthKey].amber += totalAmberCost;
+                 monthlyTotals[monthKey].other += totalOtherCharges;
+            }
 
             let date = new Date(start);
             while(date <= end) {
@@ -1984,10 +2053,21 @@
                 if (month !== currentMonth) {
                     currentMonth = month;
                     const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                    const monthKey = `${year}-${(month + 1).toString().padStart(2, '0')}`;
+                    const totals = monthlyTotals[monthKey] || {amber: 0, other: 0};
+                    
+                    const savings = totals.other - totals.amber;
+                    const savingsColor = savings > 0 ? 'text-green-700' : 'text-red-700';
+                    const savingsPrefix = savings > 0 ? 'Saving' : 'Loss';
+
+                    let summaryHtml = `<span class="text-sm font-normal text-gray-600"> (Amber: <strong>$${totals.amber.toFixed(2)}</strong> | Other: <strong>$${totals.other.toFixed(2)}</strong> | <span class="${savingsColor}">${savingsPrefix}: <strong>$${Math.abs(savings).toFixed(2)}</strong></span>)</span>`;
 
                     const monthContainer = document.createElement('div');
                     monthContainer.innerHTML = `
-                        <h3 class="text-lg font-bold text-gray-800 mb-2">${monthName}</h3>
+                        <div class="flex justify-between items-baseline mb-2">
+                            <h3 class="text-lg font-bold text-gray-800">${monthName}</h3>
+                            ${summaryHtml}
+                        </div>
                         <div class="grid grid-cols-7 gap-2 text-center font-semibold mb-1 text-sm text-gray-500">
                             <div>Sun</div><div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div>
                         </div>
@@ -2010,14 +2090,14 @@
                 
                 let dayHtml;
                  if(summary) {
-                    const totalAmberCost = summary.amberCost + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                    const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                     const costColor = totalAmberCost > 0 ? 'text-red-600' : 'text-green-600';
                     dayHtml = `
                         <div class="calendar-day has-data border border-gray-200 rounded-md p-2 flex flex-col hover:bg-indigo-50" data-date="${dateStr}">
                             <div class="font-bold text-gray-800">${day}</div>
                             <div class="text-xs mt-1">
-                                <span title="Imported kWh" class="text-blue-600">In: ${summary.totalInKwh.toFixed(1)}</span><br>
-                                <span title="Exported kWh" class="text-green-700">Out: ${summary.totalOutKwh.toFixed(1)}</span>
+                                <span title="Imported kWh" class="text-blue-600">In: ${summary.totalInKwh.toFixed(1)} kWh</span><br>
+                                <span title="Exported kWh" class="text-green-700">Out: ${summary.totalOutKwh.toFixed(1)} kWh</span>
                             </div>
                             <div class="text-sm mt-auto font-semibold ${costColor}" title="Total Amber daily cost including service fees">
                                 $${totalAmberCost.toFixed(2)}
@@ -2038,42 +2118,84 @@
         }
         
         function showTooltip(cell) {
-            hideTooltip(); // Remove any existing tooltip
+            hideTooltip(); 
             const dateStr = cell.dataset.date;
             const summary = dailySummaries[dateStr];
             if (!summary) return;
+            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
 
             const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-            const totalAmberCharges = summary.amberCost + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
-            const totalOtherCharges = summary.otherCost + (otherDailyConnection / 100);
+            
+            const amberDemandCost = summary.amberDemandCost || 0;
+            const otherDemandCost = summary.otherDemandCost || 0;
+
+            const totalAmberCharges = summary.amberCost + amberDemandCost + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+            const totalOtherCharges = summary.otherCost + otherDemandCost + (otherDailyConnection / 100);
 
             const tooltip = document.createElement('div');
             tooltip.id = 'day-tooltip';
-            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-96';
+            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-auto';
             
-            let contentHtml = `<h3 class="text-base font-bold text-gray-800 mb-2">Details for ${dateStr}</h3>`;
-            contentHtml += `<div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">`;
-            contentHtml += `<div class="bg-blue-50 p-2 rounded-md border border-blue-200">
-                <h4 class="font-bold text-blue-800">Amber Details</h4>
-                <ul class="space-y-1 mt-1">`;
-            Object.entries(summary.channels).forEach(([id, data]) => {
-                 contentHtml += `<li><strong>${id}:</strong> ${data.kwh.toFixed(2)} kWh, $${data.amberCost.toFixed(2)}</li>`;
-            });
-            contentHtml += `<li class="border-t pt-1 mt-1"><strong>Daily Charges:</strong> $${((AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS)/100).toFixed(2)}</li>`;
-            contentHtml += `<li class="font-bold mt-1 text-sm"><strong>Total:</strong> $${totalAmberCharges.toFixed(2)}</li>`;
-            contentHtml += `</ul></div>`;
+            let contentHtml = `<h3 class="text-base font-bold text-gray-800 mb-2">Summary for ${dateStr}</h3>`;
+            contentHtml += `<table class="min-w-full text-xs">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-2 py-1 text-left font-medium text-gray-500">Channel</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">Usage</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">Amber</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">${planName}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">`;
             
-            contentHtml += `<div class="bg-green-50 p-2 rounded-md border border-green-200">
-                <h4 class="font-bold text-green-800">${document.getElementById('planName').value || 'Other Supplier'}</h4>
-                 <ul class="space-y-1 mt-1">`;
             Object.entries(summary.channels).forEach(([id, data]) => {
-                let cost = data.type === 'feedIn' ? data.otherCost : -data.otherCost; // Note: cost is already negative for feedin, so we invert it for display
-                 contentHtml += `<li><strong>${id}:</strong> ${data.kwh.toFixed(2)} kWh, $${(-cost).toFixed(2)}</li>`;
+                contentHtml += `<tr>
+                                    <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
+                                    <td class="px-2 py-1 text-right">${data.kwh.toFixed(2)} kWh</td>
+                                    <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
+                                    <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
+                                 </tr>`;
             });
-            contentHtml += `<li class="border-t pt-1 mt-1"><strong>Daily Connection:</strong> $${(otherDailyConnection/100).toFixed(2)}</li>`;
-            contentHtml += `<li class="font-bold mt-1 text-sm"><strong>Total:</strong> $${totalOtherCharges.toFixed(2)}</li>`;
-            contentHtml += `</ul></div>`;
-            contentHtml += `</div>`;
+            contentHtml += `<tr class="border-t"></tr>`; // Visual separator
+
+            const amberDaily = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) / 100;
+            const otherDaily = otherDailyConnection / 100;
+            
+            let hasDemandRow = false;
+            if (demandInfoForTooltip && demandInfoForTooltip.amber && demandInfoForTooltip.amber.cost > 0 && amberDemandCost > 0) {
+                 const maxDemandKw = (demandInfoForTooltip.amber.maxDemandKwh * 2).toFixed(2);
+                 contentHtml += `<tr>
+                                    <td class="px-2 py-1 text-sm" colspan="2">Amber Demand Tariff <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${amberDemandCost.toFixed(2)}</td>
+                                    <td class="px-2 py-1 text-right"></td>
+                                </tr>`;
+                hasDemandRow = true;
+            }
+
+            if (demandInfoForTooltip && demandInfoForTooltip.other && demandInfoForTooltip.other.cost > 0 && otherDemandCost > 0) {
+                const maxDemandKw = (demandInfoForTooltip.other.maxDemandKwh * 2).toFixed(2);
+                contentHtml += `<tr>
+                                    <td class="px-2 py-1 text-sm" colspan="2">${planName} Demand Tariff <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
+                                    <td class="px-2 py-1 text-right"></td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${otherDemandCost.toFixed(2)}</td>
+                                </tr>`;
+                hasDemandRow = true;
+            }
+
+            contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}"> 
+                                <td class="px-2 py-1 font-semibold" colspan="2">Daily Charges</td>
+                                <td class="px-2 py-1 text-right font-semibold">$${amberDaily.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right font-semibold">$${otherDaily.toFixed(2)}</td>
+                            </tr>`;
+
+            contentHtml += `<tr class="bg-gray-50 font-bold">
+                                <td class="px-2 py-1" colspan="2">Total</td>
+                                <td class="px-2 py-1 text-right">$${totalAmberCharges.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right">$${totalOtherCharges.toFixed(2)}</td>
+                            </tr>`;
+
+            contentHtml += `</tbody></table>`;
+
 
             tooltip.innerHTML = contentHtml;
             document.body.appendChild(tooltip);
@@ -2084,7 +2206,6 @@
             let top = cellRect.top + window.scrollY - (tooltipRect.height / 2) + (cellRect.height / 2);
             let left = cellRect.right + window.scrollX + 10;
 
-            // Adjust if tooltip goes off-screen
             if (left + tooltipRect.width > window.innerWidth) {
                 left = cellRect.left + window.scrollX - tooltipRect.width - 10;
             }
