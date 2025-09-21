@@ -35,6 +35,21 @@
             pointer-events: none;
             transition: opacity 0.2s;
         }
+        .day-checkbox-label {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            padding: 2px 4px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .day-checkbox-label input:checked + span {
+             font-weight: bold;
+             color: #1a56db; /* A blue color */
+        }
+        .day-checkbox-label:hover {
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
@@ -115,33 +130,68 @@
                             </div>
 
                             <div id="touRateSection" class="hidden">
-                                <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates (c/kWh)</h3>
-                                <p class="text-xs text-gray-500 mb-3">Rates are based on a standard TOU structure. Weekdays are Mon-Fri.</p>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                                    <div class="bg-red-50 p-3 rounded-lg border border-red-200">
-                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate</label>
-                                        <p class="text-xs text-gray-500">2pm - 8pm weekdays</p>
+                                <h3 class="text-md font-medium text-gray-800 mt-4 pt-4 border-t border-gray-200 mb-2">Consumption Rates & Times</h3>
+                                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
+                                    <!-- Peak -->
+                                    <div class="bg-red-50 p-3 rounded-lg border border-red-200" data-tou-period="peak">
+                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh)</label>
                                         <input type="number" id="tou_peak_rate" value="57.93" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <div class="grid grid-cols-2 gap-2 mt-2">
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_peak_start">Start</label><input type="time" id="tou_peak_start" value="14:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_peak_end">End</label><input type="time" id="tou_peak_end" value="20:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                        </div>
+                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
+                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
+                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
+                                        </div>
                                     </div>
-                                    <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200">
-                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate</label>
-                                        <p class="text-xs text-gray-500">7am-2pm, 8pm-10pm weekdays; 7am-10pm weekends</p>
+                                    <!-- Shoulder -->
+                                    <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200" data-tou-period="shoulder">
+                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate (c/kWh)</label>
                                         <input type="number" id="tou_shoulder_rate" value="30.61" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <div class="grid grid-cols-2 gap-2 mt-2">
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_shoulder_start">Start</label><input type="time" id="tou_shoulder_start" value="07:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_shoulder_end">End</label><input type="time" id="tou_shoulder_end" value="14:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                        </div>
+                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
+                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
+                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
+                                        </div>
                                     </div>
-                                    <div class="bg-green-50 p-3 rounded-lg border border-green-200">
-                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate</label>
-                                        <p class="text-xs text-gray-500">10pm - 7am every day</p>
+                                    <!-- Off-Peak -->
+                                    <div class="bg-green-50 p-3 rounded-lg border border-green-200" data-tou-period="offpeak">
+                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate (c/kWh)</label>
                                         <input type="number" id="tou_offpeak_rate" value="24.28" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                    <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load</label>
-                                        <p class="text-xs text-gray-500">e.g., Hot water</p>
-                                        <input type="number" id="tou_controlled_load_rate" value="14.6" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <div class="grid grid-cols-2 gap-2 mt-2">
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_offpeak_start">Start</label><input type="time" id="tou_offpeak_start" value="22:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                            <div><label class="text-xs font-medium text-gray-600" for="tou_offpeak_end">End</label><input type="time" id="tou_offpeak_end" value="07:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                        </div>
+                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
+                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
+                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
+                                        </div>
                                     </div>
                                 </div>
-                                 <div>
-                                    <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
-                                    <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                     <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load (c/kWh)</label>
+                                        <p class="text-xs text-gray-500">Applies 24/7 to the controlled load channel.</p>
+                                        <input type="number" id="tou_controlled_load_rate" value="14.6" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    </div>
+                                    <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
+                                        <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700">Feed-in Rate (c/kWh)</label>
+                                        <p class="text-xs text-gray-500">Applies 24/7 to the feed-in channel.</p>
+                                        <input type="number" id="otherSupplierFeedInRateTou" value="4.0" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., 5">
+                                    </div>
                                 </div>
                             </div>
 
@@ -163,8 +213,17 @@
                                         <label for="demandWindowEnd" class="block text-sm font-medium text-gray-700">Window End</label>
                                         <input type="time" id="demandWindowEnd" value="21:00" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
+                                    <div class="sm:col-span-3 mt-1">
+                                        <label class="text-sm font-medium text-gray-700">Applicable Days</label>
+                                        <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm" id="demandDaysContainer">
+                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
+                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
+                                        </div>
+                                    </div>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-1">Calculates a charge on your highest 30-min usage during the daily window (weekdays only) across the entire period.</p>
+                                <p class="text-xs text-gray-500 mt-1">Calculates a charge on your highest 30-min usage during the daily window across the entire period.</p>
                             </div>
                         </div>
                     </div>
@@ -265,32 +324,61 @@
         // --- Supplier Templates ---
         const supplierTemplates = {
             "NSW": {
-                "EnergyAustralia - Total Plan": { rateType: 'tou', daily: 121.58, peak: 51.55, shoulder: 27.24, offpeak: 20.35, cl: 17.88, feedIn: 7.6, demand: { e: true, r: 33.55, s: '17:00', f: '20:00' } },
+                "EnergyAustralia - Total Plan": {
+                    rateType: 'tou', daily: 121.58, feedIn: 7.6, cl: 17.88,
+                    tou: {
+                        peak: { rate: 51.55, start: '14:00', end: '20:00', days: [1, 2, 3, 4, 5] },
+                        shoulder: { rate: 27.24, start: '07:00', end: '14:00', days: [1, 2, 3, 4, 5] }, // Note: EA has multiple shoulder blocks, we default to one.
+                        offpeak: { rate: 20.35, start: '22:00', end: '07:00', days: [0, 1, 2, 3, 4, 5, 6] }
+                    },
+                    demand: { e: true, r: 33.55, s: '17:00', f: '20:00', days: [1,2,3,4,5] }
+                },
                 "AGL - Standard": { rateType: 'flat', daily: 102.8, flat: 36.5, feedIn: 5.0, demand: { e: false } },
-                "Origin - Go Variable": { rateType: 'tou', daily: 110.0, peak: 55.2, shoulder: 30.1, offpeak: 22.5, cl: 18.0, feedIn: 6.0, demand: { e: false } },
-                "Red Energy - Living Energy Saver": { rateType: 'flat', daily: 95.0, flat: 34.2, feedIn: 6.5, demand: { e: false } },
-                "OVO Energy - The One Plan": { rateType: 'tou', daily: 105.0, peak: 49.9, shoulder: 25.0, offpeak: 18.9, cl: 16.5, feedIn: 8.0, demand: { e: false } }
+                "Origin - Go Variable": { 
+                    rateType: 'tou', daily: 110.0, feedIn: 6.0, cl: 18.0,
+                    tou: {
+                        peak: { rate: 55.2, start: '14:00', end: '20:00', days: [1,2,3,4,5]},
+                        shoulder: {rate: 30.1, start: '07:00', end: '14:00', days: [1,2,3,4,5]},
+                        offpeak: {rate: 22.5, start: '22:00', end: '07:00', days: [0,1,2,3,4,5,6]}
+                    },
+                     demand: { e: false }
+                },
             },
             "VIC": {
-                "EnergyAustralia - Flexi Plan": { rateType: 'tou', daily: 115.3, peak: 48.9, shoulder: 33.1, offpeak: 24.6, cl: 20.1, feedIn: 4.9, demand: { e: true, r: 29.8, s: '15:00', f: '21:00' } },
+                "EnergyAustralia - Flexi Plan": {
+                    rateType: 'tou', daily: 115.3, feedIn: 4.9, cl: 20.1,
+                    tou: {
+                        peak: { rate: 48.9, start: '15:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 33.1, start: '07:00', end: '15:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 24.6, start: '00:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                    },
+                    demand: { e: true, r: 29.8, s: '15:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                 "AGL - Victorian Default Offer": { rateType: 'flat', daily: 120.0, flat: 31.5, feedIn: 4.9, demand: { e: false } },
-                "Origin - Basic": { rateType: 'flat', daily: 118.0, flat: 30.8, feedIn: 4.9, demand: { e: false } },
-                "Red Energy - Red Wildlife Saver": { rateType: 'tou', daily: 109.0, peak: 45.0, shoulder: 31.0, offpeak: 22.0, cl: 19.5, feedIn: 5.2, demand: { e: false } },
-                "Alinta Energy - Home Deal": { rateType: 'flat', daily: 112.5, flat: 29.9, feedIn: 5.2, demand: { e: false } }
             },
             "QLD": {
-                "EnergyAustralia - Basic Home": { rateType: 'tou', daily: 130.1, peak: 44.5, shoulder: 24.3, offpeak: 19.8, cl: 18.2, feedIn: 5.0, demand: { e: true, r: 35.1, s: '16:00', f: '21:00' } },
+                 "EnergyAustralia - Basic Home": {
+                    rateType: 'tou', daily: 130.1, feedIn: 5.0, cl: 18.2,
+                    tou: {
+                        peak: { rate: 44.5, start: '16:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 24.3, start: '07:00', end: '16:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 19.8, start: '22:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                    },
+                    demand: { e: true, r: 35.1, s: '16:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                 "AGL - Standard": { rateType: 'flat', daily: 125.6, flat: 28.9, feedIn: 5.0, demand: { e: false } },
-                "Origin - Saver": { rateType: 'tou', daily: 122.0, peak: 42.1, shoulder: 23.5, offpeak: 18.9, cl: 17.5, feedIn: 5.0, demand: { e: false } },
-                "Alinta Energy - Carbon Neutral": { rateType: 'flat', daily: 119.0, flat: 27.5, feedIn: 5.2, demand: { e: false } },
-                "OVO Energy - The One Plan": { rateType: 'flat', daily: 115.0, flat: 26.8, feedIn: 6.0, demand: { e: false } }
             },
             "SA": {
-                "EnergyAustralia - Total Plan": { rateType: 'tou', daily: 145.2, peak: 60.1, shoulder: 40.5, offpeak: 30.2, cl: 22.1, feedIn: 6.0, demand: { e: true, r: 40.2, s: '17:00', f: '21:00' } },
+                "EnergyAustralia - Total Plan": {
+                    rateType: 'tou', daily: 145.2, feedIn: 6.0, cl: 22.1,
+                    tou: {
+                        peak: { rate: 60.1, start: '17:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 40.5, start: '07:00', end: '17:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 30.2, start: '00:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                    },
+                    demand: { e: true, r: 40.2, s: '17:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                 "AGL - Standard": { rateType: 'flat', daily: 138.0, flat: 42.3, feedIn: 6.0, demand: { e: false } },
-                "Origin - Go Variable": { rateType: 'tou', daily: 140.0, peak: 58.5, shoulder: 38.9, offpeak: 28.5, cl: 21.0, feedIn: 6.0, demand: { e: false } },
-                "Simply Energy - SA Saver": { rateType: 'flat', daily: 135.5, flat: 41.8, feedIn: 6.5, demand: { e: false } },
-                "OVO Energy - The One Plan": { rateType: 'flat', daily: 132.0, flat: 40.9, feedIn: 7.0, demand: { e: false } }
             }
         };
 
@@ -545,11 +633,22 @@
                 if (template.rateType === 'tou') {
                     flatRateSection.classList.add('hidden');
                     touRateSection.classList.remove('hidden');
-                    document.getElementById('tou_peak_rate').value = template.peak || 0;
-                    document.getElementById('tou_shoulder_rate').value = template.shoulder || 0;
-                    document.getElementById('tou_offpeak_rate').value = template.offpeak || 0;
-                    document.getElementById('tou_controlled_load_rate').value = template.cl || 0;
                     document.getElementById('otherSupplierFeedInRateTou').value = template.feedIn || 0;
+                    document.getElementById('tou_controlled_load_rate').value = template.cl || 0;
+                    
+                    ['peak', 'shoulder', 'offpeak'].forEach(period => {
+                        const periodConfig = template.tou[period];
+                        if (periodConfig) {
+                            document.getElementById(`tou_${period}_rate`).value = periodConfig.rate || 0;
+                            document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
+                            document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
+                            
+                            const container = document.querySelector(`[data-tou-period="${period}"]`);
+                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                cb.checked = periodConfig.days.includes(parseInt(cb.value));
+                            });
+                        }
+                    });
                 } else {
                     flatRateSection.classList.remove('hidden');
                     touRateSection.classList.add('hidden');
@@ -566,6 +665,9 @@
                     document.getElementById('demandRate').value = demand.r || 0;
                     document.getElementById('demandWindowStart').value = demand.s || '16:00';
                     document.getElementById('demandWindowEnd').value = demand.f || '21:00';
+                    document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                        cb.checked = (demand.days || []).includes(parseInt(cb.value));
+                    });
                 } else {
                     demandInputsDiv.classList.add('hidden');
                 }
@@ -585,14 +687,26 @@
                 localStorage.setItem('flatFeedInRate', document.getElementById('otherSupplierFeedInRateFlat').value);
                 localStorage.setItem('dailyConnectionRate', document.getElementById('dailyConnectionRate').value);
                 
-                const touRates = {
-                    peak: document.getElementById('tou_peak_rate').value,
-                    shoulder: document.getElementById('tou_shoulder_rate').value,
-                    offpeak: document.getElementById('tou_offpeak_rate').value,
-                    controlledLoad: document.getElementById('tou_controlled_load_rate').value,
-                    feedIn: document.getElementById('otherSupplierFeedInRateTou').value
+                const getPeriodSettings = (period) => {
+                    const container = document.querySelector(`[data-tou-period="${period}"]`);
+                    if (!container) return {};
+                    const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+                    return {
+                        rate: document.getElementById(`tou_${period}_rate`).value,
+                        start: document.getElementById(`tou_${period}_start`).value,
+                        end: document.getElementById(`tou_${period}_end`).value,
+                        days: days
+                    };
                 };
-                localStorage.setItem('touRates', JSON.stringify(touRates));
+
+                const touConfig = {
+                    peak: getPeriodSettings('peak'),
+                    shoulder: getPeriodSettings('shoulder'),
+                    offpeak: getPeriodSettings('offpeak'),
+                    controlledLoad: document.getElementById('tou_controlled_load_rate').value,
+                    feedIn: document.getElementById('otherSupplierFeedInRateTou').value,
+                };
+                localStorage.setItem('touConfig', JSON.stringify(touConfig));
                 
                 localStorage.setItem('selectedState', stateSelector.value);
                 localStorage.setItem('selectedPlan', planSelector.value);
@@ -603,6 +717,7 @@
                     rate: document.getElementById('demandRate').value,
                     start: document.getElementById('demandWindowStart').value,
                     end: document.getElementById('demandWindowEnd').value,
+                    days: Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value))
                 };
                 localStorage.setItem('demandSettings', JSON.stringify(demandSettings));
             }
@@ -639,20 +754,29 @@
                 const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
                 if (savedFlatFeedIn) document.getElementById('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
                 
-                const savedTouRates = localStorage.getItem('touRates');
-                if (savedTouRates) {
-                    const rates = JSON.parse(savedTouRates);
-                    document.getElementById('tou_peak_rate').value = rates.peak;
-                    document.getElementById('tou_shoulder_rate').value = rates.shoulder;
-                    document.getElementById('tou_offpeak_rate').value = rates.offpeak;
-                    document.getElementById('tou_controlled_load_rate').value = rates.controlledLoad;
-                    document.getElementById('otherSupplierFeedInRateTou').value = rates.feedIn;
+                const savedTouConfig = localStorage.getItem('touConfig');
+                if (savedTouConfig) {
+                    const config = JSON.parse(savedTouConfig);
+                    document.getElementById('otherSupplierFeedInRateTou').value = config.feedIn;
+                    document.getElementById('tou_controlled_load_rate').value = config.controlledLoad;
+
+                    const setPeriodSettings = (period, settings) => {
+                        if (!settings) return;
+                        document.getElementById(`tou_${period}_rate`).value = settings.rate;
+                        document.getElementById(`tou_${period}_start`).value = settings.start;
+                        document.getElementById(`tou_${period}_end`).value = settings.end;
+                        const container = document.querySelector(`[data-tou-period="${period}"]`);
+                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                            cb.checked = (settings.days || []).includes(parseInt(cb.value));
+                        });
+                    };
+                    setPeriodSettings('peak', config.peak);
+                    setPeriodSettings('shoulder', config.shoulder);
+                    setPeriodSettings('offpeak', config.offpeak);
                 }
 
                 const savedDailyConnectionRate = localStorage.getItem('dailyConnectionRate');
-                if (savedDailyConnectionRate) {
-                    document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
-                }
+                if (savedDailyConnectionRate) document.getElementById('dailyConnectionRate').value = savedDailyConnectionRate;
                 
                 const savedDemandSettings = localStorage.getItem('demandSettings');
                 if (savedDemandSettings) {
@@ -664,6 +788,9 @@
                     if (settings.enabled) {
                         demandInputsDiv.classList.remove('hidden');
                     }
+                    document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                        cb.checked = (settings.days || []).includes(parseInt(cb.value));
+                    });
                 }
             }
             
@@ -690,7 +817,18 @@
                      el.addEventListener('input', saveAllSettings);
                 }
             });
-            rateTypeSelector.addEventListener('change', saveAllSettings);
+
+            rateTypeSelector.addEventListener('change', () => {
+                const selectedType = document.querySelector('input[name="rateType"]:checked').value;
+                if (selectedType === 'tou') {
+                    flatRateSection.classList.add('hidden');
+                    touRateSection.classList.remove('hidden');
+                } else {
+                    flatRateSection.classList.remove('hidden');
+                    touRateSection.classList.add('hidden');
+                }
+                saveAllSettings();
+            });
 
 
             document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
@@ -1059,22 +1197,30 @@
             document.body.removeChild(link);
         }
 
-        function getTouRate(date, rates) {
-             const day = date.getDay(); 
-            const hour = date.getHours();
-            const isWeekday = day >= 1 && day <= 5;
+        function getTouRate(date, touConfig, fallbackRate) {
+            const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
+            const time = date.getHours() * 100 + date.getMinutes(); // e.g., 14:30 -> 1430
 
-            if (hour >= 22 || hour < 7) {
-                return rates.offpeak;
-            }
-            if (isWeekday) {
-                if (hour >= 14 && hour < 20) {
-                    return rates.peak;
+            const checkPeriod = (period) => {
+                if (!period || !period.days || !period.start || !period.end) return false;
+                if (!period.days.includes(day)) return false;
+        
+                const startTime = parseInt(period.start.replace(':', ''));
+                const endTime = parseInt(period.end.replace(':', ''));
+        
+                // Handle overnight periods (e.g., 22:00 to 07:00)
+                if (startTime > endTime) {
+                    return time >= startTime || time < endTime;
+                } else {
+                    return time >= startTime && time < endTime;
                 }
-                return rates.shoulder;
-            } else {
-                return rates.shoulder;
-            }
+            };
+        
+            if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate);
+            if (checkPeriod(touConfig.shoulder)) return parseFloat(touConfig.shoulder.rate);
+            if (checkPeriod(touConfig.offpeak)) return parseFloat(touConfig.offpeak.rate);
+        
+            return fallbackRate;
         }
         
         function calculateOtherSupplierCosts(channelTotals, otherDemandCost) {
@@ -1095,26 +1241,24 @@
                     }
                 });
             } else { // 'tou'
-                const touRates = {
-                    peak: parseFloat(document.getElementById('tou_peak_rate').value) || 0,
-                    shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value) || 0,
-                    offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value) || 0
-                };
-                 const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
-                 const controlledLoadRate = parseFloat(document.getElementById('tou_controlled_load_rate').value) || 0;
+                const savedTouConfig = JSON.parse(localStorage.getItem('touConfig') || '{}');
+                const feedInRate = parseFloat(savedTouConfig.feedIn) || 0;
+                const controlledLoadRate = parseFloat(savedTouConfig.controlledLoad) || 0;
+                const fallbackRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
-                    let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                     if (c.type === 'feedIn') {
+                        let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                         channelOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'controlledLoad') {
+                        let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                         channelOtherCost = (totalKwhForPeriod * controlledLoadRate) / 100;
                     }
                     else if (c.type === 'general') { 
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
-                            const rateForInterval = getTouRate(itemDate, touRates);
+                            const rateForInterval = getTouRate(itemDate, savedTouConfig, fallbackRate);
                             return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
                         }, 0);
                         channelOtherCost += otherDemandCost;
@@ -1189,9 +1333,12 @@
 
         function calculateOtherDemandTariff(channelTotals, startDateStr, endDateStr) {
             const isEnabled = document.getElementById('enableDemandTariff').checked;
-            if (!isEnabled) {
-                return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
-            }
+            if (!isEnabled) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
+            
+            const demandSettings = JSON.parse(localStorage.getItem('demandSettings') || '{}');
+            const demandDays = demandSettings.days || [];
+            if(demandDays.length === 0) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
+
 
             const generalChannel = Object.values(channelTotals).find(c => c.type === 'general');
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
@@ -1208,15 +1355,18 @@
             const demandWindowUsage = generalChannel.usageData.filter(item => {
                 const d = new Date(item.nemTime);
                 const day = d.getDay(); 
-                if (day === 0 || day === 6) return false;
+                if (!demandDays.includes(day)) return false;
 
                 const hour = d.getHours();
                 const min = d.getMinutes();
                 
                 const timeInMins = hour * 60 + min;
                 const startInMins = startHour * 60 + startMin;
-                const endInMins = endHour * 60 + endMin;
+                let endInMins = endHour * 60 + endMin;
 
+                if (startInMins > endInMins) { // overnight window
+                    return timeInMins >= startInMins || timeInMins < endInMins;
+                }
                 return timeInMins >= startInMins && timeInMins < endInMins;
             });
             
@@ -1256,19 +1406,19 @@
                 return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
 
-            let weekdays = 0;
+            let applicableDaysCount = 0;
             let currentDate = new Date(startDateStr + 'T00:00:00');
             const endDate = new Date(endDateStr + 'T00:00:00');
             while (currentDate <= endDate) {
                 const day = currentDate.getDay();
-                if (day >= 1 && day <= 5) { // Mon-Fri
-                    weekdays++;
+                if (demandDays.includes(day)) {
+                    applicableDaysCount++;
                 }
                 currentDate.setDate(currentDate.getDate() + 1);
             }
             
             const dailyCharge = (maxDemandKwh * 2) * (demandRate / 100);
-            const totalDemandCost = dailyCharge * weekdays;
+            const totalDemandCost = dailyCharge * applicableDaysCount;
             
             return {
                 cost: totalDemandCost,
@@ -1944,22 +2094,19 @@
                     if(type === 'feedIn') return parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
                     return parseFloat(document.getElementById('otherSupplierRate').value) || 0;
                 } else { // tou
-                    if(type === 'feedIn') return parseFloat(document.getElementById('otherSupplierFeedInRateTou').value) || 0;
-                    if(type === 'controlledLoad') return parseFloat(document.getElementById('tou_controlled_load_rate').value) || 0;
+                    const touConfig = JSON.parse(localStorage.getItem('touConfig') || '{}');
+                    if(type === 'feedIn') return parseFloat(touConfig.feedIn) || 0;
+                    if(type === 'controlledLoad') return parseFloat(touConfig.controlledLoad) || 0;
                     
-                    const touRates = {
-                        peak: parseFloat(document.getElementById('tou_peak_rate').value) || 0,
-                        shoulder: parseFloat(document.getElementById('tou_shoulder_rate').value) || 0,
-                        offpeak: parseFloat(document.getElementById('tou_offpeak_rate').value) || 0
-                    };
-                    return getTouRate(new Date(item.nemTime), touRates);
+                    const fallbackRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
+                    return getTouRate(new Date(item.nemTime), touConfig, fallbackRate);
                 }
             };
 
             Object.values(channelData).forEach(channel => {
                 channel.usageData.forEach(item => {
                     const dateStr = item.nemTime.substring(0, 10);
-                    if (!summaries[dateStr]) return; // Should not happen with the pre-population step
+                    if (!summaries[dateStr]) return; 
 
                     const kwh = parseFloat(item.kwh) || 0;
                     const perKwh = parseFloat(item.perKwh) || 0;
@@ -1999,7 +2146,9 @@
             }
 
             const amberDailyDemandCost = (amberDemandInfo && amberDemandInfo.demandDays > 0) ? (amberDemandInfo.cost / amberDemandInfo.demandDays) : 0;
-            const otherDailyDemandCharge = (document.getElementById('enableDemandTariff').checked && otherDemandInfo) ? otherDemandInfo.dailyCharge : 0;
+            
+            const demandSettings = JSON.parse(localStorage.getItem('demandSettings') || '{}');
+            const otherDailyDemandCharge = (demandSettings.enabled && otherDemandInfo) ? otherDemandInfo.dailyCharge : 0;
 
             for (const dateStr in summaries) {
                 summaries[dateStr].amberDemandCost = 0;
@@ -2010,7 +2159,7 @@
                 }
 
                 const dayOfWeek = new Date(dateStr + 'T00:00:00').getDay();
-                if (dayOfWeek >= 1 && dayOfWeek <= 5) { // Monday to Friday
+                if ((demandSettings.days || []).includes(dayOfWeek)) {
                     summaries[dateStr].otherDemandCost = otherDailyDemandCharge;
                 }
             }
@@ -2285,3 +2434,4 @@
     </script>
 </body>
 </html>
+
