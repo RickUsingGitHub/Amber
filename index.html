@@ -869,7 +869,10 @@
                 // Ensure time is processed only once
                 if (!item.processedTime) {
                     const itemDate = new Date(item.nemTime);
-                    itemDate.setMinutes(itemDate.getMinutes() - 5);
+                    // The nemTime is the END of the interval. We adjust it back by one second
+                    // to ensure all calculations (TOU, daily bucketing) use the date/time
+                    // the usage actually occurred in, correctly handling the midnight boundary.
+                    itemDate.setSeconds(itemDate.getSeconds() - 1);
                     item.nemTime = toLocalIsoWithOffset(itemDate);
                     item.processedTime = true;
                 }
@@ -1048,7 +1051,18 @@
                         throw new Error(`Failed to fetch usage for ${range.start} to ${range.end}. Status: ${usageResponse.status}. Message: ${detail}`);
                     }
                     const apiResponseData = JSON.parse(responseText);
-                    selectedUsageData.push(...apiResponseData);
+
+                    const filteredDataForRange = apiResponseData.filter(item => {
+                        const itemDate = new Date(item.nemTime);
+                        // The NEM time is the END of the interval. To get the date the usage occurred on, 
+                        // we subtract a second to correctly handle the midnight boundary.
+                        // e.g., nemTime 2025-01-02T00:00:00 becomes 2025-01-01T23:59:59, which correctly belongs to Jan 1st.
+                        itemDate.setSeconds(itemDate.getSeconds() - 1);
+                        const usageDateStr = formatForInput(itemDate);
+                        return usageDateStr >= range.start && usageDateStr <= range.end;
+                    });
+
+                    selectedUsageData.push(...filteredDataForRange);
 
                     // Update progress based on days in this fetched range
                     const rangeStartDt = new Date(range.start + "T00:00:00");
@@ -1059,14 +1073,12 @@
                     if(progressBar) progressBar.style.width = `${progress}%`;
 
                     const dailyData = {};
-                    apiResponseData.forEach(item => {
+                    filteredDataForRange.forEach(item => {
                         const itemDate = new Date(item.nemTime);
                         itemDate.setSeconds(itemDate.getSeconds() - 1);
                         const usageDateStr = formatForInput(itemDate);
-                        if (usageDateStr >= range.start && usageDateStr <= range.end) {
-                            if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
-                            dailyData[usageDateStr].push(item);
-                        }
+                        if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
+                        dailyData[usageDateStr].push(item);
                     });
 
                     for (const dateStr in dailyData) {
@@ -2479,4 +2491,5 @@
     </script>
 </body>
 </html>
+
 
