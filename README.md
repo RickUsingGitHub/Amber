@@ -12,9 +12,10 @@ Built with [TailwindCSS](https://tailwindcss.com/) and [Chart.js](https://www.ch
 👉 **[Launch App Directly](https://rickusinggithub.github.io/Amber/)**
 
 ### Option 2: Run Locally
-1. Download `index.html`
-2. Open in any modern web browser
-3. Enter your Amber API key and start analyzing
+Download `index.html`
+### Now
+1. Open in any modern web browser
+2. Enter your Amber API key and start analyzing
 
 ---
 
