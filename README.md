@@ -44,8 +44,10 @@ Download `index.html`
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
-  
-- **Daily Summary Calendar** with detailed overlays of complete usage/costs.
+
+### 🗓️ **Daily Summary Calendar**
+- Detailed daily overlays of complete usage/costs.
+- Complete with monthly total summaries.
  
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6469520e-8f8a-4167-994d-13be3c6da91d" />
 
