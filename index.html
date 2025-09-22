@@ -1515,7 +1515,7 @@
             }
             
             const avgUsageData = intervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
-            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKWh / numDays) * 2 : 0);
+            const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0);
             const avgControlledLoadData = controlledLoadIntervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
@@ -1560,7 +1560,7 @@
                 categoryPercentage: 1.0
             });
 
-            if (feedInChannel) {
+            if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
                     label: `Average Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(1)} kWh, Price: ${feedInAvgPrice} c/kWh`,
                     data: avgFeedInData,
