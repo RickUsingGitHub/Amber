@@ -16,7 +16,7 @@
             cursor: not-allowed;
         }
         .calendar-day {
-            min-height: 110px;
+            min-height: 85px;
             transition: background-color 0.2s;
         }
         .calendar-day.has-data {
@@ -1736,7 +1736,7 @@
 
             const usageData = intervals.map(i => i.kwh * 12);
             const feedInData = feedInIntervals.map(i => -i.kwh * 12);
-            const controlledLoadData = intervals.map(i => i.kwh * 12);
+            const controlledLoadData = controlledLoadIntervals.map(i => i.kwh * 12);
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
 
             const ctx = document.getElementById('dailyChart').getContext('2d');
@@ -2296,8 +2296,9 @@
                         const savingsColor = savings > 0 ? 'text-green-700' : 'text-red-700';
                         summaryHtml = `
                             <div class="text-sm font-normal text-gray-600 flex items-center space-x-4 flex-wrap">
-                                <span><strong>In:</strong> ${totals.inKwh.toFixed(1)} kWh</span>
-                                <span><strong>Out:</strong> ${totals.outKwh.toFixed(1)} kWh</span>
+                                <span>
+                                  <span class="text-blue-600">↓${totals.inKwh.toFixed(1)}</span><span class="text-gray-400">/</span><span class="text-green-700">↑${totals.outKwh.toFixed(1)}</span>
+                                </span>
                                 <span><strong>Amber:</strong> $${totals.amber.toFixed(2)}</span>
                                 <span><strong>Other:</strong> $${totals.other.toFixed(2)}</span>
                                 <span class="${savingsColor}"><strong>Saving:</strong> $${savings.toFixed(2)}</span>
@@ -2341,9 +2342,8 @@
                         dayHtml = `
                             <div class="calendar-day has-data ${borderClass} rounded-md p-2 flex flex-col hover:bg-indigo-50 shadow-sm" data-date="${dateStr}">
                                 <div class="font-bold text-gray-800">${day}</div>
-                                <div class="text-xs mt-1">
-                                    <span class="text-blue-600">In: ${summary.totalInKwh.toFixed(1)} kWh</span><br>
-                                    <span class="text-green-700">Out: ${summary.totalOutKwh.toFixed(1)} kWh</span>
+                                <div class="text-xs mt-1 whitespace-nowrap">
+                                    <span class="text-blue-600">↓${summary.totalInKwh.toFixed(1)}</span><span class="text-gray-400">/</span><span class="text-green-700">↑${summary.totalOutKwh.toFixed(1)}</span>
                                 </div>
                                 <div class="text-sm mt-auto font-semibold ${costColor}">
                                     $${totalAmberCost.toFixed(2)}
@@ -2491,5 +2491,3 @@
     </script>
 </body>
 </html>
-
-
