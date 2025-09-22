@@ -24,25 +24,25 @@ Built with [TailwindCSS](https://tailwindcss.com/) and [Chart.js](https://www.ch
 - Compare Amber Electric costs vs traditional suppliers
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
 - **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
-  <img width="1136" height="1799" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
 
 - Automatic calculation of demand tariffs and daily connection fees
 - Visual savings summary with clear cost breakdown
-  <img width="1390" height="994" alt="image" src="https://github.com/user-attachments/assets/abbda961-29d0-4969-9bbe-2bc434d617b6" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/abbda961-29d0-4969-9bbe-2bc434d617b6" />
 
 
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
-  <img width="1400" height="1067" alt="image" src="https://github.com/user-attachments/assets/faaea2a1-36ae-458b-ac0e-8edd525e98ba" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/faaea2a1-36ae-458b-ac0e-8edd525e98ba" />
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
-  <img width="1392" height="1184" alt="image" src="https://github.com/user-attachments/assets/7918553c-2f26-4f5e-b670-ab904f63d742" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/7918553c-2f26-4f5e-b670-ab904f63d742" />
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
 - Dual-axis charts showing usage (kW) and pricing (c/kWh) simultaneously
 - Also! Calendar layout to track every days break down of usage/costs.
-  <img width="1406" height="1299" alt="image" src="https://github.com/user-attachments/assets/6469520e-8f8a-4167-994d-13be3c6da91d" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6469520e-8f8a-4167-994d-13be3c6da91d" />
 
 
 ### 💾 **Smart Data Management**
@@ -102,26 +102,6 @@ Configure comparison rates (auto-filled if using templates):
 - **Savings summary** highlighting financial benefits/costs
 - **Interactive graphs** accessible via dedicated buttons
 - **CSV export** for further analysis in Excel/Google Sheets
-
----
-
-## 🗃️ Technical Architecture
-
-### Frontend Stack
-- **[TailwindCSS](https://tailwindcss.com/)** - Responsive utility-first styling
-- **[Chart.js](https://www.chartjs.org/)** - Interactive data visualization
-- **Vanilla JavaScript** - Core functionality and API integration
-
-### Data Management
-- **IndexedDB** - Client-side caching with automatic cache boundary management
-- **Amber Electric API** - Real-time usage and pricing data
-- **Smart fetching** - Consolidates date ranges and minimizes API calls
-- **Progress logging** - Shows cache hits vs API calls for transparency
-
-### Browser Storage
-- **localStorage** - User preferences, API keys, and form settings
-- **IndexedDB** - Historical usage data cache (3+ day retention)
-- **No server dependency** - Everything runs client-side
 
 ---
 
@@ -189,11 +169,9 @@ Contributions welcome! Priority areas for improvement:
 
 ### High Priority
 - **Additional supplier templates** for more Australian energy retailers
-- **Enhanced mobile responsiveness** for smartphone usage
 - **Seasonal analysis features** (quarterly, yearly comparisons)
 
 ### Medium Priority
-- **Export format options** (JSON, Excel formats)
 - **API error handling** improvements and retry logic
 - **Advanced visualization options** (heatmaps, usage distribution charts)
 
@@ -212,8 +190,7 @@ Contributions welcome! Priority areas for improvement:
 ## 📁 File Structure
 ```
 ├── index.html          # Complete self-contained application
-├── README.md          # This documentation
-└── LICENSE           # MIT License terms
+└── README.md          # This documentation
 ```
 
 ---
