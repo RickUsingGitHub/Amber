@@ -258,16 +258,21 @@
                 </div>
 
                 <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Daily Usage & Price Graph</h3>
-                    <div class="flex items-center space-x-2 sm:space-x-4 mb-4">
-                        <button id="prevDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt; Prev</button>
+
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Usage & Price Graph</h3>
+                    <div class="flex items-center space-x-2 sm:space-x-4">
+                        <button id="prevDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
                         <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                        <button id="nextDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">Next &gt;</button>
-                    </div>
-                    <div class="h-[70vh] relative">
-                        <canvas id="dailyChart"></canvas>
+                        <button id="nextDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
                     </div>
                 </div>
+            
+                <div class="h-[70vh] relative">
+                    <canvas id="dailyChart"></canvas>
+                </div>
+            
+            </div>
             </div>
             
             <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
