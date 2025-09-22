@@ -107,7 +107,8 @@ Configure comparison rates (auto-filled if using templates):
 - **Cost comparison table** with channel-by-channel breakdown
 - **Demand tariff calculations** showing peak usage times and costs
 - **Savings summary** highlighting financial benefits/costs
-- **Interactive graphs** accessible via dedicated buttons
+- **Interactive graphs** showing the flow throughout the day.
+- **Daily Summary Calendar** showing the flow throughout the days.
 - **CSV export** for further analysis in Excel/Google Sheets
 
 ---
