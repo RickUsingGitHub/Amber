@@ -24,29 +24,29 @@ Built with [TailwindCSS](https://tailwindcss.com/) and [Chart.js](https://www.ch
 - Compare Amber Electric costs vs traditional suppliers
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
 - **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
-- 
+ 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
 
 - Automatic calculation of demand tariffs and daily connection fees
 - Visual savings summary with clear cost breakdown
-- 
+ 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/abbda961-29d0-4969-9bbe-2bc434d617b6" />
 
 
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
-- 
+ 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/faaea2a1-36ae-458b-ac0e-8edd525e98ba" />
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
-- 
+ 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/7918553c-2f26-4f5e-b670-ab904f63d742" />
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
 - Dual-axis charts showing usage (kW) and pricing (c/kWh) simultaneously
 - Also! Calendar layout to track every days break down of usage/costs.
-- 
+ 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6469520e-8f8a-4167-994d-13be3c6da91d" />
 
 
