@@ -320,6 +320,7 @@
 
         // --- Supplier Templates ---
         const supplierTemplates = {
+            "ACT": {},
             "NSW": {
                 "EnergyAustralia - Total Plan": {
                     rateType: 'tou', daily: 121.58, feedIn: 7.6, cl: 17.88,
@@ -331,7 +332,7 @@
                     demand: { e: true, r: 33.55, s: '17:00', f: '20:00', days: [1,2,3,4,5] }
                 },
                 "AGL - Standard": { rateType: 'flat', daily: 102.8, flat: 36.5, feedIn: 5.0, demand: { e: false } },
-                "Origin - Go Variable": { 
+                "Origin - Go Variable": {
                     rateType: 'tou', daily: 110.0, feedIn: 6.0, cl: 18.0,
                     tou: {
                         peak: { rate: 55.2, start: '14:00', end: '20:00', days: [1,2,3,4,5]},
@@ -341,18 +342,7 @@
                      demand: { e: false }
                 },
             },
-            "VIC": {
-                "EnergyAustralia - Flexi Plan": {
-                    rateType: 'tou', daily: 115.3, feedIn: 4.9, cl: 20.1,
-                    tou: {
-                        peak: { rate: 48.9, start: '15:00', end: '21:00', days: [1,2,3,4,5] },
-                        shoulder: { rate: 33.1, start: '07:00', end: '15:00', days: [1,2,3,4,5] },
-                        offpeak: { rate: 24.6, start: '00:00', end: '07:00', days: [0,1,2,3,4,5,6] }
-                    },
-                    demand: { e: true, r: 29.8, s: '15:00', f: '21:00', days: [1,2,3,4,5] }
-                },
-                "AGL - Victorian Default Offer": { rateType: 'flat', daily: 120.0, flat: 31.5, feedIn: 4.9, demand: { e: false } },
-            },
+            "NT": {},
             "QLD": {
                  "EnergyAustralia - Basic Home": {
                     rateType: 'tou', daily: 130.1, feedIn: 5.0, cl: 18.2,
@@ -376,7 +366,21 @@
                     demand: { e: true, r: 40.2, s: '17:00', f: '21:00', days: [1,2,3,4,5] }
                 },
                 "AGL - Standard": { rateType: 'flat', daily: 138.0, flat: 42.3, feedIn: 6.0, demand: { e: false } },
-            }
+            },
+            "TAS": {},
+            "VIC": {
+                "EnergyAustralia - Flexi Plan": {
+                    rateType: 'tou', daily: 115.3, feedIn: 4.9, cl: 20.1,
+                    tou: {
+                        peak: { rate: 48.9, start: '15:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 33.1, start: '07:00', end: '15:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 24.6, start: '00:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                    },
+                    demand: { e: true, r: 29.8, s: '15:00', f: '21:00', days: [1,2,3,4,5] }
+                },
+                "AGL - Victorian Default Offer": { rateType: 'flat', daily: 120.0, flat: 31.5, feedIn: 4.9, demand: { e: false } },
+            },
+            "WA": {}
         };
 
 
@@ -595,6 +599,16 @@
 
             const enableDemandCheckbox = document.getElementById('enableDemandTariff');
             const demandInputsDiv = document.getElementById('demandTariffInputs');
+
+            const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans')) || {};
+            for (const state in customPlans) {
+                if (!supplierTemplates[state]) {
+                    supplierTemplates[state] = {};
+                }
+                for (const planName in customPlans[state]) {
+                    supplierTemplates[state][planName] = customPlans[state][planName];
+                }
+            }
             
             Object.keys(supplierTemplates).forEach(state => {
                 const option = document.createElement('option');
@@ -602,18 +616,6 @@
                 option.textContent = state;
                 stateSelector.appendChild(option);
             });
-            
-            function updatePlanSelector(selectedState) {
-                planSelector.innerHTML = '<option value="">-- Custom --</option>';
-                if (supplierTemplates[selectedState]) {
-                    Object.keys(supplierTemplates[selectedState]).forEach(planName => {
-                        const option = document.createElement('option');
-                        option.value = planName;
-                        option.textContent = planName;
-                        planSelector.appendChild(option);
-                    });
-                }
-            }
             
             function applyPlanTemplate() {
                 const state = stateSelector.value;
@@ -899,8 +901,96 @@
         }
 
 
+        function updatePlanSelector(selectedState) {
+            const planSelector = document.getElementById('planSelector');
+            planSelector.innerHTML = '<option value="">-- Custom --</option>';
+            if (supplierTemplates[selectedState]) {
+                Object.keys(supplierTemplates[selectedState]).forEach(planName => {
+                    const option = document.createElement('option');
+                    option.value = planName;
+                    option.textContent = planName;
+                    planSelector.appendChild(option);
+                });
+            }
+        }
+
+        function createPlanObjectFromForm() {
+            const rateType = document.querySelector('input[name="rateType"]:checked').value;
+            const isDemandEnabled = document.getElementById('enableDemandTariff').checked;
+
+            const demandConfig = {
+                e: isDemandEnabled,
+                r: isDemandEnabled ? parseFloat(document.getElementById('demandRate').value) : 0,
+                s: isDemandEnabled ? document.getElementById('demandWindowStart').value : '16:00',
+                f: isDemandEnabled ? document.getElementById('demandWindowEnd').value : '21:00',
+                days: isDemandEnabled ? Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value)) : []
+            };
+
+            if (rateType === 'flat') {
+                return {
+                    rateType: 'flat',
+                    daily: parseFloat(document.getElementById('dailyConnectionRate').value),
+                    flat: parseFloat(document.getElementById('otherSupplierRate').value),
+                    feedIn: parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value),
+                    demand: demandConfig
+                };
+            } else { // tou
+                const getPeriodSettings = (period) => {
+                    const container = document.querySelector(`[data-tou-period="${period}"]`);
+                    if (!container) return { rate: 0, start: '00:00', end: '00:00', days: [] };
+                    const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+                    return {
+                        rate: parseFloat(document.getElementById(`tou_${period}_rate`).value),
+                        start: document.getElementById(`tou_${period}_start`).value,
+                        end: document.getElementById(`tou_${period}_end`).value,
+                        days: days
+                    };
+                };
+
+                return {
+                    rateType: 'tou',
+                    daily: parseFloat(document.getElementById('dailyConnectionRate').value),
+                    feedIn: parseFloat(document.getElementById('otherSupplierFeedInRateTou').value),
+                    cl: parseFloat(document.getElementById('tou_controlled_load_rate').value),
+                    tou: {
+                        peak: getPeriodSettings('peak'),
+                        shoulder: getPeriodSettings('shoulder'),
+                        offpeak: getPeriodSettings('offpeak')
+                    },
+                    demand: demandConfig
+                };
+            }
+        }
+
+        function saveCustomPlan() {
+            const state = document.getElementById('stateSelector').value;
+            const planName = document.getElementById('planName').value.trim();
+
+            if (!state || !planName) {
+                return; // Don't save if no state or name
+            }
+
+            const plan = createPlanObjectFromForm();
+
+            const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans')) || {};
+            if (!customPlans[state]) {
+                customPlans[state] = {};
+            }
+            customPlans[state][planName] = plan;
+            localStorage.setItem('customSupplierPlans', JSON.stringify(customPlans));
+
+            if (!supplierTemplates[state]) {
+                supplierTemplates[state] = {};
+            }
+            supplierTemplates[state][planName] = plan;
+
+            updatePlanSelector(state);
+            document.getElementById('planSelector').value = planName;
+        }
+
         // --- Main Fetch and Calculation Logic ---
         document.getElementById('fetchData').addEventListener('click', async () => {
+            saveCustomPlan();
             const resultsSection = document.getElementById('resultsSection');
             const calendarSection = document.getElementById('calendarSection');
             const messageContainer = document.getElementById('messageContainer');
