@@ -1854,6 +1854,7 @@
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
                                     if (index % 24 === 0) return label; 
+                                    if (index === ticks.length - 1) return '24:00';                                    
                                     return '';
                                 },
                                 autoSkip: false,
