@@ -2404,7 +2404,7 @@
                     const monthContainer = document.createElement('div');
                     monthContainer.innerHTML = `
                         <div class="flex justify-between items-center mb-2 flex-wrap">
-                            <h3 class="text-lg font-bold text-gray-800 mr-4">${monthName}</h3>
+                            <h3 class="text-lg font-bold text-gray-800 mr-4 cursor-pointer hover:underline" data-month-key="${monthKey}">${monthName}</h3>
                             ${summaryHtml}
                         </div>
                         <div class="grid grid-cols-7 gap-2 text-center font-semibold mb-1 text-sm text-gray-500">
@@ -2415,6 +2415,10 @@
                     monthGrid.className = 'grid grid-cols-7 gap-2';
                     monthContainer.appendChild(monthGrid);
                     container.appendChild(monthContainer);
+
+                    const monthHeader = monthContainer.querySelector('h3');
+                    monthHeader.addEventListener('mouseenter', (e) => showMonthTooltip(e.currentTarget));
+                    monthHeader.addEventListener('mouseleave', hideTooltip);
 
                     const firstDayOfMonth = new Date(year, month, 1);
                     const startingDayOfWeek = (firstDayOfMonth.getDay() + 6) % 7; // Monday is 0
@@ -2575,6 +2579,133 @@
             
             tooltip.innerHTML = contentHtml;
             positionTooltip(tooltip, cell);
+        }
+
+        async function showMonthTooltip(element) {
+            hideTooltip();
+            const monthKey = element.dataset.monthKey;
+
+            const monthlySummary = {
+                totalInKwh: 0,
+                totalOutKwh: 0,
+                amberCost: 0,
+                otherCost: 0,
+                amberDemandCost: 0,
+                otherDemandCost: 0,
+                channels: {},
+                daysInMonth: 0
+            };
+
+            const datesInMonth = Object.keys(dailySummaries).filter(d => d.startsWith(monthKey));
+
+            for (const dateStr of datesInMonth) {
+                const summary = dailySummaries[dateStr];
+                if (summary) {
+                    monthlySummary.daysInMonth++;
+                    monthlySummary.totalInKwh += summary.totalInKwh;
+                    monthlySummary.totalOutKwh += summary.totalOutKwh;
+                    monthlySummary.amberCost += summary.amberCost;
+                    monthlySummary.otherCost += summary.otherCost;
+                    monthlySummary.amberDemandCost += (summary.amberDemandCost || 0);
+                    monthlySummary.otherDemandCost += (summary.otherDemandCost || 0);
+
+                    Object.entries(summary.channels).forEach(([id, data]) => {
+                        if (!monthlySummary.channels[id]) {
+                            monthlySummary.channels[id] = { type: data.type, kwh: 0, amberCost: 0, otherCost: 0 };
+                        }
+                        monthlySummary.channels[id].kwh += data.kwh;
+                        monthlySummary.channels[id].amberCost += data.amberCost;
+                        monthlySummary.channels[id].otherCost += data.otherCost;
+                    });
+                }
+            }
+
+            if (monthlySummary.daysInMonth === 0) return;
+
+            const tooltip = document.createElement('div');
+            tooltip.id = 'day-tooltip';
+            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-auto';
+
+            const monthDate = new Date(monthKey + '-02T00:00:00');
+            const monthName = monthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
+            const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+            const monthDemandInfo = demandInfoForTooltip ? demandInfoForTooltip[monthKey] : null;
+
+            const amberDemandCost = monthlySummary.amberDemandCost;
+            const otherDemandCost = monthlySummary.otherDemandCost;
+
+            const totalAmberDailyCharges = (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100 + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100) * monthlySummary.daysInMonth;
+            const totalOtherDailyCharges = (otherDailyConnection / 100) * monthlySummary.daysInMonth;
+
+            const totalAmberCharges = monthlySummary.amberCost + amberDemandCost + totalAmberDailyCharges;
+            const totalOtherCharges = monthlySummary.otherCost + otherDemandCost + totalOtherDailyCharges;
+
+
+            let contentHtml = `<h3 class="text-base font-bold text-gray-800 mb-2">Monthly Summary for ${monthName}</h3>`;
+            contentHtml += `<table class="min-w-full text-xs">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-2 py-1 text-left font-medium text-gray-500">Channel</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">Usage</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">Amber</th>
+                                        <th class="px-2 py-1 text-right font-medium text-gray-500">${planName}</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200">`;
+
+            const sortedChannels = Object.entries(monthlySummary.channels).sort(([, a], [, b]) => a.type.localeCompare(b.type));
+
+            sortedChannels.forEach(([id, data]) => {
+                if (Math.abs(data.kwh) > 0.01) {
+                    contentHtml += `<tr>
+                                        <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
+                                        <td class="px-2 py-1 text-right">${data.kwh.toFixed(1)} kWh</td>
+                                        <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
+                                        <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
+                                    </tr>`;
+                }
+            });
+            contentHtml += `<tr class="border-t"></tr>`;
+
+            let hasDemandRow = false;
+
+            if (monthDemandInfo && monthDemandInfo.amber && monthDemandInfo.amber.cost > 0) {
+                 const maxDemandKw = (monthDemandInfo.amber.maxDemandKwh * 2).toFixed(2);
+                 contentHtml += `<tr>
+                                    <td class="px-2 py-1 text-sm" colspan="2">Amber Demand Tariff <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${amberDemandCost.toFixed(2)}</td>
+                                    <td class="px-2 py-1 text-right"></td>
+                                </tr>`;
+                hasDemandRow = true;
+            }
+
+            if (monthDemandInfo && monthDemandInfo.other && monthDemandInfo.other.cost > 0) {
+                const maxDemandKw = (monthDemandInfo.other.maxDemandKwh * 2).toFixed(2);
+                contentHtml += `<tr>
+                                    <td class="px-2 py-1 text-sm" colspan="2">${planName} Demand Tariff <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
+                                    <td class="px-2 py-1 text-right"></td>
+                                    <td class="px-2 py-1 text-right font-semibold">$${otherDemandCost.toFixed(2)}</td>
+                                </tr>`;
+                hasDemandRow = true;
+            }
+
+            contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}">
+                                <td class="px-2 py-1 font-semibold" colspan="2">Daily Charges (${monthlySummary.daysInMonth} days)</td>
+                                <td class="px-2 py-1 text-right font-semibold">$${totalAmberDailyCharges.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right font-semibold">$${totalOtherDailyCharges.toFixed(2)}</td>
+                            </tr>`;
+
+            contentHtml += `<tr class="bg-gray-50 font-bold">
+                                <td class="px-2 py-1" colspan="2">Total</td>
+                                <td class="px-2 py-1 text-right">$${totalAmberCharges.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right">$${totalOtherCharges.toFixed(2)}</td>
+                            </tr>`;
+
+            contentHtml += `</tbody></table>`;
+
+            tooltip.innerHTML = contentHtml;
+            positionTooltip(tooltip, element);
         }
 
         function hideTooltip() {
