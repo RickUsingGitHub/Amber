@@ -617,18 +617,6 @@
                 stateSelector.appendChild(option);
             });
             
-            function updatePlanSelector(selectedState) {
-                planSelector.innerHTML = '<option value="">-- Custom --</option>';
-                if (supplierTemplates[selectedState]) {
-                    Object.keys(supplierTemplates[selectedState]).forEach(planName => {
-                        const option = document.createElement('option');
-                        option.value = planName;
-                        option.textContent = planName;
-                        planSelector.appendChild(option);
-                    });
-                }
-            }
-            
             function applyPlanTemplate() {
                 const state = stateSelector.value;
                 const planName = planSelector.value;
@@ -912,6 +900,19 @@
             });
         }
 
+
+        function updatePlanSelector(selectedState) {
+            const planSelector = document.getElementById('planSelector');
+            planSelector.innerHTML = '<option value="">-- Custom --</option>';
+            if (supplierTemplates[selectedState]) {
+                Object.keys(supplierTemplates[selectedState]).forEach(planName => {
+                    const option = document.createElement('option');
+                    option.value = planName;
+                    option.textContent = planName;
+                    planSelector.appendChild(option);
+                });
+            }
+        }
 
         function createPlanObjectFromForm() {
             const rateType = document.querySelector('input[name="rateType"]:checked').value;
