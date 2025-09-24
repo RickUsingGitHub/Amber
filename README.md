@@ -25,7 +25,8 @@ Download `index.html`
 - Compare Amber Electric costs vs traditional suppliers
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
 - **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
- 
+- **User made templates** name your own plans and they will be saved to use again later.
+
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
 
 - Visual savings summary with clear cost breakdown
