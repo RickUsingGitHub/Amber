@@ -41,7 +41,7 @@ Download `index.html`
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
  
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/7918553c-2f26-4f5e-b670-ab904f63d742" />
+<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/1c954f60-88e7-49fe-a4ac-414f200732da" />
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
