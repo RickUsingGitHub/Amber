@@ -47,11 +47,9 @@ Download `index.html`
 - Hover tooltips for detailed data points
 
 ### 🗓️ **Daily Summary Calendar**
-- Detailed daily overlays of complete usage/costs.
-- Complete with monthly total summaries.
- 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6469520e-8f8a-4167-994d-13be3c6da91d" />
+- Detailed daily and monthly overlays of usage/costs.
 
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/d227c02a-0629-4001-a139-b92d555310ab" />
 
 ### 💾 **Smart Data Management**
 - **Intelligent caching** using IndexedDB for faster repeat queries
