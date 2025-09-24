@@ -37,7 +37,7 @@ Download `index.html`
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
  
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/faaea2a1-36ae-458b-ac0e-8edd525e98ba" />
+<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/8866da32-a8da-4eee-bc6a-e9e5e4059d53" />
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
  
