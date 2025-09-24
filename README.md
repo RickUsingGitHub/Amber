@@ -57,14 +57,7 @@ Download `index.html`
 - **Collapsible configuration panel** for cleaner interface
 - Persistent settings storage for rate configurations
 - Optimized API calls to minimize Amber API usage
-
-### ⚡ **Advanced Features**
-- **Demand tariff calculation** for both Amber and comparison suppliers
-- **Solar feed-in tracking** with separate rate calculations
-- **Controlled load analysis** (hot water, etc.)
-- **Multi-channel support** for complex energy setups
-- **State-specific supplier templates** (NSW, VIC, QLD, SA)
-
+  
 ---
 
 ## 🔧 Setup Requirements
@@ -73,19 +66,13 @@ Download `index.html`
 - **Amber Electric API key** - Get yours at [app.amber.com.au/developers](https://app.amber.com.au/developers)
 - Modern web browser with JavaScript enabled
 
-### Optional for Full Comparison
-- Select from pre-configured supplier templates or enter custom rates
-- Daily connection charge details
-- Solar feed-in tariff information
-- Demand tariff settings (if applicable)
-
 ---
 
 ## 📋 How to Use
 
 ### 1. **Initial Configuration**
 - Enter your Amber Electric API key (stored securely in your browser)
-- **Select your state** (NSW, VIC, QLD, SA) to load relevant supplier templates
+- **Select your state** (NSW, VIC, etc) to load relevant supplier templates
 - **Choose a supplier template** or select "Custom" for manual entry
 - Configuration panel can be collapsed after setup for cleaner interface
 
@@ -199,14 +186,6 @@ Contributions welcome! Priority areas for improvement:
 ├── index.html          # Complete self-contained application
 └── README.md          # This documentation
 ```
-
----
-
-## 📜 License
-
-**MIT License** - See [LICENSE](LICENSE) for full details.
-
-Free for personal and commercial use with attribution.
 
 ---
 
