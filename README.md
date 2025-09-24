@@ -49,7 +49,7 @@ Download `index.html`
 ### 🗓️ **Daily Summary Calendar**
 - Detailed daily and monthly overlays of usage/costs.
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/d227c02a-0629-4001-a139-b92d555310ab" />
+<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ffb676f9-51ed-4e18-9228-a567807528ea" />
 
 ### 💾 **Smart Data Management**
 - **Intelligent caching** using IndexedDB for faster repeat queries
