@@ -46,9 +46,21 @@
 <body class="bg-gray-100 text-gray-800">
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
-        <header class="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator & Exporter</h1>
-            <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare costs or export your usage data.</p>
+        <header class="bg-white rounded-lg shadow-md p-6 mb-6 relative">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Amber Electric Cost Comparator & Exporter</h1>
+                    <p class="mt-2 text-gray-600">Enter your Amber API key and select a date range to compare costs or export your usage data.</p>
+                </div>
+                <div class="relative">
+                    <button id="settingsBtn" class="text-gray-500 hover:text-gray-700 focus:outline-none">
+                        <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    </button>
+                    <div id="settingsMenu" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                        <!-- Content will be moved here -->
+                    </div>
+                </div>
+            </div>
         </header>
 
         <main>
@@ -243,9 +255,17 @@
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                        <button id="downloadCsvButton" title="Download complete energy data from your Amber account for your chosen dates." disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
-                            Download CSV
-                        </button>
+                        <div class="relative">
+                            <button id="downloadCsvButton" title="Download your energy data in various formats." disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center">
+                                Download CSV 📈
+                                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                            </button>
+                            <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-64 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                                <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Download Full Interval Data</a>
+                                <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Download Daily Summaries</a>
+                                <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Download Results Table</a>
+                            </div>
+                        </div>
                     </div>
                     <div id="results-table-container"></div>
                  </div>
@@ -278,9 +298,6 @@
             <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
                  <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
-                    <button id="clearCacheBtn" title="Only need to do this if the graphs or results look weird or broken!" class="bg-red-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
-                        Clear Cached Data
-                    </button>
                  </div>
     
                 <div id="messageContainer" class="hidden text-center mb-4 p-4 border rounded-lg bg-gray-50">
@@ -830,10 +847,67 @@
             });
 
 
-            document.getElementById('downloadCsvButton').addEventListener('click', generateAndDownloadCSV);
+            const downloadCsvButton = document.getElementById('downloadCsvButton');
+            const csvDropdownMenu = document.getElementById('csvDropdownMenu');
             
+            downloadCsvButton.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (!downloadCsvButton.disabled) {
+                    csvDropdownMenu.classList.toggle('hidden');
+                }
+            });
+
+            window.addEventListener('click', (event) => {
+                if (!csvDropdownMenu.contains(event.target) && !downloadCsvButton.contains(event.target)) {
+                    csvDropdownMenu.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('downloadFullIntervalCsv').addEventListener('click', (e) => {
+                e.preventDefault();
+                generateAndDownloadFullIntervalDataCSV();
+                csvDropdownMenu.classList.add('hidden');
+            });
+            document.getElementById('downloadDailySummaryCsv').addEventListener('click', (e) => {
+                e.preventDefault();
+                generateAndDownloadDailySummariesCSV();
+                csvDropdownMenu.classList.add('hidden');
+            });
+            document.getElementById('downloadResultsTableCsv').addEventListener('click', (e) => {
+                e.preventDefault();
+                generateAndDownloadResultsTableCSV();
+                csvDropdownMenu.classList.add('hidden');
+            });
+
+
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsMenu = document.getElementById('settingsMenu');
+
+            const clearCacheBtnHTML = `
+                <button id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 flex items-center">
+                    <span class="mr-2">🗑️</span>
+                    <span>Clear Cached Data</span>
+                </button>`;
+            settingsMenu.innerHTML = clearCacheBtnHTML;
+
+            settingsBtn.addEventListener('click', (event) => {
+                event.stopPropagation();
+                settingsMenu.classList.toggle('hidden');
+            });
+
+            window.addEventListener('click', (event) => {
+                if (!settingsMenu.contains(event.target) && !settingsBtn.contains(event.target)) {
+                    settingsMenu.classList.add('hidden');
+                }
+            });
+
             const clearCacheBtn = document.getElementById('clearCacheBtn');
             clearCacheBtn.addEventListener('click', () => {
+                const confirmed = window.confirm("Are you sure you want to clear all cached data? This action cannot be undone.");
+                if (!confirmed) {
+                    return;
+                }
+
                 const cacheMessageEl = document.getElementById('cacheMessage');
                 cacheMessageEl.textContent = 'Clearing cache...';
                 cacheMessageEl.className = 'text-sm mt-2 font-medium text-yellow-600';
@@ -1271,13 +1345,13 @@
 
         // --- Helper Functions ---
         
-        function generateAndDownloadCSV() {
+        function generateAndDownloadFullIntervalDataCSV() {
             if (!cachedChannelData) {
-                // ... same as before
+                alert("No data available to download. Please fetch data first.");
                 return;
             }
 
-            let csvContent = "nemTime,channelIdentifier,kWh,SpotPrice_cents_per_kWh\n";
+            let csvContent = "nemTime,channelIdentifier,channelType,kWh,SpotPrice_cents_per_kWh\n";
             
             Object.values(cachedChannelData).forEach(channel => {
                 if (!channel.usageData || channel.usageData.length === 0) return;
@@ -1285,20 +1359,84 @@
                     const nemTime = item.nemTime || '';
                     const kwh = (item.kwh !== undefined && item.kwh !== null) ? item.kwh : '';
                     const perKwh = (item.perKwh !== undefined && item.perKwh !== null) ? item.perKwh : '';
-                    const row = `"${nemTime}",${channel.identifier},${kwh},${perKwh}\n`;
+                    const row = `"${nemTime}",${channel.identifier},${channel.type},${kwh},${perKwh}\n`;
                     csvContent += row;
                 });
             });
 
+            downloadCSV(csvContent, `amber_full_interval_data_${lastFetchedStartDate}_to_${lastFetchedEndDate}.csv`);
+        }
+
+        function generateAndDownloadDailySummariesCSV() {
+            if (Object.keys(dailySummaries).length === 0) {
+                alert("No daily summary data available. Please fetch data first.");
+                return;
+            }
+
+            const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
+            const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+            const amberFixedDailyCost = (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+
+            let csvContent = "Date,Total Usage (kWh),Total Feed-in (kWh),Amber Usage Cost ($),Amber Demand Cost ($),Amber Fixed Cost ($),Amber Total ($),Other Usage Cost ($),Other Demand Cost ($),Other Fixed Cost ($),Other Total ($)\n";
+
+            const sortedDates = Object.keys(dailySummaries).sort();
+
+            for (const dateStr of sortedDates) {
+                const summary = dailySummaries[dateStr];
+                if (!summary) continue;
+
+                const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + amberFixedDailyCost;
+                const totalOtherCost = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+
+                const row = [
+                    dateStr,
+                    summary.totalInKwh.toFixed(3),
+                    summary.totalOutKwh.toFixed(3),
+                    summary.amberCost.toFixed(4),
+                    (summary.amberDemandCost || 0).toFixed(4),
+                    amberFixedDailyCost.toFixed(4),
+                    totalAmberCost.toFixed(4),
+                    summary.otherCost.toFixed(4),
+                    (summary.otherDemandCost || 0).toFixed(4),
+                    (otherDailyConnection / 100).toFixed(4),
+                    totalOtherCost.toFixed(4)
+                ].join(',');
+                csvContent += row + '\n';
+            }
+
+            downloadCSV(csvContent, `amber_daily_summaries_${lastFetchedStartDate}_to_${lastFetchedEndDate}.csv`);
+        }
+
+        function generateAndDownloadResultsTableCSV() {
+            const resultsTable = document.querySelector('#results-table-container table');
+            if (!resultsTable) {
+                alert("No results table available to download. Please fetch data first.");
+                return;
+            }
+
+            let csv = [];
+            const rows = resultsTable.querySelectorAll("tr");
+
+            for (const row of rows) {
+                const cols = row.querySelectorAll("td, th");
+                const rowData = [];
+                for (const col of cols) {
+                    // Replace newlines and extra spaces within a cell, and wrap in quotes
+                    let cellText = '"' + col.innerText.replace(/\s+/g, ' ').trim() + '"';
+                    rowData.push(cellText);
+                }
+                csv.push(rowData.join(","));
+            }
+
+            downloadCSV(csv.join("\n"), `amber_results_table_${lastFetchedStartDate}_to_${lastFetchedEndDate}.csv`);
+        }
+
+        function downloadCSV(csvContent, fileName) {
             const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
             const link = document.createElement("a");
             const url = URL.createObjectURL(blob);
             link.setAttribute("href", url);
-            
-            const startDate = document.getElementById('startDate').value;
-            const endDate = document.getElementById('endDate').value;
-            link.setAttribute("download", `amber_usage_all_channels_${startDate}_to_${endDate}.csv`);
-            
+            link.setAttribute("download", fileName);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
