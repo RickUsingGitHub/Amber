@@ -723,27 +723,27 @@
                 touRateSection.classList.add('hidden');
 
                 // Clear flat rate inputs
-                document.getElementById('otherSupplierRate').value = '0';
-                document.getElementById('otherSupplierFeedInRateFlat').value = '0';
+                document.getElementById('otherSupplierRate').value = '';
+                document.getElementById('otherSupplierFeedInRateFlat').value = '';
 
                 // Clear daily connection fee
-                document.getElementById('dailyConnectionRate').value = '0';
+                document.getElementById('dailyConnectionRate').value = '';
 
                 // Clear TOU inputs
                 ['peak', 'shoulder', 'offpeak'].forEach(period => {
-                    document.getElementById(`tou_${period}_rate`).value = '0';
+                    document.getElementById(`tou_${period}_rate`).value = '';
                     document.getElementById(`tou_${period}_start`).value = '00:00';
                     document.getElementById(`tou_${period}_end`).value = '00:00';
                     const container = document.querySelector(`[data-tou-period="${period}"]`);
                     container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
                 });
-                document.getElementById('tou_controlled_load_rate').value = '0';
-                document.getElementById('otherSupplierFeedInRateTou').value = '0';
+                document.getElementById('tou_controlled_load_rate').value = '';
+                document.getElementById('otherSupplierFeedInRateTou').value = '';
 
                 // Clear demand tariff inputs
                 document.getElementById('enableDemandTariff').checked = false;
                 document.getElementById('demandTariffInputs').classList.add('hidden');
-                document.getElementById('demandRate').value = '0';
+                document.getElementById('demandRate').value = '';
                 document.getElementById('demandWindowStart').value = '16:00';
                 document.getElementById('demandWindowEnd').value = '21:00';
                 document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
