@@ -327,10 +327,12 @@
 
         // --- Global cache for API data ---
         let cachedChannelData = null;
+        let cachedAllChannelData = null;
         let dailySummaries = {};
         let demandInfoForTooltip = null;
         let lastFetchedStartDate = null;
         let lastFetchedEndDate = null;
+        let lastFetchTimestamp = null;
         let usageChart = null;
         let dailyUsageChart = null;
         let currentSiteId = null;
@@ -710,10 +712,55 @@
                 stateSelector.appendChild(option);
             });
             
+            function clearPlanInputs() {
+                // Clear the plan name
+                document.getElementById('planName').value = '';
+                updateOtherSupplierHeading();
+
+                // Reset rate type to Flat
+                document.querySelector('input[name="rateType"][value="flat"]').checked = true;
+                flatRateSection.classList.remove('hidden');
+                touRateSection.classList.add('hidden');
+
+                // Clear flat rate inputs
+                document.getElementById('otherSupplierRate').value = '';
+                document.getElementById('otherSupplierFeedInRateFlat').value = '';
+
+                // Clear daily connection fee
+                document.getElementById('dailyConnectionRate').value = '';
+
+                // Clear TOU inputs
+                ['peak', 'shoulder', 'offpeak'].forEach(period => {
+                    document.getElementById(`tou_${period}_rate`).value = '';
+                    document.getElementById(`tou_${period}_start`).value = '00:00';
+                    document.getElementById(`tou_${period}_end`).value = '00:00';
+                    const container = document.querySelector(`[data-tou-period="${period}"]`);
+                    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                });
+                document.getElementById('tou_controlled_load_rate').value = '';
+                document.getElementById('otherSupplierFeedInRateTou').value = '';
+
+                // Clear demand tariff inputs
+                document.getElementById('enableDemandTariff').checked = false;
+                document.getElementById('demandTariffInputs').classList.add('hidden');
+                document.getElementById('demandRate').value = '';
+                document.getElementById('demandWindowStart').value = '16:00';
+                document.getElementById('demandWindowEnd').value = '21:00';
+                document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+                saveAllSettings();
+            }
+
             function applyPlanTemplate() {
                 const state = stateSelector.value;
                 const planName = planSelector.value;
-                if (!state || !planName) return;
+
+                if (!state || !planName) {
+                    if(planName === '') { // This is the "-- Custom --" selection
+                        clearPlanInputs();
+                    }
+                    return;
+                }
 
                 const template = supplierTemplates[state][planName];
                 if (!template) return;
@@ -959,12 +1006,18 @@
             const settingsBtn = document.getElementById('settingsBtn');
             const settingsMenu = document.getElementById('settingsMenu');
 
-            const clearCacheBtnHTML = `
+            const settingsMenuHTML = `
                 <button id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 flex items-center">
                     <span class="mr-2">🗑️</span>
                     <span>Clear Cached Data</span>
-                </button>`;
-            settingsMenu.innerHTML = clearCacheBtnHTML;
+                </button>
+                <div class="border-t border-gray-100"></div>
+                <button id="clearCustomPlansBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 hover:text-gray-900 flex items-center">
+                    <span class="mr-2">🧹</span>
+                    <span>Clear Custom Plans</span>
+                </button>
+            `;
+            settingsMenu.innerHTML = settingsMenuHTML;
 
             settingsBtn.addEventListener('click', (event) => {
                 event.stopPropagation();
@@ -974,6 +1027,46 @@
             window.addEventListener('click', (event) => {
                 if (!settingsMenu.contains(event.target) && !settingsBtn.contains(event.target)) {
                     settingsMenu.classList.add('hidden');
+                }
+            });
+
+            document.getElementById('clearCustomPlansBtn').addEventListener('click', () => {
+                const confirmed = window.confirm("Are you sure you want to delete ALL your saved custom plans? This action cannot be undone.");
+                if (confirmed) {
+                    const oldCustomPlans = JSON.parse(localStorage.getItem('customSupplierPlans')) || {};
+
+                    localStorage.removeItem('customSupplierPlans');
+
+                    for (const state in oldCustomPlans) {
+                        if (supplierTemplates[state]) {
+                            for (const planName in oldCustomPlans[state]) {
+                                if (supplierTemplates[state][planName]) {
+                                    delete supplierTemplates[state][planName];
+                                }
+                            }
+                        }
+                    }
+
+                    const stateSelector = document.getElementById('stateSelector');
+                    const planSelector = document.getElementById('planSelector');
+                    const previouslySelectedPlanName = planSelector.value;
+
+                    updatePlanSelector(stateSelector.value);
+
+                    let planExists = false;
+                    if (supplierTemplates[stateSelector.value] && supplierTemplates[stateSelector.value][previouslySelectedPlanName]) {
+                        planExists = true;
+                    }
+
+                    if (!planExists && previouslySelectedPlanName !== '') {
+                        planSelector.value = '';
+                        clearPlanInputs();
+                    }
+
+                    const cacheMessageEl = document.getElementById('cacheMessage');
+                    cacheMessageEl.textContent = 'Custom plans cleared successfully!';
+                    cacheMessageEl.className = 'text-sm mt-2 font-medium text-green-600';
+                    setTimeout(() => { cacheMessageEl.textContent = ''; }, 3000);
                 }
             });
 
@@ -1204,8 +1297,48 @@
                 return;
             }
             const numDays = Math.ceil((overallEndDate - overallStartDate) / (1000 * 60 * 60 * 24));
-            
-            cachedChannelData = null; // Always reset for a new fetch/calculation
+
+            const now = new Date();
+            if (cachedChannelData && lastFetchTimestamp && (now - lastFetchTimestamp < 3600000) && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
+                console.log("Using cached data, less than 1 hour old.");
+                messageContainer.classList.add('hidden');
+                resultsSection.classList.remove('hidden');
+                calendarSection.classList.remove('hidden');
+
+                // Recalculate costs with potentially new plan settings
+                const otherDemandInfo = calculateOtherDemandTariff(cachedChannelData, startDateValue, endDateValue);
+                calculateOtherSupplierCosts(cachedChannelData, otherDemandInfo ? otherDemandInfo.cost : 0);
+                const demandTariffInfo = calculateDemandTariff(cachedChannelData);
+
+                const { summaries, monthlyDemandInfo } = precalculateDailySummaries(cachedAllChannelData);
+                dailySummaries = summaries;
+                demandInfoForTooltip = monthlyDemandInfo;
+
+                let overallAmberCost = 0;
+                let overallOtherCost = 0;
+                let loopDate = new Date(overallStartDate);
+                while (loopDate <= overallEndDate) {
+                    const dateStr = formatForInput(loopDate);
+                    const summary = dailySummaries[dateStr];
+                    if (summary) {
+                        overallAmberCost += summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                        const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                    } else {
+                         overallAmberCost += (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+                         const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
+                         overallOtherCost += (otherDailyConnection / 100);
+                    }
+                    loopDate.setDate(loopDate.getDate() + 1);
+                }
+
+                await displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
+                return; // Skip fetching
+            }
+
+            // If cache is not used, reset and fetch
+            cachedChannelData = null;
+            cachedAllChannelData = null;
             dailySummaries = {};
 
             calendarSection.classList.remove('hidden');
@@ -1376,6 +1509,8 @@
                 lastFetchedStartDate = startDateValue;
                 lastFetchedEndDate = endDateValue;
                 cachedChannelData = channelTotalsSelectedPeriod;
+                cachedAllChannelData = channelTotalsAllData;
+                lastFetchTimestamp = new Date();
                 
                 const otherDemandInfo = calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, endDateValue);
                 calculateOtherSupplierCosts(channelTotalsSelectedPeriod, otherDemandInfo ? otherDemandInfo.cost : 0);
