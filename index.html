@@ -171,17 +171,9 @@
                                     <div class="bg-green-50 p-3 rounded-lg border border-green-200" data-tou-period="offpeak">
                                         <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate (c/kWh)</label>
                                         <input type="number" id="tou_offpeak_rate" value="24.28" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <div class="grid grid-cols-2 gap-2 mt-2">
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_offpeak_start">Start</label><input type="time" id="tou_offpeak_start" value="22:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_offpeak_end">End</label><input type="time" id="tou_offpeak_end" value="07:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
-                                        </div>
-                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
-                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
-                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
-                                        </div>
+                                        <!-- Time and day inputs removed as Off-Peak is now the default catch-all -->
+                                        <input type="hidden" id="tou_offpeak_start">
+                                        <input type="hidden" id="tou_offpeak_end">
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -349,7 +341,7 @@
                     tou: {
                         peak: { rate: 48.23, start: '17:00', end: '20:00', days: [1, 2, 3, 4, 5] },
                         shoulder: { rate: 43.89, start: '07:00', end: '17:00', days: [1, 2, 3, 4, 5] },
-                        offpeak: { rate: 33.24, start: '22:00', end: '07:00', days: [0, 1, 2, 3, 4, 5, 6] }
+                        offpeak: { rate: 33.24 }
                     },
                     demand: { e: false }
                 }
@@ -360,7 +352,7 @@
                     tou: {
                         peak: { rate: 51.55, start: '14:00', end: '20:00', days: [1, 2, 3, 4, 5] },
                         shoulder: { rate: 27.24, start: '07:00', end: '14:00', days: [1, 2, 3, 4, 5] },
-                        offpeak: { rate: 20.35, start: '22:00', end: '07:00', days: [0, 1, 2, 3, 4, 5, 6] }
+                        offpeak: { rate: 20.35 }
                     },
                     demand: { e: true, r: 33.55, s: '17:00', f: '20:00', days: [1,2,3,4,5] }
                 },
@@ -370,7 +362,7 @@
                     tou: {
                         peak: { rate: 55.2, start: '14:00', end: '20:00', days: [1,2,3,4,5]},
                         shoulder: {rate: 30.1, start: '07:00', end: '14:00', days: [1,2,3,4,5]},
-                        offpeak: {rate: 22.5, start: '22:00', end: '07:00', days: [0,1,2,3,4,5,6]}
+                        offpeak: {rate: 22.5}
                     },
                      demand: { e: false }
                 },
@@ -395,7 +387,7 @@
                     tou: {
                         peak: { rate: 44.5, start: '16:00', end: '21:00', days: [1,2,3,4,5] },
                         shoulder: { rate: 24.3, start: '07:00', end: '16:00', days: [1,2,3,4,5] },
-                        offpeak: { rate: 19.8, start: '21:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                        offpeak: { rate: 19.8 }
                     },
                     demand: { e: true, r: 35.1, s: '16:00', f: '21:00', days: [1,2,3,4,5] }
                 },
@@ -412,7 +404,7 @@
                     tou: {
                         peak: { rate: 60.1, start: '18:00', end: '21:00', days: [1,2,3,4,5] },
                         shoulder: { rate: 40.5, start: '07:00', end: '18:00', days: [1,2,3,4,5] },
-                        offpeak: { rate: 30.2, start: '00:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                        offpeak: { rate: 30.2 }
                     },
                     demand: { e: true, r: 40.2, s: '18:00', f: '21:00', days: [1,2,3,4,5] }
                 },
@@ -426,7 +418,7 @@
                     tou: {
                         peak: { rate: 36.20, start: '07:00', end: '21:00', days: [1,2,3,4,5,6,0] }, // Note: Aurora has a complex structure, this is a simplified model. Peak is 7am-10am and 4pm-9pm weekdays. Rest is offpeak.
                         shoulder: { rate: 16.86, start: '10:00', end: '16:00', days: [1,2,3,4,5,6,0] },
-                        offpeak: { rate: 16.86, start: '21:00', end: '07:00', days: [1,2,3,4,5,6,0] }
+                        offpeak: { rate: 16.86 }
                     },
                     demand: { e: false }
                 },
@@ -445,7 +437,7 @@
                     tou: {
                         peak: { rate: 48.9, start: '15:00', end: '21:00', days: [1,2,3,4,5,6,0] },
                         shoulder: { rate: 33.1, start: '07:00', end: '15:00', days: [1,2,3,4,5,6,0] },
-                        offpeak: { rate: 24.6, start: '21:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                        offpeak: { rate: 24.6 }
                     },
                     demand: { e: true, r: 29.8, s: '15:00', f: '21:00', days: [1,2,3,4,5] }
                 },
@@ -455,7 +447,7 @@
                      tou: {
                         peak: { rate: 47.5, start: '15:00', end: '21:00', days: [1,2,3,4,5,6,0] },
                         shoulder: { rate: 32.0, start: '07:00', end: '15:00', days: [1,2,3,4,5,6,0]},
-                        offpeak: { rate: 23.8, start: '21:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                        offpeak: { rate: 23.8 }
                      },
                      demand: { e: false }
                 },
@@ -471,7 +463,7 @@
                     tou: {
                         peak: { rate: 61.56, start: '15:00', end: '21:00', days: [1,2,3,4,5,6,0] },
                         shoulder: { rate: 32.24, start: '07:00', end: '15:00', days: [1,2,3,4,5] },
-                        offpeak: { rate: 16.96, start: '21:00', end: '07:00', days: [0,1,2,3,4,5,6] }
+                        offpeak: { rate: 16.96 }
                     },
                     demand: { e: false }
                 }
@@ -779,13 +771,15 @@
                         const periodConfig = template.tou[period];
                         if (periodConfig) {
                             document.getElementById(`tou_${period}_rate`).value = periodConfig.rate || 0;
-                            document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
-                            document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
-                            
-                            const container = document.querySelector(`[data-tou-period="${period}"]`);
-                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                                cb.checked = periodConfig.days.includes(parseInt(cb.value));
-                            });
+                            if (period !== 'offpeak') {
+                                document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
+                                document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
+
+                                const container = document.querySelector(`[data-tou-period="${period}"]`);
+                                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                    cb.checked = (periodConfig.days || []).includes(parseInt(cb.value));
+                                });
+                            }
                         }
                     });
                 } else {
@@ -825,13 +819,20 @@
                 localStorage.setItem('flatRate', document.getElementById('otherSupplierRate').value);
                 localStorage.setItem('flatFeedInRate', document.getElementById('otherSupplierFeedInRateFlat').value);
                 localStorage.setItem('dailyConnectionRate', document.getElementById('dailyConnectionRate').value);
-                
+
                 const getPeriodSettings = (period) => {
                     const container = document.querySelector(`[data-tou-period="${period}"]`);
                     if (!container) return {};
+
+                    const rate = document.getElementById(`tou_${period}_rate`).value;
+
+                    if (period === 'offpeak') {
+                        return { rate: rate };
+                    }
+
                     const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
                     return {
-                        rate: document.getElementById(`tou_${period}_rate`).value,
+                        rate: rate,
                         start: document.getElementById(`tou_${period}_start`).value,
                         end: document.getElementById(`tou_${period}_end`).value,
                         days: days
@@ -902,12 +903,14 @@
                     const setPeriodSettings = (period, settings) => {
                         if (!settings) return;
                         document.getElementById(`tou_${period}_rate`).value = settings.rate;
-                        document.getElementById(`tou_${period}_start`).value = settings.start;
-                        document.getElementById(`tou_${period}_end`).value = settings.end;
-                        const container = document.querySelector(`[data-tou-period="${period}"]`);
-                        container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                            cb.checked = (settings.days || []).includes(parseInt(cb.value));
-                        });
+                         if (period !== 'offpeak') {
+                            document.getElementById(`tou_${period}_start`).value = settings.start;
+                            document.getElementById(`tou_${period}_end`).value = settings.end;
+                            const container = document.querySelector(`[data-tou-period="${period}"]`);
+                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                cb.checked = (settings.days || []).includes(parseInt(cb.value));
+                            });
+                        }
                     };
                     setPeriodSettings('peak', config.peak);
                     setPeriodSettings('shoulder', config.shoulder);
@@ -1180,10 +1183,17 @@
             } else { // tou
                 const getPeriodSettings = (period) => {
                     const container = document.querySelector(`[data-tou-period="${period}"]`);
-                    if (!container) return { rate: 0, start: '00:00', end: '00:00', days: [] };
+                    if (!container) return {};
+
+                    const rate = parseFloat(document.getElementById(`tou_${period}_rate`).value);
+
+                    if (period === 'offpeak') {
+                        return { rate: rate };
+                    }
+
                     const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
                     return {
-                        rate: parseFloat(document.getElementById(`tou_${period}_rate`).value),
+                        rate: rate,
                         start: document.getElementById(`tou_${period}_start`).value,
                         end: document.getElementById(`tou_${period}_end`).value,
                         days: days
@@ -1673,11 +1683,15 @@
                 }
             };
         
-            if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate);
-            if (checkPeriod(touConfig.shoulder)) return parseFloat(touConfig.shoulder.rate);
-            if (checkPeriod(touConfig.offpeak)) return parseFloat(touConfig.offpeak.rate);
+            if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate) || 0;
+            if (checkPeriod(touConfig.shoulder)) return parseFloat(touConfig.shoulder.rate) || 0;
+
+            // Off-peak is now the default catch-all.
+            if (touConfig.offpeak && touConfig.offpeak.rate) {
+                return parseFloat(touConfig.offpeak.rate);
+            }
         
-            return fallbackRate;
+            return fallbackRate; // Fallback if offpeak rate isn't defined.
         }
         
         function calculateOtherSupplierCosts(channelTotals, otherDemandCost) {
