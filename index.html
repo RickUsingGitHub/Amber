@@ -470,6 +470,8 @@
             }
         };
 
+        const originalSupplierTemplates = JSON.parse(JSON.stringify(supplierTemplates));
+
 
         // --- IndexedDB Helper Functions ---
         const DB_NAME = 'AmberDataCacheDB';
@@ -1155,6 +1157,9 @@
                     const option = document.createElement('option');
                     option.value = planName;
                     option.textContent = planName;
+                    if (!originalSupplierTemplates[selectedState] || !originalSupplierTemplates[selectedState][planName]) {
+                        option.style.color = '#1a56db';
+                    }
                     planSelector.appendChild(option);
                 });
             }
@@ -1221,6 +1226,10 @@
 
             if (!state || !planName) {
                 return; // Don't save if no state or name
+            }
+
+            if (originalSupplierTemplates[state] && originalSupplierTemplates[state][planName]) {
+                return;
             }
 
             const plan = createPlanObjectFromForm();
