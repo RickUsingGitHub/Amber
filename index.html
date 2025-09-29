@@ -1438,7 +1438,7 @@
                 }
 
                 for (const range of fetchRanges) {
-                    messageEl.textContent = `Fetching from API: ${range.start} to ${range.end}...`;
+                    messageEl.textContent = `Fetching from Amber: ${range.start} to ${range.end}...`;
                     const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${range.start}&endDate=${range.end}`;
                     const usageResponse = await fetch(usageUrl, { headers });
                     const responseText = await usageResponse.text();
