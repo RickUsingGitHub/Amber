@@ -247,15 +247,24 @@
                  <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                        <div class="relative">
-                            <button id="downloadCsvButton" title="Download your energy data in various formats." disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center">
-                                Download 📈
-                                <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                            </button>
-                            <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-max bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-                                <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Full Interval Data</a>
-                                <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily Summaries</a>
-                                <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Results Table</a>
+                        <div class="flex items-center">
+                            <div class="flex items-center space-x-2 mr-4">
+                                <span class="text-sm font-medium text-gray-700">GST</span>
+                                <label for="gstToggle" class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" value="" id="gstToggle" class="sr-only peer" checked>
+                                    <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                            <div class="relative">
+                                <button id="downloadCsvButton" title="Download your energy data in various formats." disabled class="bg-green-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 flex items-center">
+                                    Download 📈
+                                    <svg class="w-4 h-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                                </button>
+                                <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-max bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                                    <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Full Interval Data</a>
+                                    <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily Summaries</a>
+                                    <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Results Table</a>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -328,6 +337,15 @@
         let usageChart = null;
         let dailyUsageChart = null;
         let currentSiteId = null;
+        let lastResultDataPayload = null;
+
+        function adjustForGst(cost, isFeedIn = false) {
+            const gstToggle = document.getElementById('gstToggle');
+            if (!gstToggle.checked && !isFeedIn) {
+                return cost / 1.1;
+            }
+            return cost;
+        }
 
         // --- Supplier Templates ---
         const supplierTemplates = {
@@ -1076,6 +1094,21 @@
             });
 
             const clearCacheBtn = document.getElementById('clearCacheBtn');
+            document.getElementById('gstToggle').addEventListener('change', () => {
+                if (lastResultDataPayload) {
+                    displayResults(
+                        lastResultDataPayload.channelTotals,
+                        lastResultDataPayload.overallAmberCost,
+                        lastResultDataPayload.overallOtherCost,
+                        lastResultDataPayload.startDateStr,
+                        lastResultDataPayload.endDateStr,
+                        lastResultDataPayload.numDays,
+                        lastResultDataPayload.demandTariffInfo,
+                        lastResultDataPayload.otherDemandTariffInfo
+                    );
+                }
+            });
+
             clearCacheBtn.addEventListener('click', () => {
                 const confirmed = window.confirm("Are you sure you want to clear all cached data? This action cannot be undone.");
                 if (!confirmed) {
@@ -2368,6 +2401,8 @@
         }
 
         async function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
+            lastResultDataPayload = { channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo };
+
             const resultsTableContainer = document.getElementById('results-table-container');
             const downloadCsvButton = document.getElementById('downloadCsvButton');
             const averageGraphContainer = document.getElementById('averageGraphContainer');
@@ -2375,7 +2410,10 @@
 
             const planName = document.getElementById('planName').value.trim() || 'Other Supplier';
             const period = `(${startDateStr} to ${endDateStr})`;
-            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays;
+
+            // Recalculate totals with potential GST adjustment
+            let adjustedAmberTotal = 0;
+            let adjustedOtherTotal = 0;
             
             let tableHTML = `
                 <p class="text-sm text-gray-500 mb-4">Period: ${numDays} days ${period}</p>
@@ -2396,9 +2434,16 @@
                 if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) {
                     return;
                 }
+                const isFeedIn = c.type === 'feedIn';
+                const adjustedAmberCost = adjustForGst(c.totalAmberCost || 0, isFeedIn);
+                const adjustedOtherCost = adjustForGst(c.totalOtherCost || 0, isFeedIn);
+
+                adjustedAmberTotal += adjustedAmberCost;
+                adjustedOtherTotal += adjustedOtherCost;
+
                 const totalKWhText = (c.totalKWh || 0).toFixed(1);
-                const totalAmberCostText = (c.totalAmberCost || 0).toFixed(2);
-                const totalOtherCostText = (c.totalOtherCost || 0).toFixed(2);
+                const totalAmberCostText = adjustedAmberCost.toFixed(2);
+                const totalOtherCostText = adjustedOtherCost.toFixed(2);
                 tableHTML += `
                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
@@ -2411,6 +2456,8 @@
             });
             
             if (demandTariffInfo && demandTariffInfo.cost > 0) {
+                const adjustedDemandCost = adjustForGst(demandTariffInfo.cost || 0);
+                adjustedAmberTotal += adjustedDemandCost;
                 const maxDemandKw = ((demandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
                 const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
                 
@@ -2422,13 +2469,15 @@
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
                             <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(demandTariffInfo.cost || 0).toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedDemandCost.toFixed(2)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
                     </tr>
                 `;
             }
             
              if (otherDemandTariffInfo && otherDemandTariffInfo.cost > 0) {
+                const adjustedOtherDemandCost = adjustForGst(otherDemandTariffInfo.cost || 0);
+                adjustedOtherTotal += adjustedOtherDemandCost;
                 const maxDemandKw = ((otherDemandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
                 const maxDemandDateTime = new Date(otherDemandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
                 
@@ -2441,21 +2490,31 @@
                             <div class="text-xs">X ${numDays} days</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${(otherDemandTariffInfo.cost || 0).toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${adjustedOtherDemandCost.toFixed(2)}</td>
                     </tr>
                 `;
             }
 
+            const amberConnectionCost = (AMBER_CONNECTION_COST_PER_DAY_CENTS * numDays / 100);
+            const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * numDays / 100;
+            const amberSubscriptionCost = (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS * numDays / 100);
+
+            const adjustedAmberConnectionCost = adjustForGst(amberConnectionCost);
+            const adjustedOtherDailyConnection = adjustForGst(otherDailyConnection);
+            const adjustedAmberSubscriptionCost = adjustForGst(amberSubscriptionCost);
+
+            adjustedAmberTotal += adjustedAmberConnectionCost + adjustedAmberSubscriptionCost;
+            adjustedOtherTotal += adjustedOtherDailyConnection;
 
             tableHTML += `
                 <tr class="font-semibold border-t">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_CONNECTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(otherDailyConnection / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberConnectionCost.toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedOtherDailyConnection.toFixed(2)}</td>
                 </tr>
                 <tr class="font-semibold">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${(AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS * numDays / 100).toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberSubscriptionCost.toFixed(2)}</td>
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td>
                 </tr>
             `;
@@ -2463,14 +2522,14 @@
              tableHTML += `
                     <tr class="bg-gray-50 font-bold">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallAmberCost || 0).toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${(overallOtherCost || 0).toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberTotal.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedOtherTotal.toFixed(2)}</td>
                     </tr>
                 </tbody>
                 </table>
             `;
             
-            const savings = (overallOtherCost || 0) - (overallAmberCost || 0);
+            const savings = adjustedOtherTotal - adjustedAmberTotal;
             let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
             if (savings > 0) {
                 savingsSummaryHTML += 'bg-green-100">';
@@ -2485,55 +2544,60 @@
             
             downloadCsvButton.disabled = false;
 
-            averageGraphContainer.classList.remove('hidden');
-            dailyGraphSection.classList.remove('hidden');
-            displayAverageGraph();
-
-            const daySelector = document.getElementById('daySelector');
-            const prevDayBtn = document.getElementById('prevDayBtn');
-            const nextDayBtn = document.getElementById('nextDayBtn');
-            
-            daySelector.innerHTML = ''; 
-
-            const start = new Date(startDateStr + 'T00:00:00');
-            const end = new Date(endDateStr + 'T00:00:00');
-            let current = new Date(start);
-
-            while (current <= end) {
-                const dateValue = formatForInput(current);
-                const option = document.createElement('option');
-                option.value = dateValue;
-                option.textContent = dateValue;
-                daySelector.appendChild(option);
-                current.setDate(current.getDate() + 1);
+            // Do not re-render graphs on GST toggle.
+            if (!usageChart) {
+                averageGraphContainer.classList.remove('hidden');
+                displayAverageGraph();
             }
+            
+            if (!dailyUsageChart) {
+                dailyGraphSection.classList.remove('hidden');
+                const daySelector = document.getElementById('daySelector');
+                const prevDayBtn = document.getElementById('prevDayBtn');
+                const nextDayBtn = document.getElementById('nextDayBtn');
 
-            daySelector.onchange = () => {
-                displayDailyGraph(daySelector.value);
-                updateNavButtons();
-            };
+                daySelector.innerHTML = '';
 
-            prevDayBtn.onclick = () => {
-                if (daySelector.selectedIndex > 0) {
-                    daySelector.selectedIndex--;
+                const start = new Date(startDateStr + 'T00:00:00');
+                const end = new Date(endDateStr + 'T00:00:00');
+                let current = new Date(start);
+
+                while (current <= end) {
+                    const dateValue = formatForInput(current);
+                    const option = document.createElement('option');
+                    option.value = dateValue;
+                    option.textContent = dateValue;
+                    daySelector.appendChild(option);
+                    current.setDate(current.getDate() + 1);
+                }
+
+                daySelector.onchange = () => {
+                    displayDailyGraph(daySelector.value);
+                    updateNavButtons();
+                };
+
+                prevDayBtn.onclick = () => {
+                    if (daySelector.selectedIndex > 0) {
+                        daySelector.selectedIndex--;
+                        daySelector.dispatchEvent(new Event('change'));
+                    }
+                };
+
+                nextDayBtn.onclick = () => {
+                    if (daySelector.selectedIndex < daySelector.options.length - 1) {
+                        daySelector.selectedIndex++;
+                        daySelector.dispatchEvent(new Event('change'));
+                    }
+                };
+
+                function updateNavButtons() {
+                    prevDayBtn.disabled = daySelector.selectedIndex === 0;
+                    nextDayBtn.disabled = daySelector.selectedIndex === daySelector.options.length - 1;
+                }
+
+                if (daySelector.options.length > 0) {
                     daySelector.dispatchEvent(new Event('change'));
                 }
-            };
-
-            nextDayBtn.onclick = () => {
-                 if (daySelector.selectedIndex < daySelector.options.length - 1) {
-                    daySelector.selectedIndex++;
-                    daySelector.dispatchEvent(new Event('change'));
-                }
-            };
-            
-            function updateNavButtons() {
-                prevDayBtn.disabled = daySelector.selectedIndex === 0;
-                nextDayBtn.disabled = daySelector.selectedIndex === daySelector.options.length - 1;
-            }
-
-            if (daySelector.options.length > 0) {
-                 daySelector.dispatchEvent(new Event('change'));
             }
             
             await displayCalendar();
