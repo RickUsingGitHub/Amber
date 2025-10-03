@@ -1306,6 +1306,7 @@
             messageContainer.classList.add('hidden');
             
             if (dailyUsageChart) { dailyUsageChart.destroy(); dailyUsageChart = null; }
+            if (usageChart) { usageChart.destroy(); usageChart = null; }
 
             const apiKey = document.getElementById('apiKey').value;
             const startDateValue = document.getElementById('startDate').value;
