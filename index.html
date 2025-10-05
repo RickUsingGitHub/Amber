@@ -963,7 +963,13 @@
                 localStorage.setItem('selectedState', e.target.value);
                 planSelector.value = '';
             });
-            planSelector.addEventListener('change', applyPlanTemplate);
+            planSelector.addEventListener('change', () => {
+                applyPlanTemplate();
+                const resultsSection = document.getElementById('resultsSection');
+                if (!resultsSection.classList.contains('hidden')) {
+                    document.getElementById('fetchData').click();
+                }
+            });
             planNameInput.addEventListener('input', () => {
                 updateOtherSupplierHeading();
                 saveAllSettings();
