@@ -2722,11 +2722,11 @@
                     let savingsText = '';
 
                     if (Math.abs(difference) < 0.01) {
-                        savingsText = ' (vs Amber ~ no difference)';
+                        savingsText = ' (~ no difference)';
                     } else if (difference > 0) {
-                        savingsText = ` (vs Amber $${difference.toFixed(2)} cheaper)`;
+                        savingsText = ` ($${difference.toFixed(2)} cheaper)`;
                     } else {
-                        savingsText = ` (vs Amber $${Math.abs(difference).toFixed(2)} more)`;
+                        savingsText = ` ($${Math.abs(difference).toFixed(2)} more)`;
                     }
                     option.textContent = planValue + savingsText;
                 }
