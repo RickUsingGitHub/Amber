@@ -22,20 +22,21 @@ Download `index.html`
 ## ✨ Key Features
 
 ### 📊 **Cost Comparison Analysis**
-- Compare Amber Electric costs vs traditional suppliers. With or without GST included.
+- Compare Amber Electric costs vs traditional suppliers
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
+- With or without GST included
 - **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
 - **User made templates** name your own plans and they will be saved to use again later.
 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
 
 - Visual savings summary with clear cost breakdown
- 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/abbda961-29d0-4969-9bbe-2bc434d617b6" />
+
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/17aa2b28-809e-423c-8b9b-9cc76fcde3b2" />
 
 - Compact "Hidden" layout for quick swapping between plan comparisons
 
-  <img width="1275" height="1085" alt="image" src="https://github.com/user-attachments/assets/1b754c9d-3a39-4ac4-8d63-b9fc68401941" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/1b754c9d-3a39-4ac4-8d63-b9fc68401941" />
 
 
 ### 📈 **Interactive Visualizations**
@@ -53,7 +54,7 @@ Download `index.html`
 ### 🗓️ **Daily Summary Calendar**
 - Detailed daily and monthly overlays of usage/costs.
 
-<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ffb676f9-51ed-4e18-9228-a567807528ea" />
+<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/9b81e2f9-45e5-4a42-9f6f-3cdd75a74a2d" />
 
 ### 💾 **Smart Data Management**
 - **Intelligent caching** using IndexedDB for faster repeat queries
@@ -61,6 +62,7 @@ Download `index.html`
 - **Collapsible configuration panel** for cleaner interface
 - Persistent settings storage for rate configurations
 - Optimized API calls to minimize Amber API usage
+- Cog options to clear cached data and/or Custom Plans
   
 ---
 
