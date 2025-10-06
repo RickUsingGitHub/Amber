@@ -66,7 +66,9 @@
         <main>
             <div id="configSection" class="bg-white rounded-lg shadow-md p-6 mb-6">
                 <div class="flex justify-between items-center cursor-pointer" id="configHeader">
-                    <h2 class="text-lg font-bold text-gray-900">Configuration</h2>
+                    <div id="configHeaderLeftGroup" class="flex items-center gap-4">
+                        <h2 class="text-lg font-bold text-gray-900">Configuration</h2>
+                    </div>
                     <button id="toggleConfigBtn" class="flex items-center text-indigo-600 hover:underline focus:outline-none font-medium">
                         <span class="mr-1">Hide</span>
                         <svg id="configChevron" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
@@ -89,8 +91,8 @@
                                     <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1">State</label>
                                     <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
                                 </div>
-                                <div>
-                                    <label for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan Templates</label>
+                                <div id="planSelectorContainer">
+                                    <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan Templates</label>
                                     <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <option value="">-- Custom --</option>
                                     </select>
@@ -600,41 +602,86 @@
             return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
         }
 
-        // --- Event Listeners and Initial Setup ---
+        // --- Global State & Functions ---
+        const configElements = {};
+
+        function updateConfigVisibility(isHidden, animate = true) {
+            // Use elements from the global state
+            const {
+                configContent, toggleConfigBtn, configChevron,
+                configHeaderLeftGroup, planSelectorContainer,
+                planSelectorLabel, planSelector, planSelectorPlaceholder
+            } = configElements;
+
+            // Guard against running before initialization
+            if (!configContent) return;
+
+            if(animate){
+                configContent.classList.add('transition-all', 'duration-300', 'ease-in-out');
+            } else {
+                configContent.classList.remove('transition-all', 'duration-300', 'ease-in-out');
+            }
+
+            if (isHidden) {
+                configContent.classList.add('hidden');
+                toggleConfigBtn.querySelector('span').textContent = 'Show';
+                configChevron.style.transform = 'rotate(-180deg)';
+
+                // Move and restyle the plan selector
+                if (planSelectorPlaceholder) {
+                    planSelectorContainer.parentNode.replaceChild(planSelectorPlaceholder, planSelectorContainer);
+                    configHeaderLeftGroup.appendChild(planSelectorContainer);
+                    planSelectorContainer.classList.add('flex', 'items-center', 'gap-2');
+                    planSelectorLabel.classList.remove('block', 'mb-1');
+                    planSelector.classList.remove('w-full');
+                    planSelector.classList.add('w-auto');
+                }
+
+            } else {
+                configContent.classList.remove('hidden');
+                toggleConfigBtn.querySelector('span').textContent = 'Hide';
+                configChevron.style.transform = 'rotate(0deg)';
+
+                // Move and restyle the plan selector back
+                if (planSelectorPlaceholder && planSelectorPlaceholder.parentNode) {
+                    planSelectorPlaceholder.parentNode.replaceChild(planSelectorContainer, planSelectorPlaceholder);
+                    planSelectorContainer.classList.remove('flex', 'items-center', 'gap-2');
+                    planSelectorLabel.classList.add('block', 'mb-1');
+                    planSelector.classList.add('w-full');
+                    planSelector.classList.remove('w-auto');
+                }
+            }
+        }
+
+        // --- Event Listener and Initial Setup ---
         window.addEventListener('DOMContentLoaded', () => {
-            const configHeader = document.getElementById('configHeader');
-            const toggleConfigBtn = document.getElementById('toggleConfigBtn');
-            const configContent = document.getElementById('configContent');
-            const configChevron = document.getElementById('configChevron');
+            // Populate the global state object
+            configElements.configHeader = document.getElementById('configHeader');
+            configElements.toggleConfigBtn = document.getElementById('toggleConfigBtn');
+            configElements.configContent = document.getElementById('configContent');
+            configElements.configChevron = document.getElementById('configChevron');
+            configElements.configHeaderLeftGroup = document.getElementById('configHeaderLeftGroup');
+            configElements.planSelectorContainer = document.getElementById('planSelectorContainer');
+            configElements.planSelectorLabel = document.getElementById('planSelectorLabel');
+            configElements.planSelector = document.getElementById('planSelector');
+            configElements.planSelectorPlaceholder = document.createElement('div');
+            configElements.planSelectorPlaceholder.id = 'plan-selector-placeholder';
 
-            const updateConfigVisibility = (isHidden, animate = true) => {
-                if(animate){
-                    configContent.classList.add('transition-all', 'duration-300', 'ease-in-out');
-                } else {
-                    configContent.classList.remove('transition-all', 'duration-300', 'ease-in-out');
-                }
-
-                if (isHidden) {
-                    configContent.classList.add('hidden');
-                    toggleConfigBtn.querySelector('span').textContent = 'Show';
-                    configChevron.style.transform = 'rotate(-180deg)';
-                } else {
-                    configContent.classList.remove('hidden');
-                    toggleConfigBtn.querySelector('span').textContent = 'Hide';
-                    configChevron.style.transform = 'rotate(0deg)';
-                }
-            };
+            // Initial setup: store original parent and insert placeholder
+            const originalParent = configElements.planSelectorContainer.parentNode;
+            originalParent.replaceChild(configElements.planSelectorPlaceholder, configElements.planSelectorContainer);
+            originalParent.replaceChild(configElements.planSelectorContainer, configElements.planSelectorPlaceholder);
 
             const isConfigHidden = localStorage.getItem('configHidden') === 'true';
-            updateConfigVisibility(isConfigHidden, false); 
+            updateConfigVisibility(isConfigHidden, false);
 
             const toggleHandler = () => {
-                const isCurrentlyHidden = configContent.classList.contains('hidden');
+                const isCurrentlyHidden = configElements.configContent.classList.contains('hidden');
                 updateConfigVisibility(!isCurrentlyHidden);
                 localStorage.setItem('configHidden', !isCurrentlyHidden);
             };
 
-            configHeader.addEventListener('click', toggleHandler);
+            configElements.configHeader.addEventListener('click', toggleHandler);
 
             const apiKeyInput = document.getElementById('apiKey');
             const savedApiKey = localStorage.getItem('amberApiKey');
