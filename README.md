@@ -22,7 +22,7 @@ Download `index.html`
 ## ✨ Key Features
 
 ### 📊 **Cost Comparison Analysis**
-- Compare Amber Electric costs vs traditional suppliers
+- Compare Amber Electric costs vs traditional suppliers. With or without GST included.
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
 - **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
 - **User made templates** name your own plans and they will be saved to use again later.
@@ -32,6 +32,10 @@ Download `index.html`
 - Visual savings summary with clear cost breakdown
  
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/abbda961-29d0-4969-9bbe-2bc434d617b6" />
+
+- Compact "Hidden" layout for quick swapping between plan comparisons
+
+  <img width="1275" height="1085" alt="image" src="https://github.com/user-attachments/assets/1b754c9d-3a39-4ac4-8d63-b9fc68401941" />
 
 
 ### 📈 **Interactive Visualizations**
