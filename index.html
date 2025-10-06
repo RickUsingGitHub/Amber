@@ -340,6 +340,7 @@
         let dailyUsageChart = null;
         let currentSiteId = null;
         let lastResultDataPayload = null;
+        let amberCostBaseline = null;
 
         function adjustForGst(cost, isFeedIn = false) {
             const gstToggle = document.getElementById('gstToggle');
@@ -1370,6 +1371,10 @@
             const apiKey = document.getElementById('apiKey').value;
             const startDateValue = document.getElementById('startDate').value;
             const endDateValue = document.getElementById('endDate').value;
+
+            if (startDateValue !== lastFetchedStartDate || endDateValue !== lastFetchedEndDate) {
+                amberCostBaseline = null;
+            }
             
             localStorage.setItem('startDate', startDateValue);
             localStorage.setItem('endDate', endDateValue);
@@ -1444,6 +1449,10 @@
                     loopDate.setDate(loopDate.getDate() + 1);
                 }
 
+                if (amberCostBaseline === null) {
+                    amberCostBaseline = overallAmberCost;
+                }
+
                 await displayResults(cachedChannelData, overallAmberCost, overallOtherCost, startDateValue, endDateValue, numDays, demandTariffInfo, otherDemandInfo);
                 return; // Skip fetching
             }
@@ -1473,6 +1482,10 @@
                 if (!sites || sites.length === 0) throw new Error('No sites found for this API key.');
                 
                 const site = sites[0];
+
+                if (currentSiteId !== site.id) {
+                    amberCostBaseline = null;
+                }
                 currentSiteId = site.id;
                 const siteId = site.id;
                 const channels = site.channels;
@@ -1652,6 +1665,10 @@
                     loopDate.setDate(loopDate.getDate() + 1);
                 }
 
+                if (amberCostBaseline === null) {
+                    amberCostBaseline = overallAmberCost;
+                }
+
                 messageContainer.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
                 calendarSection.classList.remove('hidden');
@@ -1796,12 +1813,12 @@
             return fallbackRate; // Fallback if offpeak rate isn't defined.
         }
         
-        function calculateOtherSupplierCosts(channelTotals, otherDemandCost) {
-            const rateType = document.querySelector('input[name="rateType"]:checked').value;
+        function calculateOtherSupplierCosts(channelTotals, otherDemandCost, planConfig = null) {
+            const rateType = planConfig ? planConfig.rateType : document.querySelector('input[name="rateType"]:checked').value;
 
             if (rateType === 'flat') {
-                const otherSupplierRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
-                const feedInRate = parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
+                const otherSupplierRate = planConfig ? planConfig.flat : (parseFloat(document.getElementById('otherSupplierRate').value) || 0);
+                const feedInRate = planConfig ? planConfig.feedIn : (parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0);
                 
                 Object.values(channelTotals).forEach(c => {
                     let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
@@ -1814,10 +1831,10 @@
                     }
                 });
             } else { // 'tou'
-                const savedTouConfig = JSON.parse(localStorage.getItem('touConfig') || '{}');
-                const feedInRate = parseFloat(savedTouConfig.feedIn) || 0;
-                const controlledLoadRate = parseFloat(savedTouConfig.controlledLoad) || 0;
-                const fallbackRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
+                const touConfig = planConfig ? planConfig.tou : JSON.parse(localStorage.getItem('touConfig') || '{}');
+                const feedInRate = planConfig ? planConfig.feedIn : (parseFloat(JSON.parse(localStorage.getItem('touConfig') || '{}').feedIn) || 0);
+                const controlledLoadRate = planConfig ? planConfig.cl : (parseFloat(JSON.parse(localStorage.getItem('touConfig') || '{}').controlledLoad) || 0);
+                const fallbackRate = planConfig ? 0 : (parseFloat(document.getElementById('otherSupplierRate').value) || 0);
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
@@ -1831,7 +1848,7 @@
                     else if (c.type === 'general') { 
                         channelOtherCost = c.usageData.reduce((total, item) => {
                             const itemDate = new Date(item.nemTime);
-                            const rateForInterval = getTouRate(itemDate, savedTouConfig, fallbackRate);
+                            const rateForInterval = getTouRate(itemDate, touConfig, fallbackRate);
                             return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
                         }, 0);
                         channelOtherCost += otherDemandCost;
@@ -1904,12 +1921,11 @@
             };
         }
 
-        function calculateOtherDemandTariff(channelTotals, startDateStr, endDateStr) {
-            const isEnabled = document.getElementById('enableDemandTariff').checked;
+        function calculateOtherDemandTariff(channelTotals, startDateStr, endDateStr, planConfig = null) {
+            const isEnabled = planConfig ? planConfig.demand.e : document.getElementById('enableDemandTariff').checked;
             if (!isEnabled) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             
-            const demandSettings = JSON.parse(localStorage.getItem('demandSettings') || '{}');
-            const demandDays = demandSettings.days || [];
+            const demandDays = planConfig ? planConfig.demand.days : (JSON.parse(localStorage.getItem('demandSettings') || '{}').days || []);
             if(demandDays.length === 0) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
 
 
@@ -1918,9 +1934,9 @@
                 return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             }
             
-            const demandRate = parseFloat(document.getElementById('demandRate').value) || 0;
-            const startTime = document.getElementById('demandWindowStart').value;
-            const endTime = document.getElementById('demandWindowEnd').value;
+            const demandRate = planConfig ? planConfig.demand.r : (parseFloat(document.getElementById('demandRate').value) || 0);
+            const startTime = planConfig ? planConfig.demand.s : document.getElementById('demandWindowStart').value;
+            const endTime = planConfig ? planConfig.demand.f : document.getElementById('demandWindowEnd').value;
 
             const [startHour, startMin] = startTime.split(':').map(Number);
             const [endHour, endMin] = endTime.split(':').map(Number);
@@ -2684,7 +2700,7 @@
             const state = document.getElementById('stateSelector').value;
             const planSelector = document.getElementById('planSelector');
             const originalSelectedPlanValue = planSelector.value;
-            const baselineCost = lastResultDataPayload.overallAmberCost;
+            const baselineCost = amberCostBaseline;
             console.log(`Baseline cost (Amber): ${baselineCost}`);
 
             const originalSaveAllSettings = window.saveAllSettings;
@@ -2704,9 +2720,11 @@
                     planSelector.value = planValue;
                     applyPlanTemplate();
 
+                    const planConfig = createPlanObjectFromForm();
+
                     const tempChannelTotals = JSON.parse(JSON.stringify(lastResultDataPayload.channelTotals));
-                    const otherDemandInfo = calculateOtherDemandTariff(tempChannelTotals, lastResultDataPayload.startDateStr, lastResultDataPayload.endDateStr);
-                    calculateOtherSupplierCosts(tempChannelTotals, otherDemandInfo ? otherDemandInfo.cost : 0);
+                    const otherDemandInfo = calculateOtherDemandTariff(tempChannelTotals, lastResultDataPayload.startDateStr, lastResultDataPayload.endDateStr, planConfig);
+                    calculateOtherSupplierCosts(tempChannelTotals, otherDemandInfo ? otherDemandInfo.cost : 0, planConfig);
 
                     let currentPlanTotalCost = 0;
                     Object.values(tempChannelTotals).forEach(c => {
