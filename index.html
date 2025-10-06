@@ -654,6 +654,163 @@
         }
 
         // --- Event Listener and Initial Setup ---
+        function clearPlanInputs() {
+            // Clear the plan name
+            document.getElementById('planName').value = '';
+            updateOtherSupplierHeading();
+
+            // Reset rate type to Flat
+            document.querySelector('input[name="rateType"][value="flat"]').checked = true;
+            document.getElementById('flatRateSection').classList.remove('hidden');
+            document.getElementById('touRateSection').classList.add('hidden');
+
+            // Clear flat rate inputs
+            document.getElementById('otherSupplierRate').value = '';
+            document.getElementById('otherSupplierFeedInRateFlat').value = '';
+
+            // Clear daily connection fee
+            document.getElementById('dailyConnectionRate').value = '';
+
+            // Clear TOU inputs
+            ['peak', 'shoulder', 'offpeak'].forEach(period => {
+                document.getElementById(`tou_${period}_rate`).value = '';
+                document.getElementById(`tou_${period}_start`).value = '00:00';
+                document.getElementById(`tou_${period}_end`).value = '00:00';
+                const container = document.querySelector(`[data-tou-period="${period}"]`);
+                container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+            });
+            document.getElementById('tou_controlled_load_rate').value = '';
+            document.getElementById('otherSupplierFeedInRateTou').value = '';
+
+            // Clear demand tariff inputs
+            document.getElementById('enableDemandTariff').checked = false;
+            document.getElementById('demandTariffInputs').classList.add('hidden');
+            document.getElementById('demandRate').value = '';
+            document.getElementById('demandWindowStart').value = '16:00';
+            document.getElementById('demandWindowEnd').value = '21:00';
+            document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+
+            saveAllSettings();
+        }
+
+        function applyPlanTemplate() {
+            const stateSelector = document.getElementById('stateSelector');
+            const planSelector = document.getElementById('planSelector');
+            const state = stateSelector.value;
+            const planName = planSelector.value;
+
+            if (!state || !planName) {
+                if(planName === '') { // This is the "-- Custom --" selection
+                    clearPlanInputs();
+                }
+                return;
+            }
+
+            const template = supplierTemplates[state][planName];
+            if (!template) return;
+
+            document.getElementById('planName').value = planName;
+            updateOtherSupplierHeading();
+
+            document.querySelector(`input[name="rateType"][value="${template.rateType}"]`).checked = true;
+            if (template.rateType === 'tou') {
+                document.getElementById('flatRateSection').classList.add('hidden');
+                document.getElementById('touRateSection').classList.remove('hidden');
+                document.getElementById('otherSupplierFeedInRateTou').value = template.feedIn || 0;
+                document.getElementById('tou_controlled_load_rate').value = template.cl || 0;
+
+                ['peak', 'shoulder', 'offpeak'].forEach(period => {
+                    const periodConfig = template.tou[period];
+                    if (periodConfig) {
+                        document.getElementById(`tou_${period}_rate`).value = periodConfig.rate || 0;
+                        if (period !== 'offpeak') {
+                            document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
+                            document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
+
+                            const container = document.querySelector(`[data-tou-period="${period}"]`);
+                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                                cb.checked = (periodConfig.days || []).includes(parseInt(cb.value));
+                            });
+                        }
+                    }
+                });
+            } else {
+                document.getElementById('flatRateSection').classList.remove('hidden');
+                document.getElementById('touRateSection').classList.add('hidden');
+                document.getElementById('otherSupplierRate').value = template.flat || 0;
+                document.getElementById('otherSupplierFeedInRateFlat').value = template.feedIn || 0;
+            }
+
+            document.getElementById('dailyConnectionRate').value = template.daily || 0;
+
+            const demand = template.demand || { e: false };
+            document.getElementById('enableDemandTariff').checked = demand.e;
+            if (demand.e) {
+                document.getElementById('demandTariffInputs').classList.remove('hidden');
+                document.getElementById('demandRate').value = demand.r || 0;
+                document.getElementById('demandWindowStart').value = demand.s || '16:00';
+                document.getElementById('demandWindowEnd').value = demand.f || '21:00';
+                document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = (demand.days || []).includes(parseInt(cb.value));
+                });
+            } else {
+                document.getElementById('demandTariffInputs').classList.add('hidden');
+            }
+
+            saveAllSettings();
+        }
+
+        function updateOtherSupplierHeading() {
+            const heading = document.getElementById('otherSupplierHeading');
+            const planName = document.getElementById('planName').value.trim();
+            heading.textContent = planName ? `${planName} Details` : 'Other Supplier Details';
+        }
+
+        function saveAllSettings() {
+            localStorage.setItem('rateType', document.querySelector('input[name="rateType"]:checked').value);
+            localStorage.setItem('flatRate', document.getElementById('otherSupplierRate').value);
+            localStorage.setItem('flatFeedInRate', document.getElementById('otherSupplierFeedInRateFlat').value);
+            localStorage.setItem('dailyConnectionRate', document.getElementById('dailyConnectionRate').value);
+
+            const getPeriodSettings = (period) => {
+                const container = document.querySelector(`[data-tou-period="${period}"]`);
+                if (!container) return {};
+                const rate = document.getElementById(`tou_${period}_rate`).value;
+                if (period === 'offpeak') {
+                    return { rate: rate };
+                }
+                const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+                return {
+                    rate: rate,
+                    start: document.getElementById(`tou_${period}_start`).value,
+                    end: document.getElementById(`tou_${period}_end`).value,
+                    days: days
+                };
+            };
+
+            const touConfig = {
+                peak: getPeriodSettings('peak'),
+                shoulder: getPeriodSettings('shoulder'),
+                offpeak: getPeriodSettings('offpeak'),
+                controlledLoad: document.getElementById('tou_controlled_load_rate').value,
+                feedIn: document.getElementById('otherSupplierFeedInRateTou').value,
+            };
+            localStorage.setItem('touConfig', JSON.stringify(touConfig));
+
+            localStorage.setItem('selectedState', document.getElementById('stateSelector').value);
+            localStorage.setItem('selectedPlan', document.getElementById('planSelector').value);
+            localStorage.setItem('planName', document.getElementById('planName').value);
+
+            const demandSettings = {
+                enabled: document.getElementById('enableDemandTariff').checked,
+                rate: document.getElementById('demandRate').value,
+                start: document.getElementById('demandWindowStart').value,
+                end: document.getElementById('demandWindowEnd').value,
+                days: Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value))
+            };
+            localStorage.setItem('demandSettings', JSON.stringify(demandSettings));
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             // Populate the global state object
             configElements.configHeader = document.getElementById('configHeader');
@@ -776,164 +933,6 @@
                 stateSelector.appendChild(option);
             });
             
-            function clearPlanInputs() {
-                // Clear the plan name
-                document.getElementById('planName').value = '';
-                updateOtherSupplierHeading();
-
-                // Reset rate type to Flat
-                document.querySelector('input[name="rateType"][value="flat"]').checked = true;
-                flatRateSection.classList.remove('hidden');
-                touRateSection.classList.add('hidden');
-
-                // Clear flat rate inputs
-                document.getElementById('otherSupplierRate').value = '';
-                document.getElementById('otherSupplierFeedInRateFlat').value = '';
-
-                // Clear daily connection fee
-                document.getElementById('dailyConnectionRate').value = '';
-
-                // Clear TOU inputs
-                ['peak', 'shoulder', 'offpeak'].forEach(period => {
-                    document.getElementById(`tou_${period}_rate`).value = '';
-                    document.getElementById(`tou_${period}_start`).value = '00:00';
-                    document.getElementById(`tou_${period}_end`).value = '00:00';
-                    const container = document.querySelector(`[data-tou-period="${period}"]`);
-                    container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-                });
-                document.getElementById('tou_controlled_load_rate').value = '';
-                document.getElementById('otherSupplierFeedInRateTou').value = '';
-
-                // Clear demand tariff inputs
-                document.getElementById('enableDemandTariff').checked = false;
-                document.getElementById('demandTariffInputs').classList.add('hidden');
-                document.getElementById('demandRate').value = '';
-                document.getElementById('demandWindowStart').value = '16:00';
-                document.getElementById('demandWindowEnd').value = '21:00';
-                document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
-
-                saveAllSettings();
-            }
-
-            function applyPlanTemplate() {
-                const state = stateSelector.value;
-                const planName = planSelector.value;
-
-                if (!state || !planName) {
-                    if(planName === '') { // This is the "-- Custom --" selection
-                        clearPlanInputs();
-                    }
-                    return;
-                }
-
-                const template = supplierTemplates[state][planName];
-                if (!template) return;
-                
-                planNameInput.value = planName;
-                updateOtherSupplierHeading();
-
-                document.querySelector(`input[name="rateType"][value="${template.rateType}"]`).checked = true;
-                if (template.rateType === 'tou') {
-                    flatRateSection.classList.add('hidden');
-                    touRateSection.classList.remove('hidden');
-                    document.getElementById('otherSupplierFeedInRateTou').value = template.feedIn || 0;
-                    document.getElementById('tou_controlled_load_rate').value = template.cl || 0;
-                    
-                    ['peak', 'shoulder', 'offpeak'].forEach(period => {
-                        const periodConfig = template.tou[period];
-                        if (periodConfig) {
-                            document.getElementById(`tou_${period}_rate`).value = periodConfig.rate || 0;
-                            if (period !== 'offpeak') {
-                                document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
-                                document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
-
-                                const container = document.querySelector(`[data-tou-period="${period}"]`);
-                                container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                                    cb.checked = (periodConfig.days || []).includes(parseInt(cb.value));
-                                });
-                            }
-                        }
-                    });
-                } else {
-                    flatRateSection.classList.remove('hidden');
-                    touRateSection.classList.add('hidden');
-                    document.getElementById('otherSupplierRate').value = template.flat || 0;
-                    document.getElementById('otherSupplierFeedInRateFlat').value = template.feedIn || 0;
-                }
-                
-                document.getElementById('dailyConnectionRate').value = template.daily || 0;
-                
-                const demand = template.demand || { e: false };
-                enableDemandCheckbox.checked = demand.e;
-                if (demand.e) {
-                    demandInputsDiv.classList.remove('hidden');
-                    document.getElementById('demandRate').value = demand.r || 0;
-                    document.getElementById('demandWindowStart').value = demand.s || '16:00';
-                    document.getElementById('demandWindowEnd').value = demand.f || '21:00';
-                    document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                        cb.checked = (demand.days || []).includes(parseInt(cb.value));
-                    });
-                } else {
-                    demandInputsDiv.classList.add('hidden');
-                }
-                
-                saveAllSettings();
-            }
-            
-            function updateOtherSupplierHeading() {
-                const heading = document.getElementById('otherSupplierHeading');
-                const planName = planNameInput.value.trim();
-                heading.textContent = planName ? `${planName} Details` : 'Other Supplier Details';
-            }
-            
-            function saveAllSettings() {
-                localStorage.setItem('rateType', document.querySelector('input[name="rateType"]:checked').value);
-                localStorage.setItem('flatRate', document.getElementById('otherSupplierRate').value);
-                localStorage.setItem('flatFeedInRate', document.getElementById('otherSupplierFeedInRateFlat').value);
-                localStorage.setItem('dailyConnectionRate', document.getElementById('dailyConnectionRate').value);
-
-                const getPeriodSettings = (period) => {
-                    const container = document.querySelector(`[data-tou-period="${period}"]`);
-                    if (!container) return {};
-
-                    const rate = document.getElementById(`tou_${period}_rate`).value;
-
-                    if (period === 'offpeak') {
-                        return { rate: rate };
-                    }
-
-                    const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
-                    return {
-                        rate: rate,
-                        start: document.getElementById(`tou_${period}_start`).value,
-                        end: document.getElementById(`tou_${period}_end`).value,
-                        days: days
-                    };
-                };
-
-                const touConfig = {
-                    peak: getPeriodSettings('peak'),
-                    shoulder: getPeriodSettings('shoulder'),
-                    offpeak: getPeriodSettings('offpeak'),
-                    controlledLoad: document.getElementById('tou_controlled_load_rate').value,
-                    feedIn: document.getElementById('otherSupplierFeedInRateTou').value,
-                };
-                localStorage.setItem('touConfig', JSON.stringify(touConfig));
-                
-                localStorage.setItem('selectedState', stateSelector.value);
-                localStorage.setItem('selectedPlan', planSelector.value);
-                localStorage.setItem('planName', planNameInput.value);
-                
-                const demandSettings = {
-                    enabled: enableDemandCheckbox.checked,
-                    rate: document.getElementById('demandRate').value,
-                    start: document.getElementById('demandWindowStart').value,
-                    end: document.getElementById('demandWindowEnd').value,
-                    days: Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value))
-                };
-                localStorage.setItem('demandSettings', JSON.stringify(demandSettings));
-            }
-            
             function loadAllSettings() {
                 const savedState = localStorage.getItem('selectedState') || 'NSW';
                 stateSelector.value = savedState;
@@ -1020,6 +1019,8 @@
                 const resultsSection = document.getElementById('resultsSection');
                 if (!resultsSection.classList.contains('hidden')) {
                     document.getElementById('fetchData').click();
+                } else {
+                    updatePlanSavings();
                 }
             });
             planNameInput.addEventListener('input', () => {
@@ -2660,9 +2661,87 @@
             }
             
             await displayCalendar();
+            updatePlanSavings();
         }
 
         // --- Calendar & Tooltip Functions ---
+
+        function updatePlanSavings() {
+            console.log("updatePlanSavings called");
+            if (!lastResultDataPayload) {
+                console.log("No lastResultDataPayload, resetting plan selector text.");
+                const planSelector = document.getElementById('planSelector');
+                for (const option of planSelector.options) {
+                    if (option.value) {
+                        option.textContent = option.value;
+                    } else {
+                        option.textContent = "-- Custom --";
+                    }
+                }
+                return;
+            }
+
+            const state = document.getElementById('stateSelector').value;
+            const planSelector = document.getElementById('planSelector');
+            const originalSelectedPlanValue = planSelector.value;
+            const baselineCost = lastResultDataPayload.overallOtherCost;
+            console.log(`Baseline cost for ${originalSelectedPlanValue}: ${baselineCost}`);
+
+            const originalSaveAllSettings = window.saveAllSettings;
+            window.saveAllSettings = () => {};
+
+            try {
+                for (const option of planSelector.options) {
+                    const planValue = option.value;
+                    const planText = (planValue === "") ? "-- Custom --" : planValue;
+
+                    if (planValue === originalSelectedPlanValue) {
+                        option.textContent = planText + ' (current)';
+                        continue;
+                    }
+
+                    if (planValue === "") {
+                        option.textContent = planText;
+                        continue;
+                    }
+
+                    console.log(`Calculating for plan: ${planValue}`);
+                    planSelector.value = planValue;
+                    applyPlanTemplate();
+
+                    const tempChannelTotals = JSON.parse(JSON.stringify(lastResultDataPayload.channelTotals));
+                    const otherDemandInfo = calculateOtherDemandTariff(tempChannelTotals, lastResultDataPayload.startDateStr, lastResultDataPayload.endDateStr);
+                    calculateOtherSupplierCosts(tempChannelTotals, otherDemandInfo ? otherDemandInfo.cost : 0);
+
+                    let currentPlanTotalCost = 0;
+                    Object.values(tempChannelTotals).forEach(c => {
+                        const isFeedIn = c.type === 'feedIn';
+                        currentPlanTotalCost += adjustForGst(c.totalOtherCost || 0, isFeedIn);
+                    });
+
+                    const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * lastResultDataPayload.numDays / 100;
+                    currentPlanTotalCost += adjustForGst(otherDailyConnection);
+
+                    const difference = baselineCost - currentPlanTotalCost;
+                    console.log(`Cost for ${planValue}: ${currentPlanTotalCost}, Difference: ${difference}`);
+                    let savingsText = '';
+
+                    if (Math.abs(difference) < 0.01) {
+                        savingsText = ' (no difference)';
+                    } else if (difference > 0) {
+                        savingsText = ` ($${difference.toFixed(2)} cheaper)`;
+                    } else {
+                        savingsText = ` ($${Math.abs(difference).toFixed(2)} more)`;
+                    }
+                    option.textContent = planValue + savingsText;
+                }
+            } finally {
+                planSelector.value = originalSelectedPlanValue;
+                applyPlanTemplate();
+                window.saveAllSettings = originalSaveAllSettings;
+                 console.log("Finished updatePlanSavings, restored original selection.");
+            }
+        }
 
         function precalculateDailySummaries(channelData) {
             const summaries = {};
