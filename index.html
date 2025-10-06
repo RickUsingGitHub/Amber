@@ -683,6 +683,11 @@
 
             configElements.configHeader.addEventListener('click', toggleHandler);
 
+            // Stop clicks on the dropdown from toggling the config section
+            configElements.planSelectorContainer.addEventListener('click', (e) => {
+                e.stopPropagation();
+            });
+
             const apiKeyInput = document.getElementById('apiKey');
             const savedApiKey = localStorage.getItem('amberApiKey');
             if (savedApiKey) {
