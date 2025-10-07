@@ -36,7 +36,7 @@ Download `index.html`
 
 - Compact "Hidden" layout for quick swapping between plan comparisons
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/1b754c9d-3a39-4ac4-8d63-b9fc68401941" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/4c156a0d-4352-469b-b878-bb6f00bf2bcc" />
 
 
 ### 📈 **Interactive Visualizations**
