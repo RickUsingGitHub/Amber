@@ -2173,12 +2173,6 @@
                 grid: { drawOnChartArea: false },
             };
 
-            if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
-                const ratio = -usageMin / (usageMax - usageMin);
-                const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
-                priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
-            }
 
             usageChart = new Chart(ctx, {
                 type: 'bar',
@@ -2401,12 +2395,6 @@
                 grid: { drawOnChartArea: false },
             };
 
-            if (usageMin < 0 && usageMax > 0 && priceMax > 0) {
-                const ratio = -usageMin / (usageMax - usageMin);
-                const newPriceMin = (ratio * priceMax) / (ratio - 1);
-                priceAxisOptions.min = Math.floor(newPriceMin / 5) * 5;
-                priceAxisOptions.max = Math.ceil(priceMax / 5) * 5;
-            }
 
             dailyUsageChart = new Chart(ctx, {
                 type: 'bar',
