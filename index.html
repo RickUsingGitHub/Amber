@@ -2673,14 +2673,17 @@
             
             await displayCalendar();
             
-            const startDateValue = document.getElementById('startDate').value;
-            if (startDateValue) {
-                const startMonthKey = startDateValue.substring(0, 7); // e.g., "2025-10"
-                const targetMonthHeader = document.querySelector(`#calendar-container [data-month-key="${startMonthKey}"]`);
-                if (targetMonthHeader) {
-                    targetMonthHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // Scroll to the start month after a brief delay to allow rendering
+            setTimeout(() => {
+                const startDateValue = document.getElementById('startDate').value;
+                if (startDateValue) {
+                    const startMonthKey = startDateValue.substring(0, 7); // e.g., "2025-10"
+                    const targetMonthHeader = document.querySelector(`#calendar-container [data-month-key="${startMonthKey}"]`);
+                    if (targetMonthHeader) {
+                        targetMonthHeader.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
                 }
-            }            
+            }, 0); // A 0ms delay is enough to push this to the end of the execution queue 
             
             updatePlanSavings();
         }
