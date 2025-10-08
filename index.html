@@ -1391,7 +1391,6 @@
             localStorage.setItem('endDate', endDateValue);
             
             if (!apiKey) {
-                calendarSection.classList.remove('hidden');
                 messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'Please enter your Amber API key.';
                 return;
@@ -1400,7 +1399,6 @@
             localStorage.setItem('amberApiKey', apiKey);
 
              if (!startDateValue || !endDateValue) {
-                calendarSection.classList.remove('hidden');
                 messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'Please select a start and end date.';
                 return;
@@ -1419,7 +1417,6 @@
             overallEndDate.setHours(23, 59, 59, 999); 
 
             if (overallEndDate < overallStartDate) {
-                calendarSection.classList.remove('hidden');
                 messageContainer.classList.remove('hidden');
                 messageEl.textContent = 'End date cannot be before the start date.';
                 return;
@@ -1473,7 +1470,6 @@
             cachedAllChannelData = null;
             dailySummaries = {};
 
-            calendarSection.classList.remove('hidden');
             messageContainer.classList.remove('hidden');
             
             const headers = { 'Authorization': `Bearer ${apiKey}`, 'accept': 'application/json' };
