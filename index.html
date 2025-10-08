@@ -3251,9 +3251,9 @@
                                 </thead>
                                 <tbody class="divide-y divide-gray-200">`;
 
-            const sortedChannels = Object.entries(monthlySummary.channels).sort(([, a], [, b]) => a.type.localeCompare(b.type));
+            const theChannels = Object.entries(monthlySummary.channels);
 
-            sortedChannels.forEach(([id, data]) => {
+            theChannels.forEach(([id, data]) => {
                 if (Math.abs(data.kwh) > 0.01) {
                     contentHtml += `<tr>
                                         <td class="px-2 py-1 whitespace-nowrap">${id} (${data.type})</td>
