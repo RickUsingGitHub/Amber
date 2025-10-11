@@ -6,6 +6,8 @@
     <title>Amber Electric Cost Comparator & Exporter</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -292,7 +294,10 @@
                  </div>
 
                  <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[80vh]">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-4">Average 24-Hour Usage & Price</h3>
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage & Price</h3>
+                        <button id="resetAverageZoomBtn" class="bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
+                    </div>
                     <div class="h-[70vh] relative">
                         <canvas id="usagePriceChart"></canvas>
                     </div>
@@ -306,6 +311,7 @@
                         <button id="prevDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
                         <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
                         <button id="nextDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
+                        <button id="resetDailyZoomBtn" class="bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
                     </div>
                 </div>
             
@@ -2243,6 +2249,13 @@
                                     return label;
                                 }
                             }
+                        },
+                        zoom: {
+                            zoom: {
+                                enabled: true,
+                                drag: true,
+                                mode: 'x',
+                            }
                         }
                     }
                 }
@@ -2465,6 +2478,13 @@
                                     return label;
                                 }
                             }
+                        },
+                        zoom: {
+                            zoom: {
+                                enabled: true,
+                                drag: true,
+                                mode: 'x',
+                            }
                         }
                     }
                 }
@@ -2619,6 +2639,11 @@
             if (!usageChart) {
                 averageGraphContainer.classList.remove('hidden');
                 displayAverageGraph();
+                document.getElementById('resetAverageZoomBtn').addEventListener('click', () => {
+                    if (usageChart) {
+                        usageChart.resetZoom();
+                    }
+                });
             }
             
             if (!dailyUsageChart) {
@@ -2669,6 +2694,12 @@
                 if (daySelector.options.length > 0) {
                     daySelector.dispatchEvent(new Event('change'));
                 }
+
+                document.getElementById('resetDailyZoomBtn').addEventListener('click', () => {
+                    if (dailyUsageChart) {
+                        dailyUsageChart.resetZoom();
+                    }
+                });
             }
             
             await displayCalendar();
