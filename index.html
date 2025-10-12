@@ -1231,7 +1231,6 @@
                 const request = indexedDB.deleteDatabase(DB_NAME);
 
                 request.onsuccess = function() {
-                    console.log("Deleted database successfully");
                     cachedChannelData = null; 
                     dailySummaries = {};
                     lastFetchedStartDate = null;
@@ -1614,7 +1613,6 @@
 
             const now = new Date();
             if (cachedChannelData && lastFetchTimestamp && (now - lastFetchTimestamp < 3600000) && startDateValue === lastFetchedStartDate && endDateValue === lastFetchedEndDate) {
-                console.log("Using cached data, less than 1 hour old.");
                 messageContainer.classList.add('hidden');
                 resultsSection.classList.remove('hidden');
                 calendarSection.classList.remove('hidden');
@@ -2924,9 +2922,7 @@
         // --- Calendar & Tooltip Functions ---
 
         function updatePlanSavings() {
-            console.log("updatePlanSavings called");
             if (!lastResultDataPayload) {
-                console.log("No lastResultDataPayload, resetting plan selector text.");
                 const planSelector = document.getElementById('planSelector');
                 for (const option of planSelector.options) {
                     if (option.value) {
@@ -2942,7 +2938,6 @@
             const planSelector = document.getElementById('planSelector');
             const originalSelectedPlanValue = planSelector.value;
             const baselineCost = amberCostBaseline;
-            console.log(`Baseline cost (Amber): ${baselineCost}`);
 
             const originalSaveAllSettings = window.saveAllSettings;
             window.saveAllSettings = () => {};
@@ -2957,7 +2952,6 @@
                         continue;
                     }
 
-                    console.log(`Calculating for plan: ${planValue}`);
                     planSelector.value = planValue;
                     applyPlanTemplate();
 
@@ -2977,7 +2971,6 @@
                     currentPlanTotalCost += adjustForGst(otherDailyConnection);
 
                     const difference = baselineCost - currentPlanTotalCost;
-                    console.log(`Cost for ${planValue}: ${currentPlanTotalCost}, Difference: ${difference}`);
                     let savingsText = '';
 
                     if (Math.abs(difference) < 0.01) {
@@ -2993,7 +2986,6 @@
                 planSelector.value = originalSelectedPlanValue;
                 applyPlanTemplate();
                 window.saveAllSettings = originalSaveAllSettings;
-                 console.log("Finished updatePlanSavings, restored original selection.");
             }
         }
 
