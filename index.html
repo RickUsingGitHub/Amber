@@ -619,6 +619,18 @@
             return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
         }
 
+        function formatDateForCsv(dateString) {
+            const d = new Date(dateString);
+            function pad(n) { return String(n).padStart(2, '0'); }
+            const year = d.getFullYear();
+            const month = pad(d.getMonth() + 1);
+            const day = pad(d.getDate());
+            const hours = pad(d.getHours());
+            const minutes = pad(d.getMinutes());
+            const seconds = pad(d.getSeconds());
+            return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+        }
+
         // --- Global State & Functions ---
         const configElements = {};
 
@@ -1708,7 +1720,7 @@
             Object.values(cachedChannelData).forEach(channel => {
                 if (!channel.usageData || channel.usageData.length === 0) return;
                 channel.usageData.forEach(item => {
-                    const nemTime = item.nemTime || '';
+                    const nemTime = item.nemTime ? formatDateForCsv(item.nemTime) : '';
                     const kwh = (item.kwh !== undefined && item.kwh !== null) ? item.kwh : '';
                     const perKwh = (item.perKwh !== undefined && item.perKwh !== null) ? item.perKwh : '';
                     const row = `"${nemTime}",${channel.identifier},${channel.type},${kwh},${perKwh}\n`;
