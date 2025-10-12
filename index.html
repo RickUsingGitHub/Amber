@@ -2432,11 +2432,12 @@
                     scales: {
                         x: { 
                             stacked: true,
-                            ticks: { 
+                            ticks: {
                                 callback: function(value, index, ticks) {
                                     const label = this.getLabelForValue(value);
-                                    if (index % 24 === 0) return label; 
-                                    if (index === ticks.length - 1) return '24:00';                                    
+                                    if (index % 24 === 0) return label;
+                                    const isZoomed = this.chart.getZoomLevel() > 1;
+                                    if (index === ticks.length - 1 && !isZoomed) return '24:00';
                                     return '';
                                 },
                                 autoSkip: false,
@@ -2648,6 +2649,7 @@
                 displayAverageGraph();
                 document.getElementById('resetAverageZoomBtn').addEventListener('click', () => {
                     if (usageChart) {
+                        document.getElementById('resetAverageZoomBtn').classList.add('hidden');
                         usageChart.resetZoom();
                     }
                 });
@@ -2704,6 +2706,7 @@
 
                 document.getElementById('resetDailyZoomBtn').addEventListener('click', () => {
                     if (dailyUsageChart) {
+                        document.getElementById('resetDailyZoomBtn').classList.add('hidden');
                         dailyUsageChart.resetZoom();
                     }
                 });
