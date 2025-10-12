@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Amber Electric Cost Comparator & Exporter</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@0.7.7"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1/dist/chartjs-plugin-zoom.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         body {
@@ -296,7 +295,7 @@
                  <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[80vh]">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage & Price</h3>
-                        <button id="resetAverageZoomBtn" class="bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
+                        <button id="resetAverageZoomBtn" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
                     </div>
                     <div class="h-[70vh] relative">
                         <canvas id="usagePriceChart"></canvas>
@@ -311,7 +310,7 @@
                         <button id="prevDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
                         <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
                         <button id="nextDayBtn" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
-                        <button id="resetDailyZoomBtn" class="bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
+                        <button id="resetDailyZoomBtn" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset Zoom</button>
                     </div>
                 </div>
             
@@ -2251,9 +2250,15 @@
                             }
                         },
                         zoom: {
-                            enabled: true,
-                            drag: true,
-                            mode: 'x',
+                            zoom: {
+                                drag: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                                onZoomComplete: ({chart}) => {
+                                    document.getElementById('resetAverageZoomBtn').classList.toggle('hidden', chart.getZoomLevel() === 1);
+                                }
+                            }
                         }
                     }
                 }
@@ -2478,9 +2483,15 @@
                             }
                         },
                         zoom: {
-                            enabled: true,
-                            drag: true,
-                            mode: 'x',
+                            zoom: {
+                                drag: {
+                                    enabled: true
+                                },
+                                mode: 'x',
+                                onZoomComplete: ({chart}) => {
+                                    document.getElementById('resetDailyZoomBtn').classList.toggle('hidden', chart.getZoomLevel() === 1);
+                                }
+                            }
                         }
                     }
                 }
