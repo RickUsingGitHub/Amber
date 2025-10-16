@@ -32,21 +32,21 @@ Download `index.html`
 
 - Visual savings summary with clear cost breakdown
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/17aa2b28-809e-423c-8b9b-9cc76fcde3b2" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/1415779a-5aa3-431c-a726-3b32174f3c62" />
 
 - Compact "Hidden" layout for quick swapping between plan comparisons
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/4c156a0d-4352-469b-b878-bb6f00bf2bcc" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/bca887ae-7976-4ebf-b9f9-1a7daf40b782" />
 
 
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
 
-<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/c221a623-210e-4974-8a4e-9bbad751c5f4" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/c221a623-210e-4974-8a4e-9bbad751c5f4" />
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
 
-<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6a60479b-1ebe-4361-8e86-95ec33077638" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6a60479b-1ebe-4361-8e86-95ec33077638" />
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
@@ -54,7 +54,7 @@ Download `index.html`
 ### 🗓️ **Daily Summary Calendar**
 - Detailed daily and monthly overlays of usage/costs.
 
-<img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/9b81e2f9-45e5-4a42-9f6f-3cdd75a74a2d" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/9b81e2f9-45e5-4a42-9f6f-3cdd75a74a2d" />
 
 ### 💾 **Smart Data Management**
 - **Intelligent caching** using IndexedDB for faster repeat queries
