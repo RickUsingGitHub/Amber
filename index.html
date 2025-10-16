@@ -1364,18 +1364,49 @@
             }
         }
 
-        function showStatsForRick() {
-            const customPlansString = localStorage.getItem('customSupplierPlans');
-            const customPlans = JSON.parse(customPlansString) || {};
+        function formatBytes(bytes, decimals = 2) {
+            if (!+bytes) return '0 Bytes';
+            const k = 1024;
+            const dm = decimals < 0 ? 0 : decimals;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+        }
+
+        async function showStatsForRick() {
+            // 1. LocalStorage
+            let totalLocalStorageSize = 0;
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                totalLocalStorageSize += (key.length + value.length);
+            }
+            const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
             let planCount = 0;
             for (const state in customPlans) {
                 planCount += Object.keys(customPlans[state]).length;
             }
 
-            const stats = {
-                "Number of Custom Plans": planCount,
-                "LocalStorage Size (approx KB)": customPlansString ? (customPlansString.length / 1024).toFixed(2) : 0,
+            // 2. IndexedDB / Origin Storage
+            let storageEstimate = { usage: 'N/A', quota: 'N/A' };
+            if (navigator.storage && navigator.storage.estimate) {
+                const estimate = await navigator.storage.estimate();
+                storageEstimate.usage = formatBytes(estimate.usage);
+                storageEstimate.quota = formatBytes(estimate.quota);
+            }
+
+            // 3. JS Memory
+            let memoryInfo = {
+                used: 'N/A',
+                limit: 'N/A',
+                note: '(performance.memory API not supported)'
             };
+            if (performance.memory) {
+                memoryInfo.used = formatBytes(performance.memory.usedJSHeapSize);
+                memoryInfo.limit = formatBytes(performance.memory.jsHeapSizeLimit);
+                memoryInfo.note = '(Chromium-only feature)';
+            }
+
 
             const modal = document.createElement('div');
             modal.id = 'rick-stats-modal';
@@ -1391,17 +1422,20 @@
             modal.style.alignItems = 'center';
             modal.style.justifyContent = 'center';
 
+
             const modalContent = document.createElement('div');
             modalContent.style.backgroundColor = '#fefefe';
             modalContent.style.margin = 'auto';
             modalContent.style.padding = '20px';
             modalContent.style.border = '1px solid #888';
             modalContent.style.width = '80%';
-            modalContent.style.maxWidth = '500px';
+            modalContent.style.maxWidth = '600px';
             modalContent.style.borderRadius = '8px';
+            modalContent.className = 'text-gray-800';
 
             const closeBtn = document.createElement('span');
             closeBtn.innerHTML = '&times;';
+            closeBtn.className = 'close-btn'; // Add a class for easier selection
             closeBtn.style.color = '#aaa';
             closeBtn.style.float = 'right';
             closeBtn.style.fontSize = '28px';
@@ -1412,20 +1446,45 @@
             };
 
             const modalHeader = document.createElement('h2');
-            modalHeader.textContent = 'Application Stats';
-            modalHeader.style.marginBottom = '15px';
+            modalHeader.textContent = 'Application Storage & Memory Stats';
+            modalHeader.className = 'text-xl font-bold mb-4';
 
-            const statsList = document.createElement('ul');
-            for(const [key, value] of Object.entries(stats)) {
-                const listItem = document.createElement('li');
-                listItem.innerHTML = `<strong>${key}:</strong> ${value}`;
-                listItem.style.padding = '5px 0';
-                statsList.appendChild(listItem);
-            }
+            const statsTable = `
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Metric</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Usage</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Details</th>
+                        </tr>
+                    </thead>
+                    <tbody class="bg-white divide-y divide-gray-200 text-sm">
+                        <tr>
+                            <td class="px-4 py-2 font-medium">LocalStorage</td>
+                            <td class="px-4 py-2">${formatBytes(totalLocalStorageSize)}</td>
+                            <td class="px-4 py-2">${localStorage.length} keys, including ${planCount} custom plans.</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-medium">IndexedDB / Origin Storage</td>
+                            <td class="px-4 py-2">${storageEstimate.usage} of ${storageEstimate.quota}</td>
+                            <td class="px-4 py-2">Includes cached daily usage data.</td>
+                        </tr>
+                        <tr>
+                            <td class="px-4 py-2 font-medium">JavaScript Memory</td>
+                            <td class="px-4 py-2">${memoryInfo.used} of ${memoryInfo.limit}</td>
+                            <td class="px-4 py-2">${memoryInfo.note}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            `;
 
             modalContent.appendChild(closeBtn);
             modalContent.appendChild(modalHeader);
-            modalContent.appendChild(statsList);
+
+            const tableContainer = document.createElement('div');
+            tableContainer.innerHTML = statsTable;
+            modalContent.appendChild(tableContainer);
+
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
         }
