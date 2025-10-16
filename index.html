@@ -1435,6 +1435,7 @@
 
             const closeBtn = document.createElement('span');
             closeBtn.innerHTML = '&times;';
+            closeBtn.className = 'close-btn'; // Add a class for easier selection
             closeBtn.style.color = '#aaa';
             closeBtn.style.float = 'right';
             closeBtn.style.fontSize = '28px';
@@ -1479,7 +1480,10 @@
 
             modalContent.appendChild(closeBtn);
             modalContent.appendChild(modalHeader);
-            modalContent.innerHTML += statsTable;
+
+            const tableContainer = document.createElement('div');
+            tableContainer.innerHTML = statsTable;
+            modalContent.appendChild(tableContainer);
 
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
