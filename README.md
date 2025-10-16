@@ -1,4 +1,4 @@
-# Amber Electric Cost Comparator & Exporter
+# Amber Compare & Export
 
 A comprehensive **browser-based tool** for analyzing your [Amber Electric](https://www.amber.com.au/) energy usage, comparing costs with traditional suppliers, and exporting detailed CSV data.
 
