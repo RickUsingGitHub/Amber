@@ -1859,17 +1859,17 @@
                     let loopDate = new Date(overallStartDate);
                     while (loopDate <= overallEndDate) {
                         for (let hour = 1; hour < 5; hour++) {
-                            for (let minute = 0; minute < 60; minute += 30) {
+                            for (let minute = 0; minute < 60; minute += 5) {
                                 const fakeNemTime = new Date(loopDate);
                                 fakeNemTime.setHours(hour, minute, 0, 0);
 
                                 const endDate = new Date(fakeNemTime);
-                                endDate.setMinutes(endDate.getMinutes() + 30);
+                                endDate.setMinutes(endDate.getMinutes() + 5);
 
                                 selectedUsageData.push({
                                     nemTime: toLocalIsoWithOffset(endDate),
                                     channelIdentifier: clChannel.identifier,
-                                    kwh: 0.5, // 0.5 kWh per 30 mins = 1kW rate. 3 hours * 1kW = 3kWh
+                                    kwh: 0.25, // 0.25 kWh per 5 mins = 3kW rate. 4 hours * 3kW = 12kWh
                                     perKwh: 15,
                                     channelType: 'controlledLoad',
                                     tariffInformation: { demandWindow: false },
