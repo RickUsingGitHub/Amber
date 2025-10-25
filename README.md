@@ -32,11 +32,11 @@ Download `index.html`
 
 - Visual savings summary with clear cost breakdown
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/1415779a-5aa3-431c-a726-3b32174f3c62" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/636f7421-45cc-4880-8974-562af024e724" />
 
 - Compact "Hidden" layout for quick swapping between plan comparisons
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/bca887ae-7976-4ebf-b9f9-1a7daf40b782" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/3678327e-f1d4-460b-b286-63b727c52884" />
 
 
 ### 📈 **Interactive Visualizations**
@@ -50,6 +50,7 @@ Download `index.html`
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
+- Click/Drag to zoom on graphs
 
 ### 🗓️ **Daily Summary Calendar**
 - Detailed daily and monthly overlays of usage/costs.
@@ -184,14 +185,6 @@ Contributions welcome! Priority areas for improvement:
 2. Modify `index.html` directly (single-file architecture)
 3. Test across multiple browsers and screen sizes
 4. Submit pull requests with clear descriptions and test coverage
-
----
-
-## 📁 File Structure
-```
-├── index.html          # Complete self-contained application
-└── README.md          # This documentation
-```
 
 ---
 
