@@ -1858,7 +1858,7 @@
 
                     let loopDate = new Date(overallStartDate);
                     while (loopDate <= overallEndDate) {
-                        for (let hour = 11; hour < 14; hour++) {
+                        for (let hour = 1; hour < 5; hour++) {
                             for (let minute = 0; minute < 60; minute += 30) {
                                 const fakeNemTime = new Date(loopDate);
                                 fakeNemTime.setHours(hour, minute, 0, 0);
