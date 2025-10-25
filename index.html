@@ -1744,8 +1744,8 @@
                 }
                 currentSiteId = site.id;
                 const siteId = site.id;
-                const channels = site.channels;
-                if (!channels || channels.length === 0) throw new Error('No channels found for this site.');
+                let modifiableChannels = [...site.channels];
+                if (!modifiableChannels || modifiableChannels.length === 0) throw new Error('No channels found for this site.');
 
                 messageEl.textContent = `Site found: ${siteId}. Preparing to fetch usage data...`;
                 
@@ -1848,6 +1848,38 @@
                     }
                 }
 
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('fakeControlledLoad')) {
+                    let clChannel = modifiableChannels.find(c => c.type === 'controlledLoad');
+                    if (!clChannel) {
+                        clChannel = { identifier: 'C', type: 'controlledLoad' };
+                        modifiableChannels.push(clChannel);
+                    }
+
+                    let loopDate = new Date(overallStartDate);
+                    while (loopDate <= overallEndDate) {
+                        for (let hour = 1; hour < 5; hour++) {
+                            for (let minute = 0; minute < 60; minute += 5) {
+                                const fakeNemTime = new Date(loopDate);
+                                fakeNemTime.setHours(hour, minute, 0, 0);
+
+                                const endDate = new Date(fakeNemTime);
+                                endDate.setMinutes(endDate.getMinutes() + 5);
+
+                                selectedUsageData.push({
+                                    nemTime: toLocalIsoWithOffset(endDate),
+                                    channelIdentifier: clChannel.identifier,
+                                    kwh: 0.25, // 0.25 kWh per 5 mins = 3kW rate. 4 hours * 3kW = 12kWh
+                                    perKwh: 15,
+                                    channelType: 'controlledLoad',
+                                    tariffInformation: { demandWindow: false },
+                                });
+                            }
+                        }
+                        loopDate.setDate(loopDate.getDate() + 1);
+                    }
+                }
+
                 messageEl.textContent = 'Loading all cached data for calendar...';
 
                 const allCachedDates = await getAllCachedDates(db, siteId);
@@ -1868,9 +1900,9 @@
                     }
                 }
                 
-                let channelTotalsSelectedPeriod = {}; 
+                let channelTotalsSelectedPeriod = {};
                 let channelTotalsAllData = {};
-                channels.forEach(c => {
+                modifiableChannels.forEach(c => {
                     const initial = { identifier: c.identifier, type: c.type, totalKWh: 0, totalAmberCost: 0, usageData: [] };
                     channelTotalsSelectedPeriod[c.identifier] = JSON.parse(JSON.stringify(initial));
                     channelTotalsAllData[c.identifier] = JSON.parse(JSON.stringify(initial));
