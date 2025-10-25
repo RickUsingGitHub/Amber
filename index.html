@@ -2770,9 +2770,9 @@
                         <tr>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
                             <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amber</th>
-                            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">${planName}</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amber</th>
+                            <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">${planName}</th>
                         </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-200">
@@ -2796,9 +2796,9 @@
                     <tr>
                         <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${c.identifier}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${c.type}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${totalKWhText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalAmberCostText}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${totalOtherCostText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${totalKWhText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${totalAmberCostText}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${totalOtherCostText}</td>
                     </tr>
                 `;
             });
@@ -2812,12 +2812,12 @@
                 tableHTML += `
                     <tr class="font-semibold border-t">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Amber Demand Tariff</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                             <div class="text-xs">Max: ${maxDemandKw} kW</div>
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
                             <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
                         </td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedDemandCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedDemandCost.toFixed(2)}</td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
                     </tr>
                 `;
@@ -2832,13 +2832,13 @@
                 tableHTML += `
                     <tr class="font-semibold border-t">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">${planName} Demand Tariff</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                             <div class="text-xs">Max: ${maxDemandKw} kW</div>
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
                             <div class="text-xs">X ${numDays} days</div>
                         </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">$${adjustedOtherDemandCost.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherDemandCost.toFixed(2)}</td>
                     </tr>
                 `;
             }
@@ -2857,21 +2857,21 @@
             tableHTML += `
                 <tr class="font-semibold border-t">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberConnectionCost.toFixed(2)}</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedOtherDailyConnection.toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedAmberConnectionCost.toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedOtherDailyConnection.toFixed(2)}</td>
                 </tr>
                 <tr class="font-semibold">
                     <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberSubscriptionCost.toFixed(2)}</td>
-                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900">N/A</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedAmberSubscriptionCost.toFixed(2)}</td>
+                    <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">N/A</td>
                 </tr>
             `;
 
              tableHTML += `
                     <tr class="bg-gray-50 font-bold">
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedAmberTotal.toFixed(2)}</td>
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">$${adjustedOtherTotal.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedAmberTotal.toFixed(2)}</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedOtherTotal.toFixed(2)}</td>
                     </tr>
                 </tbody>
                 </table>
