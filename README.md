@@ -25,24 +25,25 @@ Download `index.html`
 - Compare Amber Electric costs vs traditional suppliers
 - Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
 - With or without GST included
-- **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
-- **User made templates** name your own plans and they will be saved to use again later.
-
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
 
 - Visual savings summary with clear cost breakdown
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/636f7421-45cc-4880-8974-562af024e724" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/07f79118-c701-42e6-b0e1-a074b2c3986a" />
+
+- **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
 
 - Compact "Hidden" layout for quick swapping between plan comparisons
 
   <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/3678327e-f1d4-460b-b286-63b727c52884" />
 
+- **Optional user made templates** name your own plans and they will be saved to use again later.
 
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
+  
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/c221a623-210e-4974-8a4e-9bbad751c5f4" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/39367f4b-81a8-4559-b8dd-768e1afbbe8b" />
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
 
