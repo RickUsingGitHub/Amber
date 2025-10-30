@@ -2947,16 +2947,23 @@
 
                 const start = new Date(startDateStr + 'T00:00:00');
                 const end = new Date(endDateStr + 'T00:00:00');
-                let current = new Date(start);
+                let currentDate = new Date(start);
+                const datesArray = []; // Use an array to collect and reverse dates
 
-                while (current <= end) {
-                    const dateValue = formatForInput(current);
+                while (currentDate <= end) {
+                    datesArray.push(formatForInput(currentDate));
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                
+                // --- MODIFICATION HERE: Reverse the array to put the most recent date first ---
+                datesArray.reverse();
+                
+                datesArray.forEach(dateValue => {
                     const option = document.createElement('option');
                     option.value = dateValue;
                     option.textContent = dateValue;
                     daySelector.appendChild(option);
-                    current.setDate(current.getDate() + 1);
-                }
+                });
 
                 daySelector.onchange = () => {
                     displayDailyGraph(daySelector.value);
