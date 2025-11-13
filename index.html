@@ -2345,7 +2345,7 @@
                 }
             });
 
-            const feedInIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0 }));
+            const feedInIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
             if (feedInChannel && feedInChannel.usageData) {
                 feedInChannel.usageData.forEach(item => {
                     const nemTimeStr = item.nemTime;
@@ -2355,6 +2355,8 @@
                     
                     if (feedInIntervals[intervalIndex]) {
                         feedInIntervals[intervalIndex].totalKwh += (parseFloat(item.kwh) || 0);
+                        feedInIntervals[intervalIndex].totalCents += (parseFloat(item.perKwh) || 0);
+                        feedInIntervals[intervalIndex].count += 1;
                     }
                 });
             }
@@ -2384,6 +2386,7 @@
             const avgFeedInData = feedInIntervals.map(i => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0);
             const avgControlledLoadData = controlledLoadIntervals.map(i => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
             const avgPriceData = intervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
+            const avgFeedInPriceData = feedInIntervals.map(i => i.count > 0 ? (i.totalCents / i.count) : 0);
 
             const ctx = document.getElementById('usagePriceChart').getContext('2d');
             
@@ -2440,7 +2443,7 @@
             }
 
             chartDatasets.push({
-                label: 'Average Spot Price (c/kWh)',
+                label: 'Average Usage Spot Price (c/kWh)',
                 data: avgPriceData,
                 type: 'line',
                 borderColor: 'rgba(255, 99, 132, 1)',
@@ -2449,6 +2452,19 @@
                 yAxisID: 'yPrice',
                 order: 1
             });
+
+            if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
+                chartDatasets.push({
+                    label: 'Average Feed-in Price (c/kWh)',
+                    data: avgFeedInPriceData,
+                    type: 'line',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                    fill: false,
+                    yAxisID: 'yPrice',
+                    order: 1
+                });
+            }
 
             const allUsage = [...avgUsageData, ...avgFeedInData, ...avgControlledLoadData];
             const usageMin = Math.min(...allUsage);
@@ -2571,7 +2587,7 @@
             });
 
             const feedInChannel = Object.values(cachedChannelData).find(c => c.type === 'feedIn');
-            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
+            const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: 0, count: 0 }));
             if (feedInChannel && feedInChannel.usageData) {
                 const dayDataFeedIn = feedInChannel.usageData.filter(item => item.nemTime.substring(0, 10) === selectedDateStr);
                 dayDataFeedIn.forEach(item => {
@@ -2582,6 +2598,8 @@
 
                     if (feedInIntervals[intervalIndex]) {
                         feedInIntervals[intervalIndex].kwh += (parseFloat(item.kwh) || 0);
+                        feedInIntervals[intervalIndex].price += (parseFloat(item.perKwh) || 0);
+                        feedInIntervals[intervalIndex].count += 1;
                     }
                 });
             }
@@ -2612,6 +2630,7 @@
             const feedInData = feedInIntervals.map(i => -i.kwh * 12);
             const controlledLoadData = controlledLoadIntervals.map(i => i.kwh * 12);
             const priceData = intervals.map(i => i.count > 0 ? i.price / i.count : null);
+            const feedInPriceData = feedInIntervals.map(i => i.count > 0 ? i.price / i.count : null);
 
             const ctx = document.getElementById('dailyChart').getContext('2d');
             if (dailyUsageChart) {
@@ -2673,7 +2692,7 @@
             }
             
             chartDatasets.push({
-                label: 'Spot Price (c/kWh)',
+                label: 'Usage Spot Price (c/kWh)',
                 data: priceData,
                 type: 'line',
                 borderColor: 'rgba(255, 99, 132, 1)',
@@ -2685,6 +2704,22 @@
                 order: 1,
                 spanGaps: true,
             });
+
+            if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
+                chartDatasets.push({
+                    label: 'Feed-in Price (c/kWh)',
+                    data: feedInPriceData,
+                    type: 'line',
+                    borderColor: 'rgba(40, 167, 69, 1)',
+                    backgroundColor: 'rgba(40, 167, 69, 0.2)',
+                    pointRadius: 0,
+                    borderWidth: 2,
+                    fill: false,
+                    yAxisID: 'yPrice',
+                    order: 1,
+                    spanGaps: true,
+                });
+            }
             
             const allUsage = [...usageData, ...feedInData, ...controlledLoadData];
             const usageMin = Math.min(...allUsage);
