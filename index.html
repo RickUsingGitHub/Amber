@@ -2431,7 +2431,7 @@
 
             if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
-                    label: `Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(1)} kWh, Price: ${feedInAvgPrice} c/kWh`,
+                    label: `Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(1)} kWh @ ${feedInAvgPrice} c/kWh`,
                     data: avgFeedInData,
                     backgroundColor: 'rgba(40, 167, 69, 0.6)',
                     borderColor: 'rgba(40, 167, 69, 1)',
