@@ -2407,7 +2407,7 @@
 
             if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
                 chartDatasets.push({
-                    label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(1)} kWh, Price: ${controlledLoadAvgPrice} c/kWh`,
+                    label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(1)} kWh @ ${controlledLoadAvgPrice} c/kWh`,
                     data: avgControlledLoadData,
                     backgroundColor: 'rgba(13, 110, 253, 0.6)',
                     borderColor: 'rgba(13, 110, 253, 1)',
@@ -2419,7 +2419,7 @@
             }
 
             chartDatasets.push({
-                label: `Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(1)} kWh, Price: ${generalAvgPrice} c/kWh`,
+                label: `Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(1)} kWh @ ${generalAvgPrice} c/kWh`,
                 data: avgUsageData,
                 backgroundColor: 'rgba(54, 162, 235, 0.6)',
                 borderColor: 'rgba(54, 162, 235, 1)',
