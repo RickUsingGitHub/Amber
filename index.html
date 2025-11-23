@@ -2951,10 +2951,10 @@
             let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
             if (savings > 0) {
                 savingsSummaryHTML += 'bg-green-100">';
-                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">Amber saved you <span class="font-bold">$${savings.toFixed(2)} \(${percentSave.toFixed(1)}\%\)</span> compared to <span class="italic">${planName}</span>!</p>`;
+                savingsSummaryHTML += `<p class="text-lg font-medium text-green-800">Amber saved you <span class="font-bold">$${savings.toFixed(2)} \(${percentSave.toFixed(1)}\%\)</span> compared to <span class="italic">${planName}!</span></p>`;
             } else {
                  savingsSummaryHTML += 'bg-red-100">';
-                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with <span class="italic">${planName}</span>.</p>`;
+                 savingsSummaryHTML += `<p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with <span class="italic">${planName}.</span></p>`;
             }
             savingsSummaryHTML += '</div>';
 
