@@ -43,11 +43,13 @@ Download `index.html`
 ### 📈 **Interactive Visualizations**
 - **24-hour average usage graphs** with spot price overlays
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/39367f4b-81a8-4559-b8dd-768e1afbbe8b" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/8e295dd7-1c19-44b4-ac9c-9e206f3a3d47" />
+
 
 - **Daily detailed charts** (5-minute intervals) for specific date analysis
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/6a60479b-1ebe-4361-8e86-95ec33077638" />
+  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/56f65cfc-a73f-4c6c-9d7e-84bad851f0dd" />
+
 
 - Separate tracking for general usage, solar feed-in, and controlled load
 - Hover tooltips for detailed data points
