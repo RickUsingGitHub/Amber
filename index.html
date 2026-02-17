@@ -371,6 +371,10 @@
         // --- Supplier Templates ---
         const supplierTemplates = {
             "ACT": {
+                "2026 ActewAGL - Standard Home": {
+                    rateType: 'flat', daily: 206.17, flat: 41.00, feedIn: 7.5, cl: 18.15,
+                    demand: { e: false }
+                },
                 "ActewAGL - Standard Home": {
                     rateType: 'flat', daily: 196.35, flat: 39.04, feedIn: 8.0, cl: 17.28,
                     demand: { e: false }
@@ -386,6 +390,15 @@
                 }
             },
             "NSW": {
+                "2026 EnergyAustralia - Total Plan": {
+                    rateType: 'tou', daily: 127.66, feedIn: 7.2, cl: 18.77,
+                    tou: {
+                        peak: { rate: 54.13, start: '14:00', end: '20:00', days: [1, 2, 3, 4, 5] },
+                        shoulder: { rate: 28.60, start: '07:00', end: '14:00', days: [1, 2, 3, 4, 5] },
+                        offpeak: { rate: 21.37 }
+                    },
+                    demand: { e: true, r: 35.23, s: '17:00', f: '20:00', days: [1,2,3,4,5] }
+                },
                 "EnergyAustralia - Total Plan": {
                     rateType: 'tou', daily: 121.58, feedIn: 7.6, cl: 17.88,
                     tou: {
@@ -418,12 +431,25 @@
                 "Greg TOU...": {"rateType":"tou","daily":102.2,"feedIn":4,"cl":16.24,"tou":{"peak":{"rate":40.44,"start":"16:00","end":"20:00","days":[1,2,3,4,5,6,0]},"shoulder":{"rate":26.73,"start":"10:00","end":"14:00","days":[1,2,3,4,5,6,0]},"offpeak":{"rate":33.72}},"demand":{"e":false,"r":0,"s":"16:00","f":"21:00","days":[]}}
             },
             "NT": {
+                "2026 Jacana Energy - Standard": {
+                    rateType: 'flat', daily: 157.5, flat: 29.93, feedIn: 8.86, cl: 18.9,
+                    demand: { e: false }
+                },
                 "Jacana Energy - Standard": {
                     rateType: 'flat', daily: 150.0, flat: 28.5, feedIn: 9.33, cl: 18.0,
                     demand: { e: false }
                 }
             },
             "QLD": {
+                 "2026 EnergyAustralia - Basic Home": {
+                    rateType: 'tou', daily: 136.6, feedIn: 4.8, cl: 19.1,
+                    tou: {
+                        peak: { rate: 46.73, start: '16:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 25.52, start: '07:00', end: '16:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 20.79 }
+                    },
+                    demand: { e: true, r: 36.86, s: '16:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                  "EnergyAustralia - Basic Home": {
                     rateType: 'tou', daily: 130.1, feedIn: 5.0, cl: 18.2,
                     tou: {
@@ -441,6 +467,15 @@
                 }
             },
             "SA": {
+                "2026 EnergyAustralia - Total Plan": {
+                    rateType: 'tou', daily: 152.46, feedIn: 5.7, cl: 23.2,
+                    tou: {
+                        peak: { rate: 63.11, start: '18:00', end: '21:00', days: [1,2,3,4,5] },
+                        shoulder: { rate: 42.53, start: '07:00', end: '18:00', days: [1,2,3,4,5] },
+                        offpeak: { rate: 31.71 }
+                    },
+                    demand: { e: true, r: 42.21, s: '18:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                 "EnergyAustralia - Total Plan": {
                     rateType: 'tou', daily: 145.2, feedIn: 6.0, cl: 22.1,
                     tou: {
@@ -455,6 +490,15 @@
                 "Alinta - Homesaver SA": { rateType: 'flat', daily: 135.5, flat: 41.8, feedIn: 6.5, cl: 21.5, demand: { e: false }}
             },
             "TAS": {
+                "2026 Aurora Energy - Residential Peak and Off-Peak": {
+                    rateType: 'tou', daily: 132.71, feedIn: 10.26, cl: 20.42,
+                    tou: {
+                        peak: { rate: 38.01, start: '07:00', end: '21:00', days: [1,2,3,4,5,6,0] }, // Note: Aurora has a complex structure, this is a simplified model. Peak is 7am-10am and 4pm-9pm weekdays. Rest is offpeak.
+                        shoulder: { rate: 17.70, start: '10:00', end: '16:00', days: [1,2,3,4,5,6,0] },
+                        offpeak: { rate: 17.70 }
+                    },
+                    demand: { e: false }
+                },
                 "Aurora Energy - Residential Peak and Off-Peak": {
                     rateType: 'tou', daily: 126.39, feedIn: 10.8, cl: 19.45,
                     tou: {
@@ -474,6 +518,15 @@
                 }
             },
             "VIC": {
+                "2026 EnergyAustralia - Flexi Plan": {
+                    rateType: 'tou', daily: 121.07, feedIn: 4.65, cl: 21.11,
+                    tou: {
+                        peak: { rate: 51.35, start: '15:00', end: '21:00', days: [1,2,3,4,5,6,0] },
+                        shoulder: { rate: 34.76, start: '07:00', end: '15:00', days: [1,2,3,4,5,6,0] },
+                        offpeak: { rate: 25.83 }
+                    },
+                    demand: { e: true, r: 31.29, s: '15:00', f: '21:00', days: [1,2,3,4,5] }
+                },
                 "EnergyAustralia - Flexi Plan": {
                     rateType: 'tou', daily: 115.3, feedIn: 4.9, cl: 20.1,
                     tou: {
@@ -496,6 +549,10 @@
                 "Origin - Basic VIC": { rateType: 'flat', daily: 122.3, flat: 32.1, feedIn: 4.9, cl: 20.5, demand: { e: false } },
             },
             "WA": {
+                 "2026 Synergy - Home Plan (A1)": {
+                    rateType: 'flat', daily: 121.85, flat: 33.99, feedIn: 9.5, // Feed-in varies, 10c is for peak times.
+                    demand: { e: false }
+                },
                  "Synergy - Home Plan (A1)": {
                     rateType: 'flat', daily: 116.05, flat: 32.37, feedIn: 10.0, // Feed-in varies, 10c is for peak times.
                     demand: { e: false }
@@ -2817,6 +2874,24 @@
             });
         }
 
+        function showAmberDemandTooltip(element, cost, monthName) {
+            hideTooltip();
+            const tooltip = document.createElement('div');
+            tooltip.id = 'day-tooltip'; // Reusing existing ID style
+            tooltip.className = 'absolute bg-white rounded-lg shadow-xl p-4 border border-gray-200 z-10 w-auto text-sm text-gray-800';
+
+            tooltip.innerHTML = `
+                <div class="font-bold mb-1">Estimated Monthly Tariff</div>
+                <div>Expected total for <span class="font-semibold">${monthName}</span>:</div>
+                <div class="text-lg font-bold text-blue-600 mt-1">$${cost.toFixed(2)}</div>
+                <div class="text-xs text-gray-500 mt-2 max-w-[200px]">
+                    Based on the max demand occurring in this month applied to all days in the month.
+                </div>
+            `;
+
+            positionTooltip(tooltip, element);
+        }
+
         async function displayResults(channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo) {
             lastResultDataPayload = { channelTotals, overallAmberCost, overallOtherCost, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo };
 
@@ -2832,6 +2907,8 @@
             let adjustedAmberTotal = 0;
             let adjustedOtherTotal = 0;
             
+            let projectedMonthlyCostData = null;
+
             let tableHTML = `
                 <p class="text-sm text-gray-500 mb-4">Period: ${numDays} days ${period}</p>
                 <table class="min-w-full divide-y divide-gray-200">
@@ -2876,11 +2953,26 @@
                 const adjustedDemandCost = adjustForGst(demandTariffInfo.cost || 0);
                 adjustedAmberTotal += adjustedDemandCost;
                 const maxDemandKw = ((demandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
-                const maxDemandDateTime = new Date(demandTariffInfo.maxDemandTime).toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
+                const maxDemandDateTimeObj = new Date(demandTariffInfo.maxDemandTime);
+                const maxDemandDateTime = maxDemandDateTimeObj.toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
                 
+                const monthOfMaxDemand = maxDemandDateTimeObj.getMonth();
+                const yearOfMaxDemand = maxDemandDateTimeObj.getFullYear();
+                const daysInMonth = new Date(yearOfMaxDemand, monthOfMaxDemand + 1, 0).getDate();
+                const projectedMonthlyCost = (demandTariffInfo.maxDemandKwh * 2) * (AMBER_DEMAND_TARIFF_COST_PER_KW_CENTS / 100) * daysInMonth;
+                const adjustedProjectedMonthlyCost = adjustForGst(projectedMonthlyCost);
+                const monthName = maxDemandDateTimeObj.toLocaleString('default', { month: 'long' });
+
+                projectedMonthlyCostData = {
+                    cost: adjustedProjectedMonthlyCost,
+                    month: monthName
+                };
+
                 tableHTML += `
                     <tr class="font-semibold border-t">
-                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">Amber Demand Tariff</td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">
+                             <span id="amber-demand-tooltip-trigger" class="cursor-help border-b border-dotted border-gray-500">Amber Demand Tariff</span>
+                        </td>
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                             <div class="text-xs">Max: ${maxDemandKw} kW</div>
                             <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>                            
@@ -2960,6 +3052,16 @@
 
             resultsTableContainer.innerHTML = tableHTML + savingsSummaryHTML;
             
+            if (projectedMonthlyCostData) {
+                const trigger = document.getElementById('amber-demand-tooltip-trigger');
+                if (trigger) {
+                    trigger.addEventListener('mouseenter', (e) => {
+                        showAmberDemandTooltip(e.currentTarget, projectedMonthlyCostData.cost, projectedMonthlyCostData.month);
+                    });
+                     trigger.addEventListener('mouseleave', hideTooltip);
+                }
+            }
+
             downloadCsvButton.disabled = false;
 
             // Do not re-render graphs on GST toggle.
