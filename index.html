@@ -1892,16 +1892,18 @@
                     fetchRanges.push({ start: rangeStart, end: rangeEnd });
                 }
 
-                for (const range of fetchRanges) {
-                    messageEl.textContent = `Fetching from Amber: ${range.start} to ${range.end}...`;
+                let completedChunks = 0;
+                const fetchPromises = fetchRanges.map(async (range) => {
                     const usageUrl = `${AMBER_API_URL}/sites/${siteId}/usage?startDate=${range.start}&endDate=${range.end}`;
                     const usageResponse = await fetch(usageUrl, { headers });
                     const responseText = await usageResponse.text();
-                     if (!usageResponse.ok) {
+
+                    if (!usageResponse.ok) {
                         let detail = responseText;
                         try { detail = (JSON.parse(responseText)).message || responseText; } catch (e) { /* not JSON */ }
                         throw new Error(`Failed to fetch usage for ${range.start} to ${range.end}. Status: ${usageResponse.status}. Message: ${detail}`);
                     }
+
                     const apiResponseData = JSON.parse(responseText);
 
                     const filteredDataForRange = apiResponseData.filter(item => {
@@ -1914,15 +1916,17 @@
                         return usageDateStr >= range.start && usageDateStr <= range.end;
                     });
 
-                    selectedUsageData.push(...filteredDataForRange);
-
                     // Update progress based on days in this fetched range
                     const rangeStartDt = new Date(range.start + "T00:00:00");
                     const rangeEndDt = new Date(range.end + "T00:00:00");
                     const daysInThisRange = Math.round((rangeEndDt - rangeStartDt) / (1000 * 3600 * 24)) + 1;
+
                     processedDays += daysInThisRange;
+                    completedChunks++;
+
                     const progress = (processedDays / numDays) * 100;
-                    if(progressBar) progressBar.style.width = `${progress}%`;
+                    if (progressBar) progressBar.style.width = `${progress}%`;
+                    messageEl.textContent = `Fetching data from Amber (${completedChunks}/${fetchRanges.length} chunks)...`;
 
                     const dailyData = {};
                     filteredDataForRange.forEach(item => {
@@ -1939,7 +1943,12 @@
                             await setUsageData(db, `${siteId}_${dateStr}`, dailyData[dateStr]);
                         }
                     }
-                }
+
+                    return filteredDataForRange;
+                });
+
+                const chunkResults = await Promise.all(fetchPromises);
+                chunkResults.forEach(data => selectedUsageData.push(...data));
 
                 const urlParams = new URLSearchParams(window.location.search);
                 if (urlParams.has('fakeControlledLoad')) {
