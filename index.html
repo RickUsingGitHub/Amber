@@ -146,33 +146,19 @@
                                     <div class="bg-red-50 p-3 rounded-lg border border-red-200" data-tou-period="peak">
                                         <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh)</label>
                                         <input type="number" id="tou_peak_rate" value="57.93" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <div class="grid grid-cols-2 gap-2 mt-2">
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_peak_start">Start</label><input type="time" id="tou_peak_start" value="14:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_peak_end">End</label><input type="time" id="tou_peak_end" value="20:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                        <div id="tou_peak_windows_container" class="mt-2 space-y-2">
+                                            <!-- Windows will be injected here -->
                                         </div>
-                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
-                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
-                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
-                                        </div>
+                                        <button type="button" onclick="addTouWindow('peak')" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
                                     </div>
                                     <!-- Shoulder -->
                                     <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200" data-tou-period="shoulder">
                                         <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate (c/kWh)</label>
                                         <input type="number" id="tou_shoulder_rate" value="30.61" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <div class="grid grid-cols-2 gap-2 mt-2">
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_shoulder_start">Start</label><input type="time" id="tou_shoulder_start" value="07:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
-                                            <div><label class="text-xs font-medium text-gray-600" for="tou_shoulder_end">End</label><input type="time" id="tou_shoulder_end" value="14:00" class="w-full text-sm p-1 border border-gray-300 rounded"></div>
+                                        <div id="tou_shoulder_windows_container" class="mt-2 space-y-2">
+                                            <!-- Windows will be injected here -->
                                         </div>
-                                        <div class="mt-2 text-xs font-medium text-gray-600">Days:</div>
-                                        <div class="grid grid-cols-4 gap-x-2 gap-y-1 mt-1 text-xs">
-                                            <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label> <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="3"><span>Wed</span></label> <label class="day-checkbox-label"><input type="checkbox" value="4"><span>Thu</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="5"><span>Fri</span></label> <label class="day-checkbox-label"><input type="checkbox" value="6"><span>Sat</span></label>
-                                            <label class="day-checkbox-label"><input type="checkbox" value="0"><span>Sun</span></label>
-                                        </div>
+                                        <button type="button" onclick="addTouWindow('shoulder')" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
                                     </div>
                                     <!-- Off-Peak -->
                                     <div class="bg-green-50 p-3 rounded-lg border border-green-200" data-tou-period="offpeak">
@@ -341,6 +327,45 @@
     </div>
 
     <script>
+        // --- UI Helpers ---
+        function addTouWindow(period, windowData = null) {
+            const container = document.getElementById(`tou_${period}_windows_container`);
+            if (!container) return;
+            const windowDiv = document.createElement('div');
+            windowDiv.className = 'tou-window relative bg-white border border-gray-300 p-2 rounded shadow-sm text-sm';
+
+            const startVal = windowData && windowData.start ? windowData.start : '00:00';
+            const endVal = windowData && windowData.end ? windowData.end : '00:00';
+            const daysArr = windowData && windowData.days ? windowData.days : [1,2,3,4,5,6,0];
+
+            windowDiv.innerHTML = `
+                <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove" onclick="this.closest('.tou-window').remove(); if(typeof saveAllSettings === 'function') saveAllSettings();">×</button>
+                <div class="grid grid-cols-2 gap-2 pr-6">
+                    <div><label class="text-xs font-medium text-gray-600">Start</label><input type="time" class="tou-start w-full text-xs p-1 border border-gray-300 rounded" value="${startVal}"></div>
+                    <div><label class="text-xs font-medium text-gray-600">End</label><input type="time" class="tou-end w-full text-xs p-1 border border-gray-300 rounded" value="${endVal}"></div>
+                </div>
+                <div class="mt-1 text-[10px] font-medium text-gray-600">Days:</div>
+                <div class="grid grid-cols-7 gap-1 mt-1 text-[10px]">
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="1" ${daysArr.includes(1) ? 'checked' : ''}><span class="mt-0.5">M</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="2" ${daysArr.includes(2) ? 'checked' : ''}><span class="mt-0.5">T</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="3" ${daysArr.includes(3) ? 'checked' : ''}><span class="mt-0.5">W</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="4" ${daysArr.includes(4) ? 'checked' : ''}><span class="mt-0.5">T</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="5" ${daysArr.includes(5) ? 'checked' : ''}><span class="mt-0.5">F</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="6" ${daysArr.includes(6) ? 'checked' : ''}><span class="mt-0.5">S</span></label>
+                    <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="0" ${daysArr.includes(0) ? 'checked' : ''}><span class="mt-0.5">S</span></label>
+                </div>
+            `;
+
+            // Trigger saveAllSettings when any input changes
+            windowDiv.querySelectorAll('input').forEach(input => {
+                input.addEventListener('change', () => {
+                    if (typeof saveAllSettings === 'function') saveAllSettings();
+                });
+            });
+
+            container.appendChild(windowDiv);
+        }
+
         // --- Security Helpers ---
         function escapeHTML(str) {
             if (!str) return str;
@@ -419,6 +444,22 @@
                 }
             },
             "NSW": {
+                "Diamond Energy - TOU (Ausgrid T53)": {
+                    rateType: 'tou', daily: 132.0, feedIn: 0, cl: 17.93,
+                    tou: {
+                        peak: { rate: 55.61, windows: [{ start: '17:00', end: '21:00', days: [1, 2, 3, 4, 5] }] },
+                        shoulder: {
+                            rate: 32.42,
+                            windows: [
+                                { start: '07:00', end: '17:00', days: [1, 2, 3, 4, 5] },
+                                { start: '21:00', end: '22:00', days: [1, 2, 3, 4, 5] },
+                                { start: '07:00', end: '22:00', days: [0, 6] }
+                            ]
+                        },
+                        offpeak: { rate: 33.00 }
+                    },
+                    demand: { e: false }
+                },
                 "2025 AGL Standing Offer": { rateType: 'flat', daily: 108.97, flat: 40.18, feedIn: 5.0, cl: 19.51, demand: { e: false } },
                 "2026 EnergyAustralia - Total Plan": {
                     rateType: 'tou', daily: 127.66, feedIn: 7.2, cl: 18.77,
@@ -799,10 +840,13 @@
             // Clear TOU inputs
             ['peak', 'shoulder', 'offpeak'].forEach(period => {
                 document.getElementById(`tou_${period}_rate`).value = '';
-                document.getElementById(`tou_${period}_start`).value = '00:00';
-                document.getElementById(`tou_${period}_end`).value = '00:00';
-                const container = document.querySelector(`[data-tou-period="${period}"]`);
-                container.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
+                if (period !== 'offpeak') {
+                    const windowsContainer = document.getElementById(`tou_${period}_windows_container`);
+                    if (windowsContainer) {
+                        windowsContainer.innerHTML = '';
+                        addTouWindow(period); // default empty window
+                    }
+                }
             });
             document.getElementById('tou_controlled_load_rate').value = '';
             document.getElementById('otherSupplierFeedInRateTou').value = '';
@@ -849,13 +893,15 @@
                     if (periodConfig) {
                         document.getElementById(`tou_${period}_rate`).value = periodConfig.rate || 0;
                         if (period !== 'offpeak') {
-                            document.getElementById(`tou_${period}_start`).value = periodConfig.start || '00:00';
-                            document.getElementById(`tou_${period}_end`).value = periodConfig.end || '00:00';
-
-                            const container = document.querySelector(`[data-tou-period="${period}"]`);
-                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                                cb.checked = (periodConfig.days || []).includes(parseInt(cb.value));
-                            });
+                            const windowsContainer = document.getElementById(`tou_${period}_windows_container`);
+                            if (windowsContainer) windowsContainer.innerHTML = '';
+                            if (periodConfig.windows && periodConfig.windows.length > 0) {
+                                periodConfig.windows.forEach(win => addTouWindow(period, win));
+                            } else if (periodConfig.start) {
+                                addTouWindow(period, { start: periodConfig.start, end: periodConfig.end, days: periodConfig.days });
+                            } else {
+                                addTouWindow(period); // default empty window
+                            }
                         }
                     }
                 });
@@ -904,12 +950,17 @@
                 if (period === 'offpeak') {
                     return { rate: rate };
                 }
-                const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+                    const windowElements = container.querySelectorAll('.tou-window');
+                    const windows = Array.from(windowElements).map(win => {
+                        return {
+                            start: win.querySelector('.tou-start').value,
+                            end: win.querySelector('.tou-end').value,
+                            days: Array.from(win.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value))
+                        };
+                    });
                 return {
                     rate: rate,
-                    start: document.getElementById(`tou_${period}_start`).value,
-                    end: document.getElementById(`tou_${period}_end`).value,
-                    days: days
+                        windows: windows
                 };
             };
 
@@ -1098,14 +1149,17 @@
 
                     const setPeriodSettings = (period, settings) => {
                         if (!settings) return;
-                        document.getElementById(`tou_${period}_rate`).value = settings.rate;
-                         if (period !== 'offpeak') {
-                            document.getElementById(`tou_${period}_start`).value = settings.start;
-                            document.getElementById(`tou_${period}_end`).value = settings.end;
-                            const container = document.querySelector(`[data-tou-period="${period}"]`);
-                            container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                                cb.checked = (settings.days || []).includes(parseInt(cb.value));
-                            });
+                        document.getElementById(`tou_${period}_rate`).value = settings.rate || 0;
+                        if (period !== 'offpeak') {
+                            const windowsContainer = document.getElementById(`tou_${period}_windows_container`);
+                            if (windowsContainer) windowsContainer.innerHTML = '';
+                            if (settings.windows && settings.windows.length > 0) {
+                                settings.windows.forEach(win => addTouWindow(period, win));
+                            } else if (settings.start) {
+                                addTouWindow(period, { start: settings.start, end: settings.end, days: settings.days });
+                            } else {
+                                addTouWindow(period); // default empty window
+                            }
                         }
                     };
                     setPeriodSettings('peak', config.peak);
@@ -1433,12 +1487,17 @@
                         return { rate: rate };
                     }
 
-                    const days = Array.from(container.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value));
+                    const windowElements = container.querySelectorAll('.tou-window');
+                    const windows = Array.from(windowElements).map(win => {
+                        return {
+                            start: win.querySelector('.tou-start').value,
+                            end: win.querySelector('.tou-end').value,
+                            days: Array.from(win.querySelectorAll('input[type="checkbox"]:checked')).map(cb => parseInt(cb.value))
+                        };
+                    });
                     return {
                         rate: rate,
-                        start: document.getElementById(`tou_${period}_start`).value,
-                        end: document.getElementById(`tou_${period}_end`).value,
-                        days: days
+                        windows: windows
                     };
                 };
 
@@ -2177,12 +2236,12 @@
             const day = date.getDay(); // 0 = Sunday, 1 = Monday, ...
             const time = date.getHours() * 100 + date.getMinutes(); // e.g., 14:30 -> 1430
 
-            const checkPeriod = (period) => {
-                if (!period || !period.days || !period.start || !period.end) return false;
-                if (!period.days.includes(day)) return false;
+            const checkWindow = (window) => {
+                if (!window || !window.days || !window.start || !window.end) return false;
+                if (!window.days.includes(day)) return false;
         
-                const startTime = parseInt(period.start.replace(':', ''));
-                const endTime = parseInt(period.end.replace(':', ''));
+                const startTime = parseInt(window.start.replace(':', ''));
+                const endTime = parseInt(window.end.replace(':', ''));
         
                 // Handle overnight periods (e.g., 22:00 to 07:00)
                 if (startTime > endTime) {
@@ -2190,6 +2249,15 @@
                 } else {
                     return time >= startTime && time < endTime;
                 }
+            };
+
+            const checkPeriod = (period) => {
+                if (!period) return false;
+                if (period.windows && period.windows.length > 0) {
+                    return period.windows.some(checkWindow);
+                }
+                // Legacy fallback for simple periods
+                return checkWindow(period);
             };
         
             if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate) || 0;
