@@ -213,6 +213,15 @@
                                 </div>
                                 <p class="text-xs text-gray-500 mt-1">Calculates a charge on your highest 30-min usage during the daily window across the entire period.</p>
                             </div>
+
+                            <div id="discountsSection" class="mt-4 pt-4 border-t">
+                                <h3 class="text-md font-medium text-gray-800 mb-2">Discounts</h3>
+                                <div id="discountsContainer" class="space-y-2">
+                                    <!-- Discount toggles will be injected here -->
+                                </div>
+                                <button type="button" onclick="addDiscount()" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Custom Discount</button>
+                                <p class="text-xs text-gray-500 mt-1">Discounts are applied to the total overall cost for the other supplier.</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -328,6 +337,49 @@
 
     <script>
         // --- UI Helpers ---
+        function addDiscount(discountData = null) {
+            const container = document.getElementById('discountsContainer');
+            if (!container) return;
+            const discountDiv = document.createElement('div');
+            discountDiv.className = 'discount-item flex items-center justify-between bg-white border border-gray-300 p-2 rounded shadow-sm text-sm mb-2';
+
+            const nameVal = discountData && discountData.name ? discountData.name : 'Custom Discount';
+            const percentageVal = discountData && discountData.percentage !== undefined ? discountData.percentage : 0;
+            const isApplied = discountData && discountData.applied !== undefined ? discountData.applied : true;
+
+            // Generate a unique ID for the toggle
+            const toggleId = `discount_toggle_${Math.random().toString(36).substr(2, 9)}`;
+
+            discountDiv.innerHTML = `
+                <div class="flex-grow mr-4">
+                    <div class="flex gap-2 mb-1">
+                        <input type="text" class="discount-name w-2/3 text-xs p-1 border border-gray-300 rounded" value="${escapeHTML(nameVal)}" placeholder="Discount Name">
+                        <div class="flex items-center w-1/3">
+                            <input type="number" class="discount-percentage w-full text-xs p-1 border border-gray-300 rounded text-right" value="${percentageVal}" step="0.1">
+                            <span class="ml-1 text-xs font-medium text-gray-600">%</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label for="${toggleId}" class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" id="${toggleId}" class="discount-applied sr-only peer" ${isApplied ? 'checked' : ''}>
+                        <div class="w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                        <span class="ml-2 text-xs font-medium text-gray-700">Apply</span>
+                    </label>
+                    <button type="button" class="text-gray-400 hover:text-red-500 font-bold px-1" title="Remove" onclick="this.closest('.discount-item').remove(); if(typeof saveAllSettings === 'function') saveAllSettings();">×</button>
+                </div>
+            `;
+
+            // Trigger saveAllSettings when inputs change
+            discountDiv.querySelectorAll('input').forEach(input => {
+                input.addEventListener('change', () => {
+                    if (typeof saveAllSettings === 'function') saveAllSettings();
+                });
+            });
+
+            container.appendChild(discountDiv);
+        }
+
         function addTouWindow(period, windowData = null) {
             const container = document.getElementById(`tou_${period}_windows_container`);
             if (!container) return;
@@ -394,6 +446,20 @@
             }
         }
 
+        function getDiscountMultiplier(planConfig = null) {
+            const discounts = planConfig ? (planConfig.discounts || []) : JSON.parse(localStorage.getItem('discounts') || '[]');
+            let totalDiscountPercentage = 0;
+            if (discounts && discounts.length > 0) {
+                discounts.forEach(d => {
+                    if (d.applied) {
+                        totalDiscountPercentage += parseFloat(d.percentage) || 0;
+                    }
+                });
+            }
+            totalDiscountPercentage = Math.min(totalDiscountPercentage, 100);
+            return 1 - (totalDiscountPercentage / 100);
+        }
+
         // --- Amber Electric Constants (Refactored) ---
         const AMBER_CONNECTION_COST_PER_DAY_CENTS = 109.894;
         const AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS = 82.203;
@@ -458,7 +524,8 @@
                         },
                         offpeak: { rate: 33.00 }
                     },
-                    demand: { e: false }
+                    demand: { e: false },
+                    discounts: [{ name: "Pay on time discount", percentage: 2, applied: true }]
                 },
                 "2025 AGL Standing Offer": { rateType: 'flat', daily: 108.97, flat: 40.18, feedIn: 5.0, cl: 19.51, demand: { e: false } },
                 "2026 EnergyAustralia - Total Plan": {
@@ -492,7 +559,8 @@
                 },
                 "Red Energy - Living Energy Saver": {
                     rateType: 'flat', daily: 105.0, flat: 34.2, feedIn: 6.0, cl: 16.5,
-                    demand: { e: false }
+                    demand: { e: false },
+                    discounts: [{ name: "Pay on time discount", percentage: 10, applied: true }]
                 },
                 "Alinta Energy - Homesaver": {
                     rateType: 'flat', daily: 112.0, flat: 35.8, feedIn: 5.2, cl: 17.0,
@@ -859,6 +927,10 @@
             document.getElementById('demandWindowEnd').value = '21:00';
             document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = false);
 
+            // Clear discounts
+            const discountsContainer = document.getElementById('discountsContainer');
+            if (discountsContainer) discountsContainer.innerHTML = '';
+
             saveAllSettings();
         }
 
@@ -928,6 +1000,14 @@
                 document.getElementById('demandTariffInputs').classList.add('hidden');
             }
 
+            const discountsContainer = document.getElementById('discountsContainer');
+            if (discountsContainer) {
+                discountsContainer.innerHTML = '';
+                if (template.discounts && template.discounts.length > 0) {
+                    template.discounts.forEach(discount => addDiscount(discount));
+                }
+            }
+
             saveAllSettings();
         }
 
@@ -985,6 +1065,16 @@
                 days: Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value))
             };
             localStorage.setItem('demandSettings', JSON.stringify(demandSettings));
+
+            const discountElements = document.querySelectorAll('.discount-item');
+            const discounts = Array.from(discountElements).map(el => {
+                return {
+                    name: el.querySelector('.discount-name').value,
+                    percentage: parseFloat(el.querySelector('.discount-percentage').value) || 0,
+                    applied: el.querySelector('.discount-applied').checked
+                };
+            });
+            localStorage.setItem('discounts', JSON.stringify(discounts));
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -1183,6 +1273,18 @@
                     document.getElementById('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach(cb => {
                         cb.checked = (settings.days || []).includes(parseInt(cb.value));
                     });
+                }
+
+                const savedDiscounts = localStorage.getItem('discounts');
+                const discountsContainer = document.getElementById('discountsContainer');
+                if (discountsContainer) discountsContainer.innerHTML = '';
+                if (savedDiscounts) {
+                    try {
+                        const discounts = JSON.parse(savedDiscounts);
+                        discounts.forEach(discount => addDiscount(discount));
+                    } catch(e) {
+                        console.error('Failed to parse saved discounts', e);
+                    }
                 }
             }
             
@@ -1468,13 +1570,23 @@
                 days: isDemandEnabled ? Array.from(document.getElementById('demandDaysContainer').querySelectorAll('input:checked')).map(cb => parseInt(cb.value)) : []
             };
 
+            const discountElements = document.querySelectorAll('.discount-item');
+            const discounts = Array.from(discountElements).map(el => {
+                return {
+                    name: el.querySelector('.discount-name').value,
+                    percentage: parseFloat(el.querySelector('.discount-percentage').value) || 0,
+                    applied: el.querySelector('.discount-applied').checked
+                };
+            });
+
             if (rateType === 'flat') {
                 return {
                     rateType: 'flat',
                     daily: parseFloat(document.getElementById('dailyConnectionRate').value),
                     flat: parseFloat(document.getElementById('otherSupplierRate').value),
                     feedIn: parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value),
-                    demand: demandConfig
+                    demand: demandConfig,
+                    discounts: discounts
                 };
             } else { // tou
                 const getPeriodSettings = (period) => {
@@ -1511,7 +1623,8 @@
                         shoulder: getPeriodSettings('shoulder'),
                         offpeak: getPeriodSettings('offpeak')
                     },
-                    demand: demandConfig
+                    demand: demandConfig,
+                    discounts: discounts
                 };
             }
         }
@@ -1842,6 +1955,8 @@
 
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
+                const discountMultiplier = getDiscountMultiplier();
+
                 let loopDate = new Date(overallStartDate);
                 while (loopDate <= overallEndDate) {
                     const dateStr = formatForInput(loopDate);
@@ -1849,11 +1964,11 @@
                     if (summary) {
                         overallAmberCost += summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                         const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + ((otherDailyConnection / 100) * discountMultiplier);
                     } else {
                          overallAmberCost += (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                          const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-                         overallOtherCost += (otherDailyConnection / 100);
+                         overallOtherCost += ((otherDailyConnection / 100) * discountMultiplier);
                     }
                     loopDate.setDate(loopDate.getDate() + 1);
                 }
@@ -2098,6 +2213,9 @@
 
                 let overallAmberCost = 0;
                 let overallOtherCost = 0;
+
+                const discountMultiplier = getDiscountMultiplier();
+
                 let loopDate = new Date(overallStartDate);
                 while (loopDate <= overallEndDate) {
                     const dateStr = formatForInput(loopDate);
@@ -2105,11 +2223,11 @@
                     if (summary) {
                         overallAmberCost += summary.amberCost + (summary.amberDemandCost || 0) + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                         const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                        overallOtherCost += summary.otherCost + (summary.otherDemandCost || 0) + ((otherDailyConnection / 100) * discountMultiplier);
                     } else {
                          overallAmberCost += (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
                          const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
-                         overallOtherCost += (otherDailyConnection / 100);
+                         overallOtherCost += ((otherDailyConnection / 100) * discountMultiplier);
                     }
                     loopDate.setDate(loopDate.getDate() + 1);
                 }
@@ -2166,6 +2284,8 @@
             const otherDailyConnection = parseFloat(document.getElementById('dailyConnectionRate').value) || 0;
             const amberFixedDailyCost = (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
 
+                const discountMultiplier = getDiscountMultiplier();
+
             let csvContent = "Date,Total Usage (kWh),Total Feed-in (kWh),Amber Usage Cost ($),Amber Demand Cost ($),Amber Fixed Cost ($),Amber Total ($),Other Usage Cost ($),Other Demand Cost ($),Other Fixed Cost ($),Other Total ($)\n";
 
             const sortedDates = Object.keys(dailySummaries).sort();
@@ -2175,7 +2295,8 @@
                 if (!summary) continue;
 
                 const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + amberFixedDailyCost;
-                const totalOtherCost = summary.otherCost + (summary.otherDemandCost || 0) + (otherDailyConnection / 100);
+                const otherDailyCostWithDiscount = (otherDailyConnection / 100) * discountMultiplier;
+                const totalOtherCost = summary.otherCost + (summary.otherDemandCost || 0) + otherDailyCostWithDiscount;
 
                 const row = [
                     dateStr,
@@ -2187,7 +2308,7 @@
                     totalAmberCost.toFixed(4),
                     summary.otherCost.toFixed(4),
                     (summary.otherDemandCost || 0).toFixed(4),
-                    (otherDailyConnection / 100).toFixed(4),
+                    otherDailyCostWithDiscount.toFixed(4),
                     totalOtherCost.toFixed(4)
                 ].join(',');
                 csvContent += row + '\n';
@@ -2273,6 +2394,7 @@
         
         function calculateOtherSupplierCosts(channelTotals, otherDemandCost, planConfig = null) {
             const rateType = planConfig ? planConfig.rateType : document.querySelector('input[name="rateType"]:checked').value;
+            const discountMultiplier = getDiscountMultiplier(planConfig);
 
             if (rateType === 'flat') {
                 const otherSupplierRate = planConfig ? planConfig.flat : (parseFloat(document.getElementById('otherSupplierRate').value) || 0);
@@ -2283,9 +2405,11 @@
                     if (c.type === 'feedIn') {
                         c.totalOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'general') {
-                        c.totalOtherCost = (totalKwhForPeriod * otherSupplierRate) / 100 + otherDemandCost;
+                        let baseCost = (totalKwhForPeriod * otherSupplierRate) / 100;
+                        c.totalOtherCost = (baseCost + otherDemandCost) * discountMultiplier;
                     } else {
-                         c.totalOtherCost = (totalKwhForPeriod * otherSupplierRate) / 100;
+                         let baseCost = (totalKwhForPeriod * otherSupplierRate) / 100;
+                         c.totalOtherCost = baseCost * discountMultiplier;
                     }
                 });
             } else { // 'tou'
@@ -2302,6 +2426,7 @@
                     } else if (c.type === 'controlledLoad') {
                         let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                         channelOtherCost = (totalKwhForPeriod * controlledLoadRate) / 100;
+                        channelOtherCost *= discountMultiplier;
                     }
                     else if (c.type === 'general') { 
                         channelOtherCost = c.usageData.reduce((total, item) => {
@@ -2309,7 +2434,8 @@
                             const rateForInterval = getTouRate(itemDate, touConfig, fallbackRate);
                             return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
                         }, 0);
-                        channelOtherCost += otherDemandCost;
+                        c.totalOtherCost = (channelOtherCost + otherDemandCost) * discountMultiplier;
+                        return; // Already set c.totalOtherCost, move to next channel
                     }
                     c.totalOtherCost = channelOtherCost;
                 });
@@ -2383,6 +2509,9 @@
             const isEnabled = planConfig ? planConfig.demand.e : document.getElementById('enableDemandTariff').checked;
             if (!isEnabled) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
             
+            // Note: discount is not applied here to avoid double-discounting since
+            // the returned cost and dailyCharge are discounted later when aggregated.
+
             const demandDays = planConfig ? planConfig.demand.days : (JSON.parse(localStorage.getItem('demandSettings') || '{}').days || []);
             if(demandDays.length === 0) return { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0 };
 
@@ -2478,10 +2607,19 @@
 
         function displayAverageGraph() {
             const averageGraphContainer = document.getElementById('averageGraphContainer');
+            const canvasContainer = averageGraphContainer.querySelector('.h-\\[70vh\\]');
             
+            // Remove any existing error messages
+            const existingError = averageGraphContainer.querySelector('.graph-error-msg');
+            if (existingError) existingError.remove();
+
             if (!cachedChannelData) {
                 console.error("No data available for graph.");
-                averageGraphContainer.innerHTML = '<p class="text-center text-red-500">No data available to render graph.</p>';
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'graph-error-msg text-center text-red-500';
+                errorMsg.textContent = 'No data available to render graph.';
+                canvasContainer.insertAdjacentElement('beforebegin', errorMsg);
+                canvasContainer.classList.add('hidden');
                 return;
             }
             const generalChannel = Object.values(cachedChannelData).find(c => c.type === 'general');
@@ -2490,9 +2628,14 @@
 
             if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
                 console.error("No general usage data for graph.");
-                 averageGraphContainer.innerHTML = '<p class="text-center text-red-500">No general usage data found to render graph.</p>';
+                const errorMsg = document.createElement('p');
+                errorMsg.className = 'graph-error-msg text-center text-red-500';
+                errorMsg.textContent = 'No general usage data found to render graph.';
+                canvasContainer.insertAdjacentElement('beforebegin', errorMsg);
+                canvasContainer.classList.add('hidden');
                 return;
             }
+            canvasContainer.classList.remove('hidden');
 
             const intervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
             
@@ -3318,7 +3461,9 @@
                         currentPlanTotalCost += adjustForGst(c.totalOtherCost || 0, isFeedIn);
                     });
 
-                    const otherDailyConnection = (parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * lastResultDataPayload.numDays / 100;
+                    const discountMultiplier = getDiscountMultiplier(planConfig);
+
+                    const otherDailyConnection = ((parseFloat(document.getElementById('dailyConnectionRate').value) || 0) * lastResultDataPayload.numDays / 100) * discountMultiplier;
                     currentPlanTotalCost += adjustForGst(otherDailyConnection);
 
                     const difference = baselineCost - currentPlanTotalCost;
@@ -3343,6 +3488,8 @@
         function precalculateDailySummaries(channelData) {
             const summaries = {};
             const monthlyDemandInfo = {};
+
+                const discountMultiplier = getDiscountMultiplier();
 
             // Step 1: Initialize summaries object and calculate base costs (no change)
             const allDatesWithData = new Set();
@@ -3410,8 +3557,8 @@
                         summaries[dateStr].channels[channel.identifier].otherCost -= otherItemCost;
                     } else {
                         summaries[dateStr].totalInKwh += kwh;
-                        summaries[dateStr].otherCost += otherItemCost;
-                        summaries[dateStr].channels[channel.identifier].otherCost += otherItemCost;
+                        summaries[dateStr].otherCost += (otherItemCost * discountMultiplier);
+                        summaries[dateStr].channels[channel.identifier].otherCost += (otherItemCost * discountMultiplier);
                     }
                 });
             });
@@ -3481,7 +3628,8 @@
                         
                         const dayOfWeek = loopDate.getDay();
                         if ((demandSettings.days || []).includes(dayOfWeek)) {
-                            summaries[dateStr].otherDemandCost = otherDailyDemandCharge;
+                            // Note: `otherDailyDemandCharge` from `calculateOtherDemandTariff` is un-discounted.
+                            summaries[dateStr].otherDemandCost = otherDailyDemandCharge * discountMultiplier;
                         }
                     }
                     loopDate.setDate(loopDate.getDate() + 1);
@@ -3681,8 +3829,12 @@
             const amberDemandCost = summary.amberDemandCost || 0;
             const otherDemandCost = summary.otherDemandCost || 0;
 
-            const totalAmberCharges = summary.amberCost + amberDemandCost + (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
-            const totalOtherCharges = summary.otherCost + otherDemandCost + (otherDailyConnection / 100);
+            const amberFixedDailyCost = (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100) + (AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100);
+            const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + amberFixedDailyCost;
+
+                const discountMultiplier = getDiscountMultiplier();
+
+            const totalOtherCost = summary.otherCost + (summary.otherDemandCost || 0) + ((otherDailyConnection / 100) * discountMultiplier);
 
             let contentHtml = `<h3 class="text-base font-bold text-gray-800 mb-2">Summary for ${dateStr}</h3>`;
             contentHtml += `<table class="min-w-full text-xs">
@@ -3709,7 +3861,7 @@
             contentHtml += `<tr class="border-t"></tr>`;
 
             const amberDaily = (AMBER_CONNECTION_COST_PER_DAY_CENTS + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS) / 100;
-            const otherDaily = otherDailyConnection / 100;
+            const otherDaily = (otherDailyConnection / 100) * discountMultiplier;
             let hasDemandRow = false;
 
             if (monthDemandInfo && monthDemandInfo.amber && monthDemandInfo.amber.cost > 0 && amberDemandCost > 0) {
@@ -3742,8 +3894,8 @@
 
             contentHtml += `<tr class="bg-gray-50 font-bold">
                                 <td class="px-2 py-1" colspan="2">Total</td>
-                                <td class="px-2 py-1 text-right">$${totalAmberCharges.toFixed(2)}</td>
-                                <td class="px-2 py-1 text-right">$${totalOtherCharges.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right">$${totalAmberCost.toFixed(2)}</td>
+                                <td class="px-2 py-1 text-right">$${totalOtherCost.toFixed(2)}</td>
                             </tr>`;
 
             contentHtml += `</tbody></table>`;
@@ -3806,8 +3958,10 @@
             const amberDemandCost = monthlySummary.amberDemandCost;
             const otherDemandCost = monthlySummary.otherDemandCost;
 
+                const discountMultiplier = getDiscountMultiplier();
+
             const totalAmberDailyCharges = (AMBER_CONNECTION_COST_PER_DAY_CENTS / 100 + AMBER_SUBSCRIPTION_COST_PER_DAY_CENTS / 100) * monthlySummary.daysInMonth;
-            const totalOtherDailyCharges = (otherDailyConnection / 100) * monthlySummary.daysInMonth;
+            const totalOtherDailyCharges = ((otherDailyConnection / 100) * monthlySummary.daysInMonth) * discountMultiplier;
 
             const totalAmberCharges = monthlySummary.amberCost + amberDemandCost + totalAmberDailyCharges;
             const totalOtherCharges = monthlySummary.otherCost + otherDemandCost + totalOtherDailyCharges;
