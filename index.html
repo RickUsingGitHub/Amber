@@ -2054,12 +2054,16 @@
                 }
 
                 let otherCachedUsageData = [];
+                const usageDataPromises = [];
                 for (const dateStr of allCachedDates) {
                     if (!selectedDates.has(dateStr)) {
-                        const cachedDayData = await getUsageData(db, `${siteId}_${dateStr}`);
-                        if (cachedDayData) {
-                            otherCachedUsageData.push(...cachedDayData);
-                        }
+                        usageDataPromises.push(getUsageData(db, `${siteId}_${dateStr}`));
+                    }
+                }
+                const cachedDaysData = await Promise.all(usageDataPromises);
+                for (const cachedDayData of cachedDaysData) {
+                    if (cachedDayData) {
+                        otherCachedUsageData.push(...cachedDayData);
                     }
                 }
                 
