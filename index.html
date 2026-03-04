@@ -738,22 +738,22 @@
             return `${year}-${month}-${day}`;
         };
 
-        function toLocalIsoWithOffset(d) {
+        function adjustNemTime(nemTimeStr) {
+            if (!nemTimeStr || nemTimeStr.length < 19) return nemTimeStr;
+            const localStr = nemTimeStr.substring(0, 19);
+            const d = new Date(localStr + "Z");
+            d.setUTCSeconds(d.getUTCSeconds() - 1);
+
             function pad(n) { return String(n).padStart(2, '0'); }
-            const year = d.getFullYear();
-            const month = pad(d.getMonth() + 1);
-            const day = pad(d.getDate());
-            const hours = pad(d.getHours());
-            const minutes = pad(d.getMinutes());
-            const seconds = pad(d.getSeconds());
+            const year = d.getUTCFullYear();
+            const month = pad(d.getUTCMonth() + 1);
+            const day = pad(d.getUTCDate());
+            const hours = pad(d.getUTCHours());
+            const minutes = pad(d.getUTCMinutes());
+            const seconds = pad(d.getUTCSeconds());
 
-            const offsetMinutes = -d.getTimezoneOffset();
-            const sign = offsetMinutes >= 0 ? '+' : '-';
-            const absOffset = Math.abs(offsetMinutes);
-            const offsetHours = pad(Math.floor(absOffset / 60));
-            const offsetMins = pad(absOffset % 60);
-
-            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${sign}${offsetHours}:${offsetMins}`;
+            const offset = nemTimeStr.substring(19);
+            return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}${offset}`;
         }
 
         function formatDateForCsv(dateString) {
@@ -1414,12 +1414,11 @@
             usageArray.forEach(item => {
                 // Ensure time is processed only once
                 if (!item.processedTime) {
-                    const itemDate = new Date(item.nemTime);
                     // The nemTime is the END of the interval. We adjust it back by one second
                     // to ensure all calculations (TOU, daily bucketing) use the date/time
                     // the usage actually occurred in, correctly handling the midnight boundary.
-                    itemDate.setSeconds(itemDate.getSeconds() - 1);
-                    item.nemTime = toLocalIsoWithOffset(itemDate);
+                    // We use adjustNemTime to avoid browser local timezone interference.
+                    item.nemTime = adjustNemTime(item.nemTime);
                     item.processedTime = true;
                 }
 
@@ -1935,10 +1934,10 @@
                 if (datesToFetch.length > 0) {
                     let rangeStart = datesToFetch[0];
                     let rangeEnd = datesToFetch[0];
-                    const getDaysBetween = (start, end) => (new Date(end) - new Date(start)) / (1000 * 3600 * 24) + 1;
+                    const getDaysBetween = (start, end) => (new Date(end + "T00:00:00") - new Date(start + "T00:00:00")) / (1000 * 3600 * 24) + 1;
 
                     for (let i = 1; i < datesToFetch.length; i++) {
-                        const nextDay = new Date(rangeEnd);
+                        const nextDay = new Date(rangeEnd + "T00:00:00");
                         nextDay.setDate(nextDay.getDate() + 1);
                         if (datesToFetch[i] === formatForInput(nextDay) && getDaysBetween(rangeStart, datesToFetch[i]) <= 7) {
                             rangeEnd = datesToFetch[i];
@@ -1966,12 +1965,11 @@
                     const apiResponseData = JSON.parse(responseText);
 
                     const filteredDataForRange = apiResponseData.filter(item => {
-                        const itemDate = new Date(item.nemTime);
                         // The NEM time is the END of the interval. To get the date the usage occurred on, 
                         // we subtract a second to correctly handle the midnight boundary.
-                        // e.g., nemTime 2025-01-02T00:00:00 becomes 2025-01-01T23:59:59, which correctly belongs to Jan 1st.
-                        itemDate.setSeconds(itemDate.getSeconds() - 1);
-                        const usageDateStr = formatForInput(itemDate);
+                        // We use adjustNemTime to avoid browser local timezone interference.
+                        const adjustedTime = adjustNemTime(item.nemTime);
+                        const usageDateStr = adjustedTime ? adjustedTime.substring(0, 10) : "";
                         return usageDateStr >= range.start && usageDateStr <= range.end;
                     });
 
@@ -1989,11 +1987,12 @@
 
                     const dailyData = {};
                     filteredDataForRange.forEach(item => {
-                        const itemDate = new Date(item.nemTime);
-                        itemDate.setSeconds(itemDate.getSeconds() - 1);
-                        const usageDateStr = formatForInput(itemDate);
-                        if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
-                        dailyData[usageDateStr].push(item);
+                        const adjustedTime = adjustNemTime(item.nemTime);
+                        const usageDateStr = adjustedTime ? adjustedTime.substring(0, 10) : "";
+                        if (usageDateStr) {
+                            if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
+                            dailyData[usageDateStr].push(item);
+                        }
                     });
 
                     for (const dateStr in dailyData) {
@@ -3354,8 +3353,8 @@
 
             const sortedDates = [...allDatesWithData].sort();
             if (sortedDates.length > 0) {
-                const start = new Date(sortedDates[0]);
-                const end = new Date(sortedDates[sortedDates.length - 1]);
+                const start = new Date(sortedDates[0] + "T00:00:00");
+                const end = new Date(sortedDates[sortedDates.length - 1] + "T00:00:00");
                 let loopDate = new Date(start);
                 while (loopDate <= end) {
                     const dateStr = formatForInput(loopDate);
