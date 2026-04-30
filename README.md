@@ -167,12 +167,6 @@ Contributions welcome! Priority areas for improvement:
 ### High Priority
 - **Additional supplier templates** for more Australian energy retailers
 
-### Development Setup
-1. Fork the repository
-2. Modify `index.html` directly (single-file architecture)
-3. Test across multiple browsers and screen sizes
-4. Submit pull requests with clear descriptions and test coverage
-
 ---
 
 ## 🆘 Support & Troubleshooting
