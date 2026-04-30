@@ -157,7 +157,6 @@ Configure comparison rates (auto-filled if using templates):
 - **Data availability** - Limited by Amber's data retention policies
 - **Comparison accuracy** - Traditional supplier calculations are estimates based on published tariffs
 - **Template accuracy** - Supplier rates may change; verify current rates for precise comparisons
-- **Browser storage limits** - Very large datasets may impact browser performance
 
 ---
 
@@ -167,15 +166,6 @@ Contributions welcome! Priority areas for improvement:
 
 ### High Priority
 - **Additional supplier templates** for more Australian energy retailers
-- **Seasonal analysis features** (quarterly, yearly comparisons)
-
-### Medium Priority
-- **API error handling** improvements and retry logic
-- **Advanced visualization options** (heatmaps, usage distribution charts)
-
-### Low Priority
-- **Multi-site support** for customers with multiple properties
-- **Bill prediction features** based on usage patterns
 
 ### Development Setup
 1. Fork the repository
@@ -198,26 +188,7 @@ Contributions welcome! Priority areas for improvement:
 - Confirm your Amber account is fully activated
 - Ensure you have an active electricity connection with Amber
 - Contact Amber support if the issue persists
-
-**Slow Performance or Timeouts**
-- Try smaller date ranges (1-2 weeks) for initial analysis
-- Clear browser cache and IndexedDB storage
-- Check browser console for specific error messages
-- Use the progress log to identify bottlenecks
-
-**Data Discrepancies**
-- Verify date ranges don't extend into the future
-- Check that supplier rate templates match your actual tariff
-- Remember that traditional supplier costs are estimates
-- Consider seasonal variations in usage patterns
-
-### Getting Help
-1. **Check browser console** for detailed error messages
-2. **Review API permissions** in Amber developer portal
-3. **Try incognito/private mode** to eliminate cache issues
-4. **Open GitHub issues** for reproducible bugs with clear steps
-5. **Check Amber's API status** page for service interruptions
-
+  
 ---
 
 ## 💡 Tips for Best Results
