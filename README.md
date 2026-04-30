@@ -8,14 +8,8 @@ Built with [TailwindCSS](https://tailwindcss.com/) and [Chart.js](https://www.ch
 
 ## 🚀 Quick Start
 
-### Option 1: Run Online (Recommended)
+### Run Online
 👉 **[Launch App Directly](https://rickusinggithub.github.io/Amber/)**
-
-### Option 2: Run Locally
-Download `index.html`
-### Now
-1. Open in any modern web browser
-2. Enter your Amber API key and start analyzing
 
 ---
 
