@@ -444,22 +444,6 @@
                 }
             },
             "NSW": {
-                "2026 Flow Power - Flow Home TOU": {
-                    rateType: 'tou', daily: 134.19, feedIn: { peak: { rate: 45.00, start: '17:30', end: '19:30', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 0.00 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 34.00, start: '00:00', end: '00:00', days: [] },
-                        offpeak: { rate: 34.00 }
-                    },
-                    demand: { e: false }
-                },
-                "2026 GloBird Energy - Solar": {
-                    rateType: 'tou', daily: 100, feedIn: { peak: { rate: 10, start: '15:00', end: '21:00', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 3 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 40, start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5] },
-                        offpeak: { rate: 30 }
-                    },
-                    demand: { e: false }
-                },
                 "Diamond Energy - TOU (Ausgrid T53)": {
                     rateType: 'tou', daily: 132.0, feedIn: 3, cl: 17.93,
                     tou: {
@@ -526,22 +510,6 @@
                 }
             },
             "QLD": {
-                "2026 Flow Power - Flow Home TOU": {
-                    rateType: 'tou', daily: 110, feedIn: { peak: { rate: 45.00, start: '17:30', end: '19:30', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 0.00 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 30.00, start: '00:00', end: '00:00', days: [] },
-                        offpeak: { rate: 30.00 }
-                    },
-                    demand: { e: false }
-                },
-                "2026 GloBird Energy - Solar": {
-                    rateType: 'tou', daily: 100, feedIn: { peak: { rate: 10, start: '15:00', end: '21:00', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 3 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 35, start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5] },
-                        offpeak: { rate: 25 }
-                    },
-                    demand: { e: false }
-                },
                  "2025 Origin Go Variable": { rateType: 'flat', daily: 117.11, flat: 29.5, feedIn: 5.0, cl: 19.0, demand: { e: false } },
                  "2026 EnergyAustralia - Basic Home": {
                     rateType: 'tou', daily: 136.6, feedIn: 4.8, cl: 19.1,
@@ -569,22 +537,6 @@
                 }
             },
             "SA": {
-
-                "2026 Flow Power - Flow Home TOU": {
-                    rateType: 'tou', daily: 110, feedIn: { peak: { rate: 45.00, start: '17:30', end: '19:30', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 0.00 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 30.00, start: '00:00', end: '00:00', days: [] },
-                        offpeak: { rate: 30.00 }
-                    },
-                    demand: { e: false }
-                },
-                "2026 GloBird Energy - Solar": {
-                    rateType: 'tou', daily: 100, feedIn: { peak: { rate: 10, start: '15:00', end: '21:00', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 3 } }, cl: 0,
-                    tou: {
-                        offpeak: { rate: 25 }
-                    },
-                    demand: { e: false }
-                },
                 "2025 Origin Standing Offer": { rateType: 'flat', daily: 140.0, flat: 43.5, feedIn: 6.0, cl: 23.0, demand: { e: false } },
                 "2026 EnergyAustralia - Total Plan": {
                     rateType: 'tou', daily: 152.46, feedIn: 5.7, cl: 23.2,
@@ -637,22 +589,6 @@
                 }
             },
             "VIC": {
-                "2026 Flow Power - Flow Home TOU": {
-                    rateType: 'tou', daily: 69.89, feedIn: { peak: { rate: 35.00, start: '17:30', end: '19:30', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 0.00 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 28.57, start: '00:00', end: '00:00', days: [] },
-                        offpeak: { rate: 28.57 }
-                    },
-                    demand: { e: false }
-                },
-                "2026 GloBird Energy - Solar": {
-                    rateType: 'tou', daily: 100, feedIn: { peak: { rate: 6.57, start: '15:00', end: '21:00', days: [0, 1, 2, 3, 4, 5, 6] }, offpeak: { rate: 0 } }, cl: 0,
-                    tou: {
-                        peak: { rate: 35, start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5] },
-                        offpeak: { rate: 25 }
-                    },
-                    demand: { e: false }
-                },
                 "2025-26 VDO (AusNet Services)": { rateType: 'flat', daily: 141.46, flat: 34.77, feedIn: 4.9, cl: 23.99, demand: { e: false } },
                 "2025-26 VDO (CitiPower)": { rateType: 'flat', daily: 124.07, flat: 27.33, feedIn: 4.9, demand: { e: false } },
                 "2026 EnergyAustralia - Flexi Plan": {
@@ -2345,15 +2281,7 @@
                 Object.values(channelTotals).forEach(c => {
                     let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                     if (c.type === 'feedIn') {
-                        if (typeof feedInRate === 'object' && feedInRate !== null) {
-                            c.totalOtherCost = c.usageData.reduce((total, item) => {
-                                const itemDate = new Date(item.nemTime);
-                                const rateForInterval = getTouRate(itemDate, feedInRate, 0);
-                                return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
-                            }, 0) * -1;
-                        } else {
-                            c.totalOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
-                        }
+                        c.totalOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'general') {
                         c.totalOtherCost = (totalKwhForPeriod * otherSupplierRate) / 100 + otherDemandCost;
                     } else {
@@ -2362,23 +2290,15 @@
                 });
             } else { // 'tou'
                 const touConfig = planConfig ? planConfig.tou : JSON.parse(localStorage.getItem('touConfig') || '{}');
-                const feedInRate = planConfig ? planConfig.feedIn : (JSON.parse(localStorage.getItem('touConfig') || '{}').feedIn || 0);
+                const feedInRate = planConfig ? planConfig.feedIn : (parseFloat(JSON.parse(localStorage.getItem('touConfig') || '{}').feedIn) || 0);
                 const controlledLoadRate = planConfig ? planConfig.cl : (parseFloat(JSON.parse(localStorage.getItem('touConfig') || '{}').controlledLoad) || 0);
                 const fallbackRate = planConfig ? 0 : (parseFloat(document.getElementById('otherSupplierRate').value) || 0);
 
                 Object.values(channelTotals).forEach(c => {
                     let channelOtherCost = 0;
                     if (c.type === 'feedIn') {
-                        if (typeof feedInRate === 'object' && feedInRate !== null) {
-                            channelOtherCost = c.usageData.reduce((total, item) => {
-                                const itemDate = new Date(item.nemTime);
-                                const rateForInterval = getTouRate(itemDate, feedInRate, 0);
-                                return total + ((parseFloat(item.kwh) || 0) * rateForInterval / 100);
-                            }, 0) * -1;
-                        } else {
-                            let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
-                            channelOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
-                        }
+                        let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
+                        channelOtherCost = -1 * (totalKwhForPeriod * feedInRate) / 100;
                     } else if (c.type === 'controlledLoad') {
                         let totalKwhForPeriod = c.usageData.reduce((acc, item) => acc + (parseFloat(item.kwh) || 0), 0);
                         channelOtherCost = (totalKwhForPeriod * controlledLoadRate) / 100;
@@ -3451,36 +3371,15 @@
 
             const getOtherRateForItem = (item, type) => {
                 const rateType = document.querySelector('input[name="rateType"]:checked').value;
-
-                // Get the feedInRate depending on whether it's from the selected predefined plan or the custom UI inputs
-                const planName = document.getElementById('planName').value;
-                const state = document.getElementById('stateSelector').value;
-                const planConfig = (supplierTemplates[state] && supplierTemplates[state][planName]) ? supplierTemplates[state][planName] : null;
-
                 if (rateType === 'flat') {
-                    if(type === 'feedIn') {
-                        const feedInRateFlat = planConfig ? planConfig.feedIn : (parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0);
-                        if (typeof feedInRateFlat === 'object' && feedInRateFlat !== null) {
-                            return getTouRate(new Date(item.nemTime), feedInRateFlat, 0);
-                        }
-                        return parseFloat(feedInRateFlat) || 0;
-                    }
+                    if(type === 'feedIn') return parseFloat(document.getElementById('otherSupplierFeedInRateFlat').value) || 0;
                     return parseFloat(document.getElementById('otherSupplierRate').value) || 0;
                 } else { // tou
-                    const touConfig = planConfig ? planConfig.tou : JSON.parse(localStorage.getItem('touConfig') || '{}');
-                    if(type === 'feedIn') {
-                        const feedInRateTou = planConfig ? planConfig.feedIn : (JSON.parse(localStorage.getItem('touConfig') || '{}').feedIn || 0);
-                        if (typeof feedInRateTou === 'object' && feedInRateTou !== null) {
-                            return getTouRate(new Date(item.nemTime), feedInRateTou, 0);
-                        }
-                        return parseFloat(feedInRateTou) || 0;
-                    }
-                    if(type === 'controlledLoad') {
-                        const clRate = planConfig ? planConfig.cl : (parseFloat(touConfig.controlledLoad) || 0);
-                        return parseFloat(clRate) || 0;
-                    }
+                    const touConfig = JSON.parse(localStorage.getItem('touConfig') || '{}');
+                    if(type === 'feedIn') return parseFloat(touConfig.feedIn) || 0;
+                    if(type === 'controlledLoad') return parseFloat(touConfig.controlledLoad) || 0;
                     
-                    const fallbackRate = planConfig ? 0 : (parseFloat(document.getElementById('otherSupplierRate').value) || 0);
+                    const fallbackRate = parseFloat(document.getElementById('otherSupplierRate').value) || 0;
                     return getTouRate(new Date(item.nemTime), touConfig, fallbackRate);
                 }
             };
