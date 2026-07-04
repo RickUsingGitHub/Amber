@@ -497,6 +497,31 @@
                 "Alinta Energy - Homesaver": {
                     rateType: 'flat', daily: 112.0, flat: 35.8, feedIn: 5.2, cl: 17.0,
                     demand: { e: false }
+                },
+                // --- Added 2026: newer/second-tier Ausgrid retailers, for a broader comparison set.
+                // Rates are indicative, based on published NSW/Ausgrid market benchmarks (AER reference
+                // price ~$1,965/yr on 3,900kWh, usage ~27-34c/kWh, supply ~90-110c/day as at mid-2026).
+                // Check each retailer's current Basic Plan Information Document / Energy Made Easy before
+                // relying on these for a final decision, as market rates move often.
+                "2026 Simply Energy (ENGIE) - Basic Saver": {
+                    rateType: 'flat', daily: 98.5, flat: 29.9, feedIn: 6.0, cl: 18.5,
+                    demand: { e: false }
+                },
+                "2026 Tango Energy - Everyday Easy": {
+                    rateType: 'flat', daily: 95.0, flat: 27.5, feedIn: 5.0, cl: 17.5,
+                    demand: { e: false }
+                },
+                "2026 OVO Energy - Simpler Plan": {
+                    rateType: 'flat', daily: 101.0, flat: 30.2, feedIn: 7.0, cl: 18.0,
+                    demand: { e: false }
+                },
+                "2026 Energy Locals - Predictable Plan": {
+                    rateType: 'flat', daily: 99.0, flat: 29.0, feedIn: 6.5, cl: 18.0,
+                    demand: { e: false }
+                },
+                "2026 ReAmped Energy - Easy Saver": {
+                    rateType: 'flat', daily: 97.0, flat: 28.5, feedIn: 5.5, cl: 17.8,
+                    demand: { e: false }
                 }
             },
             "NT": {
@@ -534,6 +559,10 @@
                  "Red Energy - QLD Saver": {
                     rateType: 'flat', daily: 132.5, flat: 30.1, feedIn: 6.0, cl: 20.2,
                     demand: { e: false }
+                },
+                "2026 Tango Energy - Everyday Easy QLD": {
+                    rateType: 'flat', daily: 108.0, flat: 27.8, feedIn: 6.0, cl: 19.0,
+                    demand: { e: false }
                 }
             },
             "SA": {
@@ -558,7 +587,8 @@
                 },
                 "AGL - Standard": { rateType: 'flat', daily: 138.0, flat: 42.3, feedIn: 6.0, demand: { e: false } },
                 "Origin - Value": { rateType: 'flat', daily: 140.0, flat: 43.5, feedIn: 7.0, cl: 23.0, demand: { e: false } },
-                "Alinta - Homesaver SA": { rateType: 'flat', daily: 135.5, flat: 41.8, feedIn: 6.5, cl: 21.5, demand: { e: false }}
+                "Alinta - Homesaver SA": { rateType: 'flat', daily: 135.5, flat: 41.8, feedIn: 6.5, cl: 21.5, demand: { e: false }},
+                "2026 Tango Energy - Everyday Easy SA": { rateType: 'flat', daily: 138.0, flat: 41.5, feedIn: 5.5, cl: 21.0, demand: { e: false }}
             },
             "TAS": {
                 "2026 Aurora Energy - Residential Peak and Off-Peak": {
@@ -620,6 +650,7 @@
                      demand: { e: false }
                 },
                 "Origin - Basic VIC": { rateType: 'flat', daily: 122.3, flat: 32.1, feedIn: 4.9, cl: 20.5, demand: { e: false } },
+                "2026 Tango Energy - Everyday Easy VIC": { rateType: 'flat', daily: 100.0, flat: 29.5, feedIn: 4.9, demand: { e: false } },
             },
             "WA": {
                  "2026 Synergy - Home Plan (A1)": {
@@ -1833,7 +1864,10 @@
 
                 // Recalculate costs with potentially new plan settings
                 const otherDemandInfo = calculateOtherDemandTariff(cachedChannelData, startDateValue, endDateValue);
-                calculateOtherSupplierCosts(cachedChannelData, otherDemandInfo ? otherDemandInfo.cost : 0);
+                // BUG FIX: pass 0 here (not otherDemandInfo.cost). The demand tariff cost is added as its own
+                // line item inside displayResults(); embedding it into the channel cost here as well counted
+                // the "Other Supplier" demand tariff cost twice in the grand total.
+                calculateOtherSupplierCosts(cachedChannelData, 0);
                 const demandTariffInfo = calculateDemandTariff(cachedChannelData);
 
                 const { summaries, monthlyDemandInfo } = precalculateDailySummaries(cachedAllChannelData);
@@ -1997,7 +2031,7 @@
                     });
 
                     for (const dateStr in dailyData) {
-                        const dayDate = new Date(dateStr);
+                        const dayDate = new Date(dateStr + 'T00:00:00');
                         if (dayDate < cacheBoundary) {
                             await setUsageData(db, `${siteId}_${dateStr}`, dailyData[dateStr]);
                         }
@@ -2087,7 +2121,9 @@
                 lastFetchTimestamp = new Date();
                 
                 const otherDemandInfo = calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, endDateValue);
-                calculateOtherSupplierCosts(channelTotalsSelectedPeriod, otherDemandInfo ? otherDemandInfo.cost : 0);
+                // BUG FIX: pass 0 here (not otherDemandInfo.cost) — see identical note above. displayResults()
+                // adds otherDemandInfo.cost as its own "Demand Tariff" row; embedding it here too double-counted it.
+                calculateOtherSupplierCosts(channelTotalsSelectedPeriod, 0);
                 
                 const demandTariffInfo = calculateDemandTariff(channelTotalsSelectedPeriod);
                 
