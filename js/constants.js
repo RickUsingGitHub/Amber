@@ -33,9 +33,11 @@
         'Jemena': '2026-27 VDO (Jemena)',
         'Powercor': '2026-27 VDO (Powercor)',
         'United Energy': '2026-27 VDO (United Energy)',
-        'Ausgrid': '2026 EnergyAustralia - Total Plan',
-        'Endeavour': '2026 EnergyAustralia - Total Plan',
-        'Essential Energy': '2026 EnergyAustralia - Total Plan'
+        'Ausgrid': '2026-27 DMO (Ausgrid)',
+        'Endeavour': '2026-27 DMO (Endeavour)',
+        'Essential Energy': '2026-27 DMO (Essential Energy)',
+        'Essential': '2026-27 DMO (Essential Energy)',
+        'Energex': '2026-27 DMO (Energex)'
     };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;
