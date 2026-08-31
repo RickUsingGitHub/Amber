@@ -1,210 +1,50 @@
 # Amber Compare & Export
 
-A comprehensive **browser-based tool** for analyzing your [Amber Electric](https://www.amber.com.au/) energy usage, comparing costs with traditional suppliers, and exporting detailed CSV data.
+A browser-based tool for analysing [Amber Electric](https://www.amber.com.au/) usage, comparing costs with traditional suppliers, and exporting CSV data.
 
-Built with [TailwindCSS](https://tailwindcss.com/) and [Chart.js](https://www.chartjs.org/) - no installation required, runs entirely in your browser.
+Runs entirely in your browser. No installation required.
 
----
+## Quick start
 
-## 🚀 Quick Start
+**[Launch the app](https://rickusinggithub.github.io/Amber/)**
 
-### Run Online
-👉 **[Launch App Directly](https://rickusinggithub.github.io/Amber/)**
+Open `index.html` on GitHub Pages, via `npm run serve`, or as a local file. Scripts are classic (not ES modules), so `file://` works in most desktop browsers.
 
----
+You need an Amber API key from [app.amber.com.au/developers](https://app.amber.com.au/developers).
 
-## ✨ Key Features
+## Features
 
-### 📊 **Cost Comparison Analysis**
-- Compare Amber Electric costs vs traditional suppliers
-- Support for both **Flat Rate** and **Time of Use (TOU)** tariffs
-- With or without GST included
+- Compare Amber vs a flat or time-of-use retailer plan, including controlled load and optional demand tariffs
+- Pre-built templates for each state, including 2026-27 Victorian Default Offer rates for all five networks
+- Time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak)
+- 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
+- Daily calendar; click a day to open it on the graph
+- IndexedDB cache, CSV export, GST toggle
+- Multi-site picker when your Amber account has more than one NMI
+- Editable Amber daily connection, subscription and demand rates
 
-- Visual savings summary with clear cost breakdown
+## Privacy
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/07f79118-c701-42e6-b0e1-a074b2c3986a" />
+- The API key is stored only in this browser (localStorage or sessionStorage). It is obfuscated, not encrypted.
+- Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else.
+- Uncheck **Remember key on this device** to keep the key in the session only.
 
-- **Pre-configured supplier templates** for major Australian retailers (EnergyAustralia, AGL, Origin, etc.)
+## Local development
 
-- Compact "Hidden" layout for quick swapping between plan comparisons
+```bash
+npm install
+npm run build:css
+npm test
+npm run serve
+```
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/3678327e-f1d4-460b-b286-63b727c52884" />
+`npm test` runs timezone/TOU unit checks, then Playwright against a local static server.
 
-- **Optional user made templates** name your own plans and they will be saved to use again later.
+## Known limitations
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/ce4c1c0b-407a-4fc6-bd17-46c268c190d2" />
-  
-### 📈 **Interactive Visualizations**
-- **24-hour average usage graphs** with spot price overlays
+- Amber API rate limits still apply; fetches run a few chunks at a time and retry 429s.
+- Retailer templates are estimates from published tariffs. Check Energy Made Easy or the retailer's current fact sheet before switching.
+- Public holidays are not treated as off-peak.
+- Comparison accuracy depends on the Amber fixed charges you enter (they vary by network).
 
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/8e295dd7-1c19-44b4-ac9c-9e206f3a3d47" />
-
-
-- **Daily detailed charts** (5-minute intervals) for specific date analysis
-
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/56f65cfc-a73f-4c6c-9d7e-84bad851f0dd" />
-
-
-- Separate tracking for general usage, solar feed-in, and controlled load
-- Hover tooltips for detailed data points
-- Click/Drag to zoom on graphs
-
-### 🗓️ **Daily Summary Calendar**
-- Detailed daily and monthly overlays of usage/costs.
-
-  <img style="width: 50%; height: auto;" alt="image" src="https://github.com/user-attachments/assets/9b81e2f9-45e5-4a42-9f6f-3cdd75a74a2d" />
-
-### 💾 **Smart Data Management**
-- **Intelligent caching** using IndexedDB for faster repeat queries
-- **CSV export** with all channels (usage, controlled load, feed-in)
-- **Collapsible configuration panel** for cleaner interface
-- Persistent settings storage for rate configurations
-- Optimized API calls to minimize Amber API usage
-- Cog options to clear cached data and/or Custom Plans
-  
----
-
-## 🔧 Setup Requirements
-
-### Essential
-- **Amber Electric API key** - Get yours at [app.amber.com.au/developers](https://app.amber.com.au/developers)
-- Modern web browser with JavaScript enabled
-
----
-
-## 📋 How to Use
-
-### 1. **Initial Configuration**
-- Enter your Amber Electric API key (stored securely in your browser)
-- **Select your state** (NSW, VIC, etc) to load relevant supplier templates
-- **Choose a supplier template** or select "Custom" for manual entry
-- Configuration panel can be collapsed after setup for cleaner interface
-
-### 2. **Set Rate Details**
-Configure comparison rates (auto-filled if using templates):
-- **Rate structure**: Flat Rate or Time of Use
-- **Daily connection charges**
-- **Usage rates** (general, peak/shoulder/off-peak for TOU, controlled load, solar feed-in)
-- **Demand tariff settings** (optional, configurable time windows)
-
-### 3. **Select Analysis Period**
-- Choose start and end dates for comparison
-- App automatically handles data fetching and caching
-- Progress tracking shows API calls vs cached data usage
-- Intelligent date range validation
-
-### 4. **Review Results**
-- **Cost comparison table** with channel-by-channel breakdown
-- **Demand tariff calculations** showing peak usage times and costs
-- **Savings summary** highlighting financial benefits/costs
-- **Interactive graphs** showing the flow throughout the day.
-- **Daily Summary Calendar** showing the flow throughout the days.
-- **CSV export** for further analysis in Excel/Google Sheets
-
----
-
-## 🔒 Privacy & Security
-
-- **API keys stored locally** in your browser only
-- **No data transmitted** to third-party servers
-- **Client-side processing** - your data never leaves your device
-- **Secure HTTPS** connection to Amber Electric API
-- **Automatic settings persistence** without compromising privacy
-
----
-
-## 📱 Browser Compatibility
-
-**Supported Browsers:**
-- Chrome/Edge (recommended)
-- Firefox
-- Safari
-- Any modern browser with ES6+ and IndexedDB support
-
-**Required Features:**
-- IndexedDB support
-- Fetch API
-- ES6 JavaScript features
-- Chart.js compatibility
-
----
-
-## 🎯 Use Cases
-
-### **Individual Analysis**
-- Track your energy usage patterns across different time periods
-- Identify peak usage times for cost optimization
-- Compare actual Amber savings vs traditional suppliers
-- Analyze solar generation efficiency and feed-in benefits
-
-### **Decision Making**
-- Evaluate if Amber Electric is right for your usage profile
-- Compare multiple supplier options using templates
-- Understand demand charge impacts on your bill
-- Optimize usage timing based on spot price patterns
-
-### **Data Export & Analysis**
-- Export detailed usage data for tax purposes or record keeping
-- Create custom analyses in spreadsheet software
-- Share data with energy consultants or solar installers
-- Archive historical usage records
-
----
-
-## 🚧 Known Limitations
-
-- **API rate limits** - Amber Electric API has usage restrictions (mitigated by intelligent caching)
-- **Data availability** - Limited by Amber's data retention policies
-- **Comparison accuracy** - Traditional supplier calculations are estimates based on published tariffs
-- **Template accuracy** - Supplier rates may change; verify current rates for precise comparisons
-
----
-
-## 🤝 Contributing
-
-Contributions welcome! Priority areas for improvement:
-
-### High Priority
-- **Additional supplier templates** for more Australian energy retailers
-
----
-
-## 🆘 Support & Troubleshooting
-
-### Common Issues
-
-**"Authentication failed. Your API Key appears to be invalid"**
-- Verify your API key at [app.amber.com.au/developers](https://app.amber.com.au/developers)
-- Ensure key has proper permissions for usage data access
-- Check for typos or extra spaces in the key field
-
-**"No sites found for this API key"**
-- Confirm your Amber account is fully activated
-- Ensure you have an active electricity connection with Amber
-- Contact Amber support if the issue persists
-  
----
-
-## 💡 Tips for Best Results
-
-### Data Analysis
-- **Use full monthly periods** for accurate cost comparisons
-- **Compare similar seasons** (summer vs summer) for consistency
-- **Monitor demand charges** - small changes in peak usage can have big cost impacts
-- **Track solar generation** patterns to optimize feed-in timing
-
-### Performance Optimization
-- **Start with recent data** (last 1-3 months) for faster initial loading
-- **Export data regularly** to build historical archives
-- **Use templates** instead of custom rates when possible for accuracy
-- **Collapse configuration panel** after setup to reduce visual clutter
-
-### Cost Optimization Insights
-- **Identify usage patterns** that coincide with high spot prices
-- **Analyze controlled load timing** for hot water optimization
-- **Monitor demand windows** to avoid peak charges
-- **Compare different supplier structures** to find the best fit for your profile
-
----
-
-*Built for Australian energy customers seeking transparency and control over their electricity costs*
+Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.

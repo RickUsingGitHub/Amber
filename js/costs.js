@@ -1,0 +1,416 @@
+(function (root) {
+    const Amber = root.Amber = root.Amber || {};
+
+    Amber.absKwh = function (value) {
+        const n = parseFloat(value);
+        if (!Number.isFinite(n)) return 0;
+        return Math.abs(n);
+    };
+
+    Amber.isEstimatedQuality = function (quality) {
+        if (!quality) return false;
+        const q = String(quality).toLowerCase();
+        return q === 'estimated' || q === 'estimate';
+    };
+
+    Amber.getTouRate = function (parts, touConfig, fallbackRate) {
+        if (!touConfig) return fallbackRate;
+        const checkPeriod = (period) => {
+            if (!period) return false;
+            if (period.windows && period.windows.length > 0) {
+                return period.windows.some((window) => Amber.windowMatches(window, parts));
+            }
+            return Amber.windowMatches(period, parts);
+        };
+        if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate) || 0;
+        if (checkPeriod(touConfig.shoulder)) return parseFloat(touConfig.shoulder.rate) || 0;
+        if (touConfig.offpeak && touConfig.offpeak.rate != null && touConfig.offpeak.rate !== '') {
+            return parseFloat(touConfig.offpeak.rate) || 0;
+        }
+        return fallbackRate;
+    };
+
+    Amber.getFeedInRate = function (parts, planConfig) {
+        const defaultRate = parseFloat(planConfig && planConfig.feedIn) || 0;
+        const windows = planConfig && planConfig.feedInWindows;
+        if (!windows || !windows.length) return defaultRate;
+        for (let i = 0; i < windows.length; i++) {
+            const window = windows[i];
+            if (Amber.windowMatches(window, parts)) return parseFloat(window.rate) || 0;
+        }
+        return defaultRate;
+    };
+
+    Amber.clockPartsForItem = function (item, planConfig, state) {
+        const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+        return Amber.getClockParts(nem, Amber.clockOptionsForState(state, planConfig));
+    };
+
+    Amber.otherRateForItem = function (item, channelType, planConfig, state) {
+        const parts = Amber.clockPartsForItem(item, planConfig, state);
+        if (channelType === 'feedIn') return Amber.getFeedInRate(parts, planConfig);
+        if (planConfig.rateType === 'flat') {
+            if (channelType === 'controlledLoad') {
+                const cl = parseFloat(planConfig.cl);
+                if (Number.isFinite(cl) && cl > 0) return cl;
+            }
+            return parseFloat(planConfig.flat) || 0;
+        }
+        if (channelType === 'controlledLoad') return parseFloat(planConfig.cl) || 0;
+        const fallback = parseFloat(planConfig.flat) || 0;
+        return Amber.getTouRate(parts, planConfig.tou, fallback);
+    };
+
+    Amber.calculateOtherSupplierCosts = function (channelTotals, planConfig, state) {
+        Object.values(channelTotals).forEach((channel) => {
+            let channelOtherCost = 0;
+            if (channel.type === 'feedIn') {
+                channelOtherCost = channel.usageData.reduce((total, item) => {
+                    const kwh = Amber.absKwh(item.kwh);
+                    const rate = Amber.otherRateForItem(item, 'feedIn', planConfig, state);
+                    return total - (kwh * rate) / 100;
+                }, 0);
+            } else if (channel.type === 'controlledLoad') {
+                channelOtherCost = channel.usageData.reduce((total, item) => {
+                    const kwh = Amber.absKwh(item.kwh);
+                    const rate = Amber.otherRateForItem(item, 'controlledLoad', planConfig, state);
+                    return total + (kwh * rate) / 100;
+                }, 0);
+            } else if (channel.type === 'general') {
+                channelOtherCost = channel.usageData.reduce((total, item) => {
+                    const kwh = Amber.absKwh(item.kwh);
+                    const rate = Amber.otherRateForItem(item, 'general', planConfig, state);
+                    return total + (kwh * rate) / 100;
+                }, 0);
+            } else {
+                channelOtherCost = channel.usageData.reduce((total, item) => {
+                    const kwh = Amber.absKwh(item.kwh);
+                    const rate = Amber.otherRateForItem(item, channel.type, planConfig, state);
+                    return total + (kwh * rate) / 100;
+                }, 0);
+            }
+            channel.totalOtherCost = channelOtherCost;
+        });
+    };
+
+    Amber.calculateDemandTariff = function (channelTotals, amberDemandCents) {
+        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        const empty = { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+        if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+            return empty;
+        }
+
+        const demandWindowUsage = generalChannel.usageData.filter((item) =>
+            item.tariffInformation && item.tariffInformation.demandWindow === true
+        );
+        if (demandWindowUsage.length === 0) return empty;
+
+        const thirtyMinChunks = {};
+        demandWindowUsage.forEach((item) => {
+            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+            const parts = Amber.parseNemParts(nem);
+            const key = Amber.thirtyMinBlockKey(parts);
+            thirtyMinChunks[key] = (thirtyMinChunks[key] || 0) + Amber.absKwh(item.kwh);
+        });
+
+        let maxDemandKwh = 0;
+        let maxDemandTime = null;
+        Object.keys(thirtyMinChunks).forEach((startTime) => {
+            if (thirtyMinChunks[startTime] > maxDemandKwh) {
+                maxDemandKwh = thirtyMinChunks[startTime];
+                maxDemandTime = startTime;
+            }
+        });
+        if (maxDemandKwh === 0) return empty;
+
+        const demandDaysSet = new Set(demandWindowUsage.map((item) => Amber.usageDateStr(item)));
+        const numberOfDemandDays = demandDaysSet.size;
+        const rate = amberDemandCents != null ? amberDemandCents : Amber.DEFAULT_AMBER_DEMAND_CENTS;
+        const demandTariffCost = maxDemandKwh * 2 * (rate / 100) * numberOfDemandDays;
+
+        return {
+            cost: demandTariffCost,
+            maxDemandKwh,
+            demandDays: numberOfDemandDays,
+            maxDemandTime
+        };
+    };
+
+    Amber.calculateOtherDemandTariff = function (channelTotals, startDateStr, endDateStr, planConfig, state) {
+        const empty = { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0, applicableDaysCount: 0 };
+        const demand = planConfig && planConfig.demand;
+        if (!demand || !demand.e) return empty;
+        const demandDays = demand.days || [];
+        if (!demandDays.length) return empty;
+
+        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
+            return empty;
+        }
+
+        const demandRate = parseFloat(demand.r) || 0;
+        const clockOpts = Amber.clockOptionsForState(state, planConfig);
+        const demandWindowUsage = generalChannel.usageData.filter((item) => {
+            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+            const parts = Amber.getClockParts(nem, clockOpts);
+            if (!demandDays.includes(parts.weekday)) return false;
+            return Amber.timeInWindow(parts, demand.s, demand.f);
+        });
+        if (demandWindowUsage.length === 0) return empty;
+
+        const thirtyMinChunks = {};
+        demandWindowUsage.forEach((item) => {
+            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+            const parts = Amber.getClockParts(nem, clockOpts);
+            const key = Amber.thirtyMinBlockKey(parts);
+            thirtyMinChunks[key] = (thirtyMinChunks[key] || 0) + Amber.absKwh(item.kwh);
+        });
+
+        let maxDemandKwh = 0;
+        let maxDemandTime = null;
+        Object.keys(thirtyMinChunks).forEach((startTime) => {
+            if (thirtyMinChunks[startTime] > maxDemandKwh) {
+                maxDemandKwh = thirtyMinChunks[startTime];
+                maxDemandTime = startTime;
+            }
+        });
+        if (maxDemandKwh === 0) return empty;
+
+        let applicableDaysCount = 0;
+        let currentDate = new Date(startDateStr + 'T00:00:00');
+        const endDate = new Date(endDateStr + 'T00:00:00');
+        while (currentDate <= endDate) {
+            if (demandDays.includes(currentDate.getDay())) applicableDaysCount++;
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        const dailyCharge = (maxDemandKwh * 2) * (demandRate / 100);
+        return {
+            cost: dailyCharge * applicableDaysCount,
+            maxDemandKwh,
+            maxDemandTime,
+            dailyCharge,
+            applicableDaysCount
+        };
+    };
+
+    Amber.adjustForGst = function (cost, gstInclusive, isFeedIn) {
+        if (!gstInclusive && !isFeedIn) return cost / 1.1;
+        return cost;
+    };
+
+    Amber.shallowChannelCopy = function (channelTotals) {
+        const copy = {};
+        Object.keys(channelTotals).forEach((id) => {
+            copy[id] = Object.assign({}, channelTotals[id]);
+        });
+        return copy;
+    };
+
+    Amber.amberFixedDaily = function (amberRates) {
+        return ((amberRates.connectionCents || 0) + (amberRates.subscriptionCents || 0)) / 100;
+    };
+
+    Amber.computePlanTotals = function (channelTotals, planConfig, options) {
+        const opts = options || {};
+        const startDateStr = opts.startDateStr;
+        const endDateStr = opts.endDateStr;
+        const numDays = opts.numDays;
+        const state = opts.state;
+        const gstInclusive = opts.gstInclusive !== false;
+        const amberRates = opts.amberRates || {
+            connectionCents: Amber.DEFAULT_AMBER_CONNECTION_CENTS,
+            subscriptionCents: Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS,
+            demandCents: Amber.DEFAULT_AMBER_DEMAND_CENTS
+        };
+
+        const temp = Amber.shallowChannelCopy(channelTotals);
+        Amber.calculateOtherSupplierCosts(temp, planConfig, state);
+        const otherDemand = Amber.calculateOtherDemandTariff(temp, startDateStr, endDateStr, planConfig, state);
+
+        let otherEnergy = 0;
+        Object.values(temp).forEach((c) => {
+            otherEnergy += Amber.adjustForGst(c.totalOtherCost || 0, gstInclusive, c.type === 'feedIn');
+        });
+        const otherConnection = Amber.adjustForGst(((parseFloat(planConfig.daily) || 0) * numDays) / 100, gstInclusive, false);
+        const otherDemandCost = Amber.adjustForGst(otherDemand.cost || 0, gstInclusive, false);
+        const otherTotal = otherEnergy + otherConnection + otherDemandCost;
+
+        return {
+            otherTotal,
+            otherEnergy,
+            otherConnection,
+            otherDemand,
+            channels: temp
+        };
+    };
+
+    Amber.precalculateDailySummaries = function (channelData, planConfig, amberRates, state) {
+        const summaries = {};
+        const monthlyDemandInfo = {};
+        const allDatesWithData = new Set();
+
+        Object.values(channelData).forEach((channel) => {
+            channel.usageData.forEach((item) => {
+                allDatesWithData.add(Amber.usageDateStr(item));
+            });
+        });
+
+        const sortedDates = [...allDatesWithData].sort();
+        if (sortedDates.length > 0) {
+            const start = new Date(sortedDates[0] + 'T00:00:00');
+            const end = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00');
+            let loopDate = new Date(start);
+            while (loopDate <= end) {
+                const dateStr = Amber.formatForInput(loopDate);
+                summaries[dateStr] = {
+                    totalInKwh: 0, totalOutKwh: 0,
+                    amberCost: 0, otherCost: 0,
+                    amberDemandCost: 0, otherDemandCost: 0,
+                    estimatedCount: 0, billableCount: 0,
+                    renewableWeighted: 0, renewableKwh: 0,
+                    channels: {}
+                };
+                loopDate.setDate(loopDate.getDate() + 1);
+            }
+        }
+
+        Object.values(channelData).forEach((channel) => {
+            channel.usageData.forEach((item) => {
+                const dateStr = Amber.usageDateStr(item);
+                if (!summaries[dateStr]) return;
+
+                const kwh = Amber.absKwh(item.kwh);
+                const perKwh = parseFloat(item.perKwh) || 0;
+                const amberItemCost = (kwh * perKwh) / 100;
+                const otherRate = Amber.otherRateForItem(item, channel.type, planConfig, state);
+                const otherItemCost = (kwh * otherRate) / 100;
+
+                if (!summaries[dateStr].channels[channel.identifier]) {
+                    summaries[dateStr].channels[channel.identifier] = {
+                        type: channel.type, kwh: 0, amberCost: 0, otherCost: 0
+                    };
+                }
+
+                summaries[dateStr].channels[channel.identifier].kwh += kwh;
+                summaries[dateStr].channels[channel.identifier].amberCost += amberItemCost;
+                summaries[dateStr].amberCost += amberItemCost;
+
+                if (Amber.isEstimatedQuality(item.quality)) summaries[dateStr].estimatedCount += 1;
+                else summaries[dateStr].billableCount += 1;
+
+                if (item.renewables != null && kwh) {
+                    summaries[dateStr].renewableWeighted += (parseFloat(item.renewables) || 0) * kwh;
+                    summaries[dateStr].renewableKwh += kwh;
+                }
+
+                if (channel.type === 'feedIn') {
+                    summaries[dateStr].totalOutKwh += kwh;
+                    summaries[dateStr].otherCost -= otherItemCost;
+                    summaries[dateStr].channels[channel.identifier].otherCost -= otherItemCost;
+                } else {
+                    summaries[dateStr].totalInKwh += kwh;
+                    summaries[dateStr].otherCost += otherItemCost;
+                    summaries[dateStr].channels[channel.identifier].otherCost += otherItemCost;
+                }
+            });
+        });
+
+        const monthlyData = {};
+        Object.keys(channelData).forEach((channelId) => {
+            channelData[channelId].usageData.forEach((item) => {
+                const monthKey = Amber.usageDateStr(item).substring(0, 7);
+                if (!monthlyData[monthKey]) monthlyData[monthKey] = {};
+                if (!monthlyData[monthKey][channelId]) {
+                    monthlyData[monthKey][channelId] = {
+                        identifier: channelData[channelId].identifier,
+                        type: channelData[channelId].type,
+                        usageData: []
+                    };
+                }
+                monthlyData[monthKey][channelId].usageData.push(item);
+            });
+        });
+
+        const demandDays = (planConfig.demand && planConfig.demand.days) || [];
+
+        Object.keys(monthlyData).forEach((monthKey) => {
+            const monthChannelData = monthlyData[monthKey];
+            const year = parseInt(monthKey.substring(0, 4), 10);
+            const month = parseInt(monthKey.substring(5, 7), 10) - 1;
+            const monthStartDate = new Date(year, month, 1);
+            const monthEndDate = new Date(year, month + 1, 0);
+            const monthStartDateStr = Amber.formatForInput(monthStartDate);
+            const monthEndDateStr = Amber.formatForInput(monthEndDate);
+
+            const amberDemandInfoMonth = Amber.calculateDemandTariff(monthChannelData, amberRates.demandCents);
+            const otherDemandInfoMonth = Amber.calculateOtherDemandTariff(
+                monthChannelData, monthStartDateStr, monthEndDateStr, planConfig, state
+            );
+
+            monthlyDemandInfo[monthKey] = { amber: amberDemandInfoMonth, other: otherDemandInfoMonth };
+
+            const amberDailyDemandCost = (amberDemandInfoMonth && amberDemandInfoMonth.demandDays > 0)
+                ? (amberDemandInfoMonth.cost / amberDemandInfoMonth.demandDays) : 0;
+            const otherDailyDemandCharge = otherDemandInfoMonth ? otherDemandInfoMonth.dailyCharge : 0;
+
+            const amberDemandDaysInMonth = new Set();
+            const generalChannelForMonth = Object.values(monthChannelData).find((c) => c.type === 'general');
+            if (generalChannelForMonth) {
+                generalChannelForMonth.usageData.forEach((item) => {
+                    if (item.tariffInformation && item.tariffInformation.demandWindow) {
+                        amberDemandDaysInMonth.add(Amber.usageDateStr(item));
+                    }
+                });
+            }
+
+            let loopDate = new Date(monthStartDate);
+            while (loopDate <= monthEndDate) {
+                const dateStr = Amber.formatForInput(loopDate);
+                if (summaries[dateStr]) {
+                    if (amberDemandDaysInMonth.has(dateStr)) {
+                        summaries[dateStr].amberDemandCost = amberDailyDemandCost;
+                    }
+                    if (demandDays.includes(loopDate.getDay())) {
+                        summaries[dateStr].otherDemandCost = otherDailyDemandCharge;
+                    }
+                }
+                loopDate.setDate(loopDate.getDate() + 1);
+            }
+        });
+
+        return { summaries, monthlyDemandInfo };
+    };
+
+    Amber.processUsageData = function (usageArray, channelTotalsObject, shouldCalculateTotals) {
+        usageArray.forEach((item) => {
+            if (!item.processedTime) {
+                item.nemTime = Amber.adjustNemTime(item.nemTime);
+                item.processedTime = true;
+            }
+            const channelId = item.channelIdentifier;
+            if (!channelTotalsObject[channelId]) return;
+            const channelData = channelTotalsObject[channelId];
+            const kwh = Amber.absKwh(item.kwh);
+            const perKwh = parseFloat(item.perKwh) || 0;
+            if (shouldCalculateTotals) {
+                channelData.totalKWh += kwh;
+                channelData.totalAmberCost += (perKwh / 100) * kwh;
+            }
+            channelData.usageData.push(item);
+        });
+    };
+
+    Amber.emptyChannel = function (channel) {
+        return {
+            identifier: channel.identifier,
+            type: channel.type,
+            totalKWh: 0,
+            totalAmberCost: 0,
+            totalOtherCost: 0,
+            usageData: []
+        };
+    };
+
+    if (typeof module === 'object' && module.exports) module.exports = Amber;
+})(typeof window !== 'undefined' ? window : globalThis);
