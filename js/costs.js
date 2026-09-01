@@ -42,13 +42,22 @@
     };
 
     Amber.clockPartsForItem = function (item, planConfig, state) {
+        const opts = Amber.clockOptionsForState(state, planConfig);
+        const key = (opts.clock || 'local') + '|' + (opts.timeZone || '');
+        if (!item._clockParts) item._clockParts = Object.create(null);
+        if (item._clockParts[key]) return item._clockParts[key];
         const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
-        return Amber.getClockParts(nem, Amber.clockOptionsForState(state, planConfig));
+        const parts = Amber.getClockParts(nem, opts);
+        item._clockParts[key] = parts;
+        return parts;
     };
 
     Amber.otherRateForItem = function (item, channelType, planConfig, state) {
-        const parts = Amber.clockPartsForItem(item, planConfig, state);
-        if (channelType === 'feedIn') return Amber.getFeedInRate(parts, planConfig);
+        if (channelType === 'feedIn') {
+            const windows = planConfig && planConfig.feedInWindows;
+            if (!windows || !windows.length) return parseFloat(planConfig && planConfig.feedIn) || 0;
+            return Amber.getFeedInRate(Amber.clockPartsForItem(item, planConfig, state), planConfig);
+        }
         if (planConfig.rateType === 'flat') {
             if (channelType === 'controlledLoad') {
                 const cl = parseFloat(planConfig.cl);
@@ -58,7 +67,7 @@
         }
         if (channelType === 'controlledLoad') return parseFloat(planConfig.cl) || 0;
         const fallback = parseFloat(planConfig.flat) || 0;
-        return Amber.getTouRate(parts, planConfig.tou, fallback);
+        return Amber.getTouRate(Amber.clockPartsForItem(item, planConfig, state), planConfig.tou, fallback);
     };
 
     Amber.calculateOtherSupplierCosts = function (channelTotals, planConfig, state) {
@@ -149,10 +158,8 @@
         }
 
         const demandRate = parseFloat(demand.r) || 0;
-        const clockOpts = Amber.clockOptionsForState(state, planConfig);
         const demandWindowUsage = generalChannel.usageData.filter((item) => {
-            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
-            const parts = Amber.getClockParts(nem, clockOpts);
+            const parts = Amber.clockPartsForItem(item, planConfig, state);
             if (!demandDays.includes(parts.weekday)) return false;
             return Amber.timeInWindow(parts, demand.s, demand.f);
         });
@@ -160,8 +167,7 @@
 
         const thirtyMinChunks = {};
         demandWindowUsage.forEach((item) => {
-            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
-            const parts = Amber.getClockParts(nem, clockOpts);
+            const parts = Amber.clockPartsForItem(item, planConfig, state);
             const key = Amber.thirtyMinBlockKey(parts);
             thirtyMinChunks[key] = (thirtyMinChunks[key] || 0) + Amber.absKwh(item.kwh);
         });

@@ -52,12 +52,54 @@
     };
 
     Amber.setUsageData = function (db, id, data) {
+        return Amber.setUsageDataMany(db, [{ id, data }]);
+    };
+
+    Amber.setUsageDataMany = function (db, entries) {
         return new Promise((resolve, reject) => {
+            if (!entries || !entries.length) {
+                resolve();
+                return;
+            }
             const transaction = db.transaction([STORE_NAME], 'readwrite');
             const store = transaction.objectStore(STORE_NAME);
-            const request = store.put({ id, data });
-            request.onsuccess = () => resolve();
-            request.onerror = (event) => reject(event.target.error);
+            entries.forEach((entry) => store.put({ id: entry.id, data: entry.data }));
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = (event) => reject(event.target.error || transaction.error);
+        });
+    };
+
+    Amber.loadSiteCacheDates = function (db, siteId, dateStrs) {
+        return new Promise((resolve, reject) => {
+            const byDate = {};
+            const dates = [];
+            if (!siteId || !dateStrs || !dateStrs.length) {
+                resolve({ byDate, dates });
+                return;
+            }
+            const transaction = db.transaction([STORE_NAME], 'readonly');
+            const store = transaction.objectStore(STORE_NAME);
+            let pending = dateStrs.length;
+            let settled = false;
+            const done = (err) => {
+                if (settled) return;
+                settled = true;
+                if (err) reject(err);
+                else resolve({ byDate, dates });
+            };
+            dateStrs.forEach((dateStr) => {
+                const request = store.get(`${siteId}_${dateStr}`);
+                request.onsuccess = () => {
+                    if (request.result && request.result.data) {
+                        byDate[dateStr] = request.result.data;
+                        dates.push(dateStr);
+                    }
+                    pending -= 1;
+                    if (pending === 0) done();
+                };
+                request.onerror = () => done(request.error);
+            });
+            transaction.onerror = (event) => done(event.target.error || transaction.error);
         });
     };
 

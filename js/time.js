@@ -83,6 +83,26 @@
         return Amber.WEEKDAY_INDEX[key] != null ? Amber.WEEKDAY_INDEX[key] : 0;
     }
 
+    const tzFormatters = Object.create(null);
+
+    function formatterForZone(timeZone) {
+        let fmt = tzFormatters[timeZone];
+        if (!fmt) {
+            fmt = tzFormatters[timeZone] = new Intl.DateTimeFormat('en-AU', {
+                timeZone,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                weekday: 'short',
+                hourCycle: 'h23'
+            });
+        }
+        return fmt;
+    }
+
     /**
      * Clock used for TOU / demand windows.
      * - clock 'nem' or 'aest': hours from the NEM string (always UTC+10)
@@ -98,17 +118,7 @@
         const instant = new Date(nemTimeStr);
         if (Number.isNaN(instant.getTime())) return Amber.parseNemParts(nemTimeStr);
 
-        const fmt = new Intl.DateTimeFormat('en-AU', {
-            timeZone: opts.timeZone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            weekday: 'short',
-            hourCycle: 'h23'
-        });
+        const fmt = formatterForZone(opts.timeZone);
         const bag = {};
         for (const part of fmt.formatToParts(instant)) {
             if (part.type !== 'literal') bag[part.type] = part.value;

@@ -113,16 +113,17 @@
 
     function updateConfigVisibility(isHidden, animate) {
         const {
-            configContent, toggleConfigBtn, configChevron,
+            configContent, configDetails, toggleConfigBtn, configChevron,
             configHeaderLeftGroup, planSelectorContainer,
             planSelectorLabel, planSelector, planSelectorPlaceholder
         } = configElements;
-        if (!configContent) return;
-        if (animate) configContent.classList.add('transition-all', 'duration-300', 'ease-in-out');
-        else configContent.classList.remove('transition-all', 'duration-300', 'ease-in-out');
+        const collapsible = configDetails || configContent;
+        if (!collapsible) return;
+        if (animate) collapsible.classList.add('transition-all', 'duration-300', 'ease-in-out');
+        else collapsible.classList.remove('transition-all', 'duration-300', 'ease-in-out');
 
         if (isHidden) {
-            configContent.classList.add('hidden');
+            collapsible.classList.add('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Show';
             configChevron.style.transform = 'rotate(-180deg)';
             if (planSelectorPlaceholder) {
@@ -134,7 +135,7 @@
                 planSelector.classList.add('w-auto');
             }
         } else {
-            configContent.classList.remove('hidden');
+            collapsible.classList.remove('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Hide';
             configChevron.style.transform = 'rotate(0deg)';
             if (planSelectorPlaceholder && planSelectorPlaceholder.parentNode) {
@@ -949,10 +950,12 @@
         $('resultsSection').classList.remove('hidden');
         $('calendarSection').classList.remove('hidden');
 
+        if (!skipGraphs) await Amber.sleep(0);
         renderAllPlansTable(channelTotals, adjustedAmberTotal, startDateStr, endDateStr, numDays);
         updatePlanSavings();
 
         if (!skipGraphs) {
+            await Amber.sleep(0);
             const avgContainer = $('averageGraphContainer');
             avgContainer.classList.remove('hidden');
             if (state.usageChart) { state.usageChart.destroy(); state.usageChart = null; }
@@ -1059,6 +1062,7 @@
                 populateSites(sites);
             } else {
                 showMessage('Fetching your site details...');
+                await Amber.sleep(0);
                 sites = await Amber.fetchSites(apiKey);
                 populateSites(sites);
                 state.sitesApiKey = apiKey;
@@ -1084,8 +1088,13 @@
             }
 
             showMessage(`Site found: ${site.nmi || site.id}. Preparing to fetch usage data...`);
+            await Amber.sleep(0);
             const db = await Amber.openDb();
-            const cache = await Amber.loadAllSiteCache(db, site.id);
+            const rangeDates = [];
+            Amber.eachDateInclusive(new Date(startDateValue + 'T00:00:00'), new Date(clampedEnd + 'T00:00:00'), (dateStr) => {
+                rangeDates.push(dateStr);
+            });
+            const cache = await Amber.loadSiteCacheDates(db, site.id, rangeDates);
             const cacheBoundary = Amber.localYesterday();
             cacheBoundary.setDate(cacheBoundary.getDate() - (Amber.CACHE_BOUNDARY_DAYS - 1));
 
@@ -1107,6 +1116,7 @@
             const fetchRanges = Amber.buildFetchRanges(datesToFetch);
             const chunkErrors = [];
             let completedChunks = 0;
+            const cacheWrites = [];
             const chunkResults = await Amber.mapPool(fetchRanges, Amber.FETCH_CONCURRENCY, async (range) => {
                 try {
                     const data = await Amber.fetchUsageRange(apiKey, site.id, range);
@@ -1123,19 +1133,20 @@
                         if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
                         dailyData[usageDateStr].push(item);
                     });
-                    for (const dateStr of Object.keys(dailyData)) {
+                    Object.keys(dailyData).forEach((dateStr) => {
                         const dayDate = new Date(dateStr + 'T00:00:00');
                         if (dayDate < cacheBoundary) {
-                            await Amber.setUsageData(db, `${site.id}_${dateStr}`, dailyData[dateStr]);
+                            cacheWrites.push({ id: `${site.id}_${dateStr}`, data: dailyData[dateStr] });
                             cache.byDate[dateStr] = dailyData[dateStr];
                         }
-                    }
+                    });
                     return data;
                 } catch (err) {
                     chunkErrors.push(err.message);
                     return [];
                 }
             });
+            if (cacheWrites.length) await Amber.setUsageDataMany(db, cacheWrites);
             chunkResults.forEach((data) => selectedUsageData.push(...data));
 
             const params = new URLSearchParams(root.location.search);
@@ -1149,39 +1160,27 @@
             }
 
             showMessage('Calculating costs...');
+            await Amber.sleep(0);
             const channelTotalsSelectedPeriod = {};
-            const channelTotalsAllData = {};
             channels.forEach((c) => {
                 channelTotalsSelectedPeriod[c.identifier] = Amber.emptyChannel(c);
-                channelTotalsAllData[c.identifier] = Amber.emptyChannel(c);
             });
 
             Amber.processUsageData(selectedUsageData, channelTotalsSelectedPeriod, true);
             Object.values(channelTotalsSelectedPeriod).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
-
-            const otherCachedUsageData = [];
-            Object.keys(cache.byDate).forEach((dateStr) => {
-                if (dateStr < startDateValue || dateStr > clampedEnd) {
-                    otherCachedUsageData.push(...cache.byDate[dateStr]);
-                }
-            });
-            const allUsageData = selectedUsageData.concat(otherCachedUsageData);
-            allUsageData.forEach((item) => { item.processedTime = false; });
-            Amber.processUsageData(allUsageData, channelTotalsAllData, false);
-            Object.values(channelTotalsAllData).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
 
             const planConfig = createPlanObjectFromForm();
             const rates = readAmberRates();
             Amber.calculateOtherSupplierCosts(channelTotalsSelectedPeriod, planConfig, currentStateCode());
             const otherDemandInfo = Amber.calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, clampedEnd, planConfig, currentStateCode());
             const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates.demandCents);
-            const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsAllData, planConfig, rates, currentStateCode());
+            const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsSelectedPeriod, planConfig, rates, currentStateCode());
 
             state.lastFetchedStartDate = startDateValue;
             state.lastFetchedEndDate = clampedEnd;
             state.lastFetchedSiteId = site.id;
             state.cachedChannelData = channelTotalsSelectedPeriod;
-            state.cachedAllChannelData = channelTotalsAllData;
+            state.cachedAllChannelData = channelTotalsSelectedPeriod;
             state.lastFetchTimestamp = Date.now();
             state.dailySummaries = summaries;
             state.demandInfoForTooltip = monthlyDemandInfo;
@@ -1355,10 +1354,13 @@
     function init() {
         Amber.registerChartPlugins();
         mergeCustomPlans();
+        const versionLabel = `Amber Compare & Export v${Amber.APP_VERSION}`;
+        document.title = versionLabel;
 
         configElements.configHeader = $('configHeader');
         configElements.toggleConfigBtn = $('toggleConfigBtn');
         configElements.configContent = $('configContent');
+        configElements.configDetails = $('configDetails');
         configElements.configChevron = $('configChevron');
         configElements.configHeaderLeftGroup = $('configHeaderLeftGroup');
         configElements.planSelectorContainer = $('planSelectorContainer');
@@ -1373,7 +1375,8 @@
         updateConfigVisibility(localStorage.getItem('configHidden') === 'true', false);
         configElements.configHeader.addEventListener('click', (e) => {
             if (e.target.closest('#planSelectorContainer')) return;
-            const hidden = !configElements.configContent.classList.contains('hidden');
+            const collapsible = configElements.configDetails || configElements.configContent;
+            const hidden = !collapsible.classList.contains('hidden');
             updateConfigVisibility(hidden);
             localStorage.setItem('configHidden', hidden);
         });
