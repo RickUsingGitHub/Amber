@@ -51,6 +51,9 @@ test.describe('Amber UI flows', () => {
     test('rates panel, TOU, GST, export menu and calendar click', async ({ page }) => {
         await page.click('#ratesDetailsToggle');
         await expect(page.locator('#ratesDetails')).toBeVisible();
+        await expect(page.locator('#ratesGstNote')).toContainText(/inc GST/i);
+        await expect(page.locator('#amberRatesGstNote')).toContainText(/inc GST/i);
+        await expect(page.locator('#gstLabel')).toHaveText(/inc GST/i);
         await page.check('input[name="rateType"][value="tou"]');
         await expect(page.locator('#touRateSection')).toBeVisible();
         await expect(page.locator('#flatRateSection')).toBeHidden();

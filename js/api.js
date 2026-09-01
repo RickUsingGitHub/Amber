@@ -31,27 +31,51 @@
         }
     };
 
-    Amber.fetchWithRetry = async function (url, options, retries) {
-        const maxAttempts = (retries != null ? retries : 4);
+    Amber.fetchWithTimeout = async function (url, options, timeoutMs) {
+        const ms = timeoutMs != null ? timeoutMs : Amber.FETCH_TIMEOUT_MS;
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), ms);
+        try {
+            return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
+        } catch (err) {
+            if (err && err.name === 'AbortError') {
+                throw new Error(`Timed out after ${Math.round(ms / 1000)}s contacting Amber. Try again.`);
+            }
+            throw err;
+        } finally {
+            clearTimeout(timer);
+        }
+    };
+
+    Amber.fetchWithRetry = async function (url, options, retries, timeoutMs) {
+        const maxAttempts = (retries != null ? retries : 2);
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
-            const response = await fetch(url, options);
-            if (response.status === 429 || response.status === 503) {
-                const retryAfter = response.headers.get('Retry-After');
-                const reset = response.headers.get('RateLimit-Reset');
-                let waitMs = Math.min(1000 * Math.pow(2, attempt), 8000);
-                if (retryAfter) {
-                    const asInt = parseInt(retryAfter, 10);
-                    waitMs = Number.isFinite(asInt) ? asInt * 1000 : waitMs;
-                } else if (reset) {
-                    const asInt = parseInt(reset, 10);
-                    if (Number.isFinite(asInt)) waitMs = Math.max(waitMs, asInt * 1000);
+            try {
+                const response = await Amber.fetchWithTimeout(url, options, timeoutMs);
+                if (response.status === 429 || response.status === 503) {
+                    const retryAfter = response.headers.get('Retry-After');
+                    const reset = response.headers.get('RateLimit-Reset');
+                    let waitMs = Math.min(1000 * Math.pow(2, attempt), 4000);
+                    if (retryAfter) {
+                        const asInt = parseInt(retryAfter, 10);
+                        waitMs = Number.isFinite(asInt) ? asInt * 1000 : waitMs;
+                    } else if (reset) {
+                        const asInt = parseInt(reset, 10);
+                        if (Number.isFinite(asInt)) waitMs = Math.max(waitMs, asInt * 1000);
+                    }
+                    lastError = new Error(`Rate limited (${response.status})`);
+                    if (attempt === maxAttempts - 1) break;
+                    await Amber.sleep(waitMs);
+                    continue;
                 }
-                lastError = new Error(`Rate limited (${response.status})`);
-                await Amber.sleep(waitMs);
-                continue;
+                return response;
+            } catch (err) {
+                lastError = err;
+                const timedOut = err && /Timed out after/.test(err.message);
+                if (timedOut || attempt === maxAttempts - 1) break;
+                await Amber.sleep(400 * (attempt + 1));
             }
-            return response;
         }
         throw lastError || new Error('Request failed after retries');
     };
@@ -60,20 +84,63 @@
         return { Authorization: `Bearer ${apiKey}`, accept: 'application/json' };
     };
 
+    let sitesInflight = null;
+    let sitesInflightKey = null;
+    let sitesCache = null;
+    let sitesCacheKey = null;
+
+    Amber.clearSitesCache = function () {
+        sitesInflight = null;
+        sitesInflightKey = null;
+        sitesCache = null;
+        sitesCacheKey = null;
+    };
+
     Amber.fetchSites = async function (apiKey) {
-        const response = await Amber.fetchWithRetry(`${Amber.API_URL}/sites`, {
-            headers: Amber.authHeaders(apiKey)
-        });
-        if (!response.ok) {
-            if (response.status === 401 || response.status === 403) {
-                throw new Error('Authentication failed. Your API Key appears to be invalid. Please check and try again.');
+        if (sitesCache && sitesCacheKey === apiKey) return sitesCache;
+        if (sitesInflight && sitesInflightKey === apiKey) return sitesInflight;
+
+        sitesInflightKey = apiKey;
+        sitesInflight = (async () => {
+            let response;
+            try {
+                response = await Amber.fetchWithRetry(`${Amber.API_URL}/sites`, {
+                    headers: Amber.authHeaders(apiKey)
+                }, 2, Amber.FETCH_SITES_TIMEOUT_MS);
+            } catch (err) {
+                if (err && /Timed out after/.test(err.message)) {
+                    throw new Error('Timed out fetching site details from Amber. Try Compare again.');
+                }
+                throw err;
             }
-            const detail = await Amber.parseErrorDetail(response);
-            throw new Error(`Failed to fetch sites. ${detail}`);
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                    throw new Error('Authentication failed. Your API Key appears to be invalid. Please check and try again.');
+                }
+                const detail = await Amber.parseErrorDetail(response);
+                throw new Error(`Failed to fetch sites. ${detail}`);
+            }
+            const sites = await response.json();
+            if (!sites || !sites.length) throw new Error('No sites found for this API key.');
+            sitesCache = sites;
+            sitesCacheKey = apiKey;
+            return sites;
+        })();
+
+        try {
+            return await sitesInflight;
+        } catch (err) {
+            if (sitesInflightKey === apiKey) {
+                sitesInflight = null;
+                sitesInflightKey = null;
+            }
+            throw err;
+        } finally {
+            if (sitesInflightKey === apiKey) {
+                sitesInflight = null;
+                sitesInflightKey = null;
+            }
         }
-        const sites = await response.json();
-        if (!sites || !sites.length) throw new Error('No sites found for this API key.');
-        return sites;
     };
 
     Amber.buildFetchRanges = function (datesToFetch, maxDays) {

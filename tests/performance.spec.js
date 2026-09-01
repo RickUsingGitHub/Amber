@@ -71,7 +71,7 @@ test.describe('Amber fetch and UI', () => {
         await page.locator('#apiKey').waitFor();
     });
 
-    test('should fetch multiple ranges in parallel and aggregate data', async ({ page }) => {
+    test('should fetch a 15-day range in one 30-day chunk', async ({ page }) => {
         await page.fill('#startDate', '2025-01-01');
         await page.fill('#endDate', '2025-01-15');
 
@@ -83,13 +83,28 @@ test.describe('Amber fetch and UI', () => {
         await page.click('#fetchData');
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
 
-        expect(requestedUrls.length).toBe(3);
+        expect(requestedUrls.length).toBe(1);
         const usageValue = await page.locator('td:has-text("E1") + td + td').textContent();
         expect(usageValue.trim()).toBe('15.0');
     });
 
+    test('should fetch a long range as multiple 30-day chunks', async ({ page }) => {
+        await page.fill('#startDate', '2025-01-01');
+        await page.fill('#endDate', '2025-03-15');
+
+        const requestedUrls = [];
+        page.on('request', (request) => {
+            if (request.url().includes('/usage')) requestedUrls.push(request.url());
+        });
+
+        await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
+
+        expect(requestedUrls.length).toBe(3);
+    });
+
     test('should keep successful chunks when one range fails', async ({ page }) => {
-        await page.route('**/usage*startDate=2025-01-08*', async (route) => {
+        await page.route('**/usage*startDate=2025-01-31*', async (route) => {
             await route.fulfill({
                 status: 500,
                 contentType: 'application/json',
@@ -98,7 +113,7 @@ test.describe('Amber fetch and UI', () => {
         });
 
         await page.fill('#startDate', '2025-01-01');
-        await page.fill('#endDate', '2025-01-15');
+        await page.fill('#endDate', '2025-02-14');
         await page.click('#fetchData');
 
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
@@ -107,7 +122,35 @@ test.describe('Amber fetch and UI', () => {
         await expect(page.locator('#fetchData')).toBeEnabled();
         const usageValue = await page.locator('td:has-text("E1") + td + td').textContent();
         expect(Number(usageValue.trim())).toBeGreaterThan(0);
-        expect(Number(usageValue.trim())).toBeLessThan(15);
+        expect(Number(usageValue.trim())).toBeLessThan(45);
+    });
+
+    test('Compare reuses prefetched sites instead of calling /sites again', async ({ page }) => {
+        await expect(page.locator('#siteSelectorRow')).toBeVisible({ timeout: 5000 });
+        let sitesCalls = 0;
+        page.on('request', (request) => {
+            const path = new URL(request.url()).pathname;
+            if (path.endsWith('/sites')) sitesCalls += 1;
+        });
+        await page.fill('#startDate', '2025-01-10');
+        await page.fill('#endDate', '2025-01-10');
+        await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
+        expect(sitesCalls).toBe(0);
+    });
+
+    test('hung sites request times out instead of hanging', { timeout: 25000 }, async ({ page }) => {
+        await page.unroute('**/sites');
+        await page.route('**/sites', async () => {
+            await new Promise(() => {});
+        });
+        await page.reload();
+        await page.locator('#apiKey').waitFor();
+        await page.fill('#startDate', '2025-01-10');
+        await page.fill('#endDate', '2025-01-10');
+        await page.click('#fetchData');
+        await expect(page.locator('#message')).toContainText(/Timed out/i, { timeout: 20000 });
+        await expect(page.locator('#fetchData')).toBeEnabled();
     });
 
     test('exposes export, date presets, remember-key and site selector', async ({ page }) => {

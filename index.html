@@ -83,6 +83,7 @@
                             <span id="ratesDetailsToggleLabel">Show comparison plan rates</span>
                         </button>
                         <div id="ratesDetails" class="hidden mt-4 space-y-4">
+                            <p id="ratesGstNote" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">Enter all custom plan rates as <strong>inc GST</strong> (GST-inclusive), the same as Energy Made Easy, DMO/VDO and retailer fact sheets. Built-in plans already use inc GST tariffs. Household feed-in is usually GST-free — enter the published c/kWh; the GST toggle does not change feed-in credits.</p>
                             <div>
                                 <label for="planName" class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
                                 <input type="text" id="planName" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., Energy Australia TOU 2026">
@@ -103,24 +104,25 @@
                             </div>
 
                             <div>
-                                <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day)</label>
+                                <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day, inc GST)</label>
                                 <input type="number" id="dailyConnectionRate" value="102.83" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                <p class="text-xs text-gray-500 mt-1">Fixed daily service fee for the other supplier.</p>
+                                <p class="text-xs text-gray-500 mt-1">Fixed daily service fee for the other supplier, GST-inclusive.</p>
                             </div>
 
                             <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
-                                    <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh)</label>
+                                    <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh, inc GST)</label>
                                     <input type="number" id="otherSupplierRate" value="36" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label for="otherSupplierControlledLoadFlat" class="block text-sm font-medium text-gray-700 mb-1">Controlled Load (c/kWh)</label>
+                                    <label for="otherSupplierControlledLoadFlat" class="block text-sm font-medium text-gray-700 mb-1">Controlled Load (c/kWh, inc GST)</label>
                                     <input type="number" id="otherSupplierControlledLoadFlat" value="0" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     <p class="text-xs text-gray-500 mt-1">Leave 0 to use the general rate.</p>
                                 </div>
                                 <div>
-                                    <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh)</label>
+                                    <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh, published)</label>
                                     <input type="number" id="otherSupplierFeedInRateFlat" value="5" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <p class="text-xs text-gray-500 mt-1">Usually GST-free for households.</p>
                                 </div>
                             </div>
 
@@ -128,32 +130,32 @@
                                 <h3 class="text-md font-medium text-gray-800 pt-2 mb-2">Consumption Rates &amp; Times</h3>
                                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                                     <div class="bg-red-50 p-3 rounded-lg border border-red-200" data-tou-period="peak">
-                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh)</label>
+                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh, inc GST)</label>
                                         <input type="number" id="tou_peak_rate" value="57.93" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <div id="tou_peak_windows_container" class="mt-2 space-y-2"></div>
                                         <button type="button" data-add-tou-window="peak" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
                                     </div>
                                     <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200" data-tou-period="shoulder">
-                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate (c/kWh)</label>
+                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate (c/kWh, inc GST)</label>
                                         <input type="number" id="tou_shoulder_rate" value="30.61" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <div id="tou_shoulder_windows_container" class="mt-2 space-y-2"></div>
                                         <button type="button" data-add-tou-window="shoulder" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
                                     </div>
                                     <div class="bg-green-50 p-3 rounded-lg border border-green-200" data-tou-period="offpeak">
-                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate (c/kWh)</label>
+                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate (c/kWh, inc GST)</label>
                                         <input type="number" id="tou_offpeak_rate" value="24.28" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <p class="text-xs text-gray-500 mt-2">Catch-all when peak/shoulder windows do not match.</p>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load (c/kWh)</label>
+                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load (c/kWh, inc GST)</label>
                                         <p class="text-xs text-gray-500">Applies 24/7 to the controlled load channel.</p>
                                         <input type="number" id="tou_controlled_load_rate" value="14.6" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                        <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700">Feed-in Rate (c/kWh)</label>
-                                        <p class="text-xs text-gray-500">Default FIT; extra windows below override by time.</p>
+                                        <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700">Feed-in Rate (c/kWh, published)</label>
+                                        <p class="text-xs text-gray-500">Default FIT; extra windows below override by time. Usually GST-free for households.</p>
                                         <input type="number" id="otherSupplierFeedInRateTou" value="4.0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
@@ -177,7 +179,7 @@
                                 </div>
                                 <div id="demandTariffInputs" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
-                                        <label for="demandRate" class="block text-sm font-medium text-gray-700">Demand Rate (c/kW/day)</label>
+                                        <label for="demandRate" class="block text-sm font-medium text-gray-700">Demand Rate (c/kW/day, inc GST)</label>
                                         <input type="number" id="demandRate" value="30" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
@@ -205,19 +207,19 @@
                             </div>
 
                             <div class="pt-4 border-t">
-                                <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable)</h3>
-                                <p class="text-xs text-gray-500 mb-3">These vary by network. Defaults are indicative — replace with the rates on your Amber bill if they differ.</p>
+                                <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
+                                <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Enter GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill. Wholesale per-kWh from the Amber API already includes GST. Defaults are indicative and inc GST — replace with the figures on your bill if they differ by network.</p>
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
-                                        <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day)</label>
+                                        <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
                                         <input type="number" id="amberConnectionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700">Subscription (c/day)</label>
+                                        <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700">Subscription (c/day, inc GST)</label>
                                         <input type="number" id="amberSubscriptionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day)</label>
+                                        <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
                                         <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
@@ -262,8 +264,8 @@
                         <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
                         <div class="flex items-center">
                             <div class="flex items-center space-x-2 mr-4">
-                                <span class="text-sm font-medium text-gray-700" id="gstLabel">GST</span>
-                                <label for="gstToggle" class="relative inline-flex items-center cursor-pointer">
+                                <span class="text-sm font-medium text-gray-700" id="gstLabel" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">inc GST</span>
+                                <label for="gstToggle" class="relative inline-flex items-center cursor-pointer" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">
                                     <input type="checkbox" id="gstToggle" class="sr-only peer" checked aria-labelledby="gstLabel">
                                     <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                                 </label>

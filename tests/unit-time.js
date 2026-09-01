@@ -2,7 +2,9 @@
 
 require('../js/constants.js');
 require('../js/time.js');
+require('../js/templates.js');
 require('../js/costs.js');
+require('../js/api.js');
 const Amber = global.Amber;
 
 let failed = 0;
@@ -96,6 +98,26 @@ const channels = {
 };
 Amber.calculateOtherSupplierCosts(channels, touPlan, 'NSW');
 assert(Math.abs(channels.E1.totalOtherCost - 0.5) < 1e-9, 'TOU cost 1 kWh at 50c = $0.50');
+
+assert(Amber.RATES_ARE_GST_INCLUSIVE === true, 'all rates are GST-inclusive');
+assert(Math.abs(Amber.adjustForGst(110, true, false) - 110) < 1e-9, 'inc GST leaves cost unchanged');
+assert(Math.abs(Amber.adjustForGst(110, false, false) - 100) < 1e-9, 'ex GST display divides by 1.1');
+assert(Math.abs(Amber.adjustForGst(110, false, true) - 110) < 1e-9, 'FIT skips GST strip');
+
+const dmo = Amber.supplierTemplates.NSW['2026-27 DMO (Ausgrid)'];
+assert(dmo && dmo.daily === 166 && dmo.flat === 33.14, 'DMO Ausgrid GST-inc published rates');
+const vdo = Amber.supplierTemplates.VIC['2026-27 VDO (CitiPower)'];
+assert(vdo && vdo.daily === 121.14 && vdo.flat === 25.96, 'VDO CitiPower GST-inc published rates');
+
+const thirtyDates = [];
+for (let i = 1; i <= 30; i++) thirtyDates.push(`2026-07-${String(i).padStart(2, '0')}`);
+const thirtyRanges = Amber.buildFetchRanges(thirtyDates);
+assert(thirtyRanges.length === 1 && thirtyRanges[0].start === '2026-07-01' && thirtyRanges[0].end === '2026-07-30', '30-day usage chunk');
+const thirtyOneDates = thirtyDates.concat(['2026-07-31']);
+const splitRanges = Amber.buildFetchRanges(thirtyOneDates);
+assert(splitRanges.length === 2 && splitRanges[0].end === '2026-07-30' && splitRanges[1].start === '2026-07-31', '31 days split into two chunks');
+
+assert(Amber.FETCH_SITES_TIMEOUT_MS > 0 && Amber.FETCH_SITES_TIMEOUT_MS <= Amber.FETCH_TIMEOUT_MS, 'sites timeout is finite and not longer than usage');
 
 if (failed) {
     console.error(`\n${failed} assertion(s) failed`);

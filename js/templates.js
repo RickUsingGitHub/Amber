@@ -5,6 +5,8 @@
     const WEEKDAYS = [1, 2, 3, 4, 5];
     const AS_AT = '2026-07-01';
 
+    // Consumption, daily, demand and controlled-load figures are GST-inclusive (inc GST).
+    // Feed-in is the published c/kWh (household FIT is typically GST-free).
     Amber.supplierTemplates = {
         ACT: {
             'ActewAGL Home (standing)': {

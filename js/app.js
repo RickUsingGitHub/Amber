@@ -16,6 +16,7 @@
         dailyUsageChart: null,
         currentSiteId: null,
         sites: [],
+        sitesApiKey: null,
         lastResultDataPayload: null,
         amberCostBaseline: null,
         fetching: false
@@ -68,7 +69,7 @@
         const daysArr = windowData && windowData.days ? windowData.days : [1, 2, 3, 4, 5, 6, 0];
         const rateVal = windowData && windowData.rate != null ? windowData.rate : '';
         const rateField = includeRate
-            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Rate (c/kWh)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>`
+            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Rate (c/kWh, published)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>`
             : '';
         windowDiv.innerHTML = `
             <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove" data-remove-window="1" aria-label="Remove window">×</button>
@@ -933,7 +934,7 @@
         }
 
         const asAt = Amber.latestAsAtForState(currentStateCode(), state.templates);
-        $('resultsDisclaimer').textContent = `Comparison uses published tariff estimates (GST inclusive unless you turn GST off) as at ${asAt}. Verify current rates with Energy Made Easy or the retailer before switching. Amber daily connection, subscription and demand rates are editable and may differ by network. Public holidays are not treated as off-peak.`;
+        $('resultsDisclaimer').textContent = `All plan, custom and Amber rates are entered inc GST (GST-inclusive), as at ${asAt}. Turn inc GST off to show dollar totals excluding GST (feed-in credits are unchanged). Verify current rates with Energy Made Easy or the retailer before switching. Amber daily connection, subscription and demand rates are editable and may differ by network. Public holidays are not treated as off-peak.`;
 
         const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
         const qualityBanner = $('qualityBanner');
@@ -1053,9 +1054,15 @@
         $('progressBar').style.width = '0%';
 
         try {
-            showMessage('Fetching your site details...');
-            const sites = await Amber.fetchSites(apiKey);
-            populateSites(sites);
+            let sites = state.sites;
+            if (sites.length && state.sitesApiKey === apiKey) {
+                populateSites(sites);
+            } else {
+                showMessage('Fetching your site details...');
+                sites = await Amber.fetchSites(apiKey);
+                populateSites(sites);
+                state.sitesApiKey = apiKey;
+            }
             const site = selectedSite();
             if (!site) throw new Error('No sites found for this API key.');
             if (state.currentSiteId !== site.id) state.amberCostBaseline = null;
@@ -1526,17 +1533,31 @@
 
         async function tryLoadSites(key) {
             if (!key || key.length < 8) return;
+            if (state.sites.length && state.sitesApiKey === key) return;
             try {
                 const sites = await Amber.fetchSites(key);
                 populateSites(sites);
+                state.sitesApiKey = key;
             } catch (err) {
                 /* ignore until Compare */
             }
         }
+        function resetSitesIfKeyChanged(key) {
+            if (state.sitesApiKey && key !== state.sitesApiKey) {
+                Amber.clearSitesCache();
+                state.sites = [];
+                state.sitesApiKey = null;
+                $('siteSelectorRow').classList.add('hidden');
+            }
+        }
         let siteFetchTimer = null;
+        $('apiKey').addEventListener('input', () => {
+            resetSitesIfKeyChanged($('apiKey').value.trim());
+        });
         $('apiKey').addEventListener('blur', () => {
             const key = $('apiKey').value.trim();
             Amber.setApiKey(key, $('rememberApiKey').checked);
+            resetSitesIfKeyChanged(key);
             clearTimeout(siteFetchTimer);
             siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
         });
