@@ -96,6 +96,8 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#apiKey')).toBeHidden();
         await expect(page.locator('#startDate')).toBeVisible();
         await expect(page.locator('#endDate')).toBeVisible();
+        await expect(page.locator('label[for="startDate"]')).toHaveText('Start');
+        await expect(page.locator('label[for="endDate"]')).toHaveText('End');
         await expect(page.locator('#fetchData')).toBeVisible();
         await expect(page.locator('[data-preset="7d"]')).toBeVisible();
         await expect(page.locator('#planSelector')).toBeVisible();
