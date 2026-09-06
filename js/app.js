@@ -112,11 +112,7 @@
     }
 
     function updateConfigVisibility(isHidden, animate) {
-        const {
-            configContent, configDetails, toggleConfigBtn, configChevron,
-            configHeaderLeftGroup, planSelectorContainer,
-            planSelectorLabel, planSelector, planSelectorPlaceholder
-        } = configElements;
+        const { configContent, configDetails, toggleConfigBtn, configChevron } = configElements;
         const collapsible = configDetails || configContent;
         if (!collapsible) return;
         if (animate) collapsible.classList.add('transition-all', 'duration-300', 'ease-in-out');
@@ -126,25 +122,10 @@
             collapsible.classList.add('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Show';
             configChevron.style.transform = 'rotate(-180deg)';
-            if (planSelectorPlaceholder) {
-                planSelectorContainer.parentNode.replaceChild(planSelectorPlaceholder, planSelectorContainer);
-                configHeaderLeftGroup.appendChild(planSelectorContainer);
-                planSelectorContainer.classList.add('flex', 'items-center', 'gap-2');
-                planSelectorLabel.classList.remove('block', 'mb-1');
-                planSelector.classList.remove('w-full');
-                planSelector.classList.add('w-auto');
-            }
         } else {
             collapsible.classList.remove('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Hide';
             configChevron.style.transform = 'rotate(0deg)';
-            if (planSelectorPlaceholder && planSelectorPlaceholder.parentNode) {
-                planSelectorPlaceholder.parentNode.replaceChild(planSelectorContainer, planSelectorPlaceholder);
-                planSelectorContainer.classList.remove('flex', 'items-center', 'gap-2');
-                planSelectorLabel.classList.add('block', 'mb-1');
-                planSelector.classList.add('w-full');
-                planSelector.classList.remove('w-auto');
-            }
         }
     }
 
@@ -654,7 +635,7 @@
                 else { vs = `$${Math.abs(diff).toFixed(2)} more than Amber`; cls = 'text-green-700'; }
             }
             const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
-            html += `<tr class="${current}">
+            html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Compare using this plan">
                 <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(row.name)}</td>
                 <td class="px-4 py-2 text-sm text-right">$${row.total.toFixed(2)}</td>
                 <td class="px-4 py-2 text-sm text-right ${cls}">${vs}</td>
@@ -662,7 +643,40 @@
         });
         html += '</tbody></table>';
         host.innerHTML = html;
+        host.querySelectorAll('tbody tr').forEach((tr, index) => {
+            const planName = rows[index].name;
+            const activate = () => selectSupplierPlan(planName, { scroll: true });
+            tr.addEventListener('click', activate);
+            tr.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    activate();
+                }
+            });
+        });
         section.classList.remove('hidden');
+    }
+
+    function selectSupplierPlan(planName, opts) {
+        const options = opts || {};
+        const selector = $('planSelector');
+        const next = planName || '';
+        const unchanged = selector.value === next;
+        selector.value = next;
+        if (unchanged && !options.fromChange) {
+            if (options.scroll && state.cachedChannelData) {
+                $('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            return;
+        }
+        applyPlanTemplate();
+        saveAllSettings();
+        if (state.cachedChannelData && state.lastFetchedStartDate) {
+            recalculateAndShow(false);
+            if (options.scroll) $('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        } else {
+            updatePlanSavings();
+        }
     }
 
     function updatePlanSavings() {
@@ -1362,25 +1376,14 @@
         configElements.configContent = $('configContent');
         configElements.configDetails = $('configDetails');
         configElements.configChevron = $('configChevron');
-        configElements.configHeaderLeftGroup = $('configHeaderLeftGroup');
-        configElements.planSelectorContainer = $('planSelectorContainer');
-        configElements.planSelectorLabel = $('planSelectorLabel');
-        configElements.planSelector = $('planSelector');
-        configElements.planSelectorPlaceholder = document.createElement('div');
-        configElements.planSelectorPlaceholder.id = 'plan-selector-placeholder';
-        const originalParent = configElements.planSelectorContainer.parentNode;
-        originalParent.replaceChild(configElements.planSelectorPlaceholder, configElements.planSelectorContainer);
-        originalParent.replaceChild(configElements.planSelectorContainer, configElements.planSelectorPlaceholder);
 
         updateConfigVisibility(localStorage.getItem('configHidden') === 'true', false);
-        configElements.configHeader.addEventListener('click', (e) => {
-            if (e.target.closest('#planSelectorContainer')) return;
+        configElements.configHeader.addEventListener('click', () => {
             const collapsible = configElements.configDetails || configElements.configContent;
             const hidden = !collapsible.classList.contains('hidden');
             updateConfigVisibility(hidden);
             localStorage.setItem('configHidden', hidden);
         });
-        configElements.planSelectorContainer.addEventListener('click', (e) => e.stopPropagation());
 
         const storedKey = Amber.getApiKey();
         $('apiKey').value = storedKey.key;
@@ -1421,12 +1424,7 @@
             saveAllSettings();
         });
         $('planSelector').addEventListener('change', () => {
-            applyPlanTemplate();
-            if (!$('resultsSection').classList.contains('hidden')) {
-                $('fetchData').click();
-            } else {
-                updatePlanSavings();
-            }
+            selectSupplierPlan($('planSelector').value, { fromChange: true });
         });
         $('planName').addEventListener('input', () => {
             updateOtherSupplierHeading();

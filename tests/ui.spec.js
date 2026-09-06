@@ -100,6 +100,21 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('label[for="endDate"]')).toHaveText('End');
         await expect(page.locator('#fetchData')).toBeVisible();
         await expect(page.locator('[data-preset="7d"]')).toBeVisible();
-        await expect(page.locator('#planSelector')).toBeVisible();
+        await expect(page.locator('#planSelector')).toBeHidden();
+        await expect(page.locator('#planSelectorContainer')).toBeHidden();
+    });
+
+    test('clicking an all-plans row uses that plan in Comparison Results', async ({ page }) => {
+        await page.fill('#startDate', '2025-01-10');
+        await page.fill('#endDate', '2025-01-10');
+        await page.selectOption('#stateSelector', 'NSW');
+        await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid)');
+        await page.click('#fetchData');
+        await page.waitForSelector('#allPlansSection:not(.hidden)');
+        const row = page.locator('#allPlansTable tbody tr').filter({ hasText: 'Origin Go Variable (Ausgrid)' });
+        await expect(row).toBeVisible();
+        await row.click();
+        await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid)');
+        await expect(page.locator('#results-table-container')).toContainText('Origin Go Variable (Ausgrid)');
     });
 });
