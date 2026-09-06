@@ -4,8 +4,8 @@
   "description": "Browser-based Amber Electric usage comparison and export tool",
   "scripts": {
     "build:css": "tailwindcss -i ./css/input.css -o ./css/app.css --minify",
-    "test": "node tests/unit-time.js && playwright test",
-    "test:unit": "node tests/unit-time.js",
+    "test": "node tests/unit-time.js && node tests/unit-bill.js && playwright test",
+    "test:unit": "node tests/unit-time.js && node tests/unit-bill.js",
     "serve": "node scripts/static-server.js"
   },
   "devDependencies": {

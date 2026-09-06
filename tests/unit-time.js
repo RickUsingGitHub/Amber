@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.03', 'app version is 1.03');
+assert(Amber.APP_VERSION === '1.04', 'app version is 1.04');
 
 const flatCl = { rateType: 'flat', flat: 36, cl: 18, feedIn: 5 };
 assert(Amber.otherRateForItem({ nemTime: '2026-01-07T12:00:00+10:00', processedTime: true }, 'controlledLoad', flatCl, 'NSW') === 18, 'flat plan uses dedicated CL rate');

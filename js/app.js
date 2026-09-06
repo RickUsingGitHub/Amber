@@ -41,6 +41,64 @@
         };
     }
 
+    function setAmberBillStatus(message, isError) {
+        const el = $('amberBillStatus');
+        if (!el) return;
+        if (!message) {
+            el.classList.add('hidden');
+            el.textContent = '';
+            return;
+        }
+        el.classList.remove('hidden');
+        el.classList.toggle('text-red-700', !!isError);
+        el.classList.toggle('text-green-700', !isError);
+        el.textContent = message;
+    }
+
+    function loadPdfJs() {
+        if (root.pdfjsLib) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'pdf.min.js';
+            script.onload = () => {
+                if (root.pdfjsLib && root.pdfjsLib.GlobalWorkerOptions) {
+                    root.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
+                }
+                resolve();
+            };
+            script.onerror = () => reject(new Error('Could not load the PDF reader.'));
+            document.head.appendChild(script);
+        });
+    }
+
+    function applyAmberBillRates(parsed) {
+        if (!parsed || !parsed.ok) {
+            setAmberBillStatus('Could not find daily connection, subscription or demand rates in that file. You can type them from the charges page.', true);
+            return;
+        }
+        if (parsed.connectionCents != null) $('amberConnectionRate').value = parsed.connectionCents.toFixed(3);
+        if (parsed.subscriptionCents != null) $('amberSubscriptionRate').value = parsed.subscriptionCents.toFixed(3);
+        if (parsed.demandCents != null) $('amberDemandRate').value = parsed.demandCents.toFixed(3);
+        saveAllSettings();
+        const gstNote = parsed.exGst ? ' Bill unit prices were ex GST; 10% GST was added.' : '';
+        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${gstNote} Edit the fields if a line looks wrong.`, false);
+        if (state.cachedChannelData && state.lastFetchedStartDate) recalculateAndShow(true);
+    }
+
+    async function handleAmberBillFile(file) {
+        if (!file) return;
+        setAmberBillStatus('Reading bill…', false);
+        try {
+            const text = await Amber.readBillFile(file, loadPdfJs);
+            applyAmberBillRates(Amber.parseAmberBillText(text));
+        } catch (err) {
+            setAmberBillStatus(err && err.message ? err.message : 'Could not read that file.', true);
+        } finally {
+            const input = $('amberBillFile');
+            if (input) input.value = '';
+        }
+    }
+
     function currentStateCode() {
         return $('stateSelector').value;
     }
@@ -1417,6 +1475,10 @@
         $('ratesDetailsToggle').addEventListener('click', (e) => {
             e.preventDefault();
             setRatesDetailsOpen($('ratesDetails').classList.contains('hidden'));
+        });
+        $('amberBillFile').addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) handleAmberBillFile(file);
         });
         $('stateSelector').addEventListener('change', (e) => {
             updatePlanSelector(e.target.value);

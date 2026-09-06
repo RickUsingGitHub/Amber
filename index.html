@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.03</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
+    <title>Amber Compare &amp; Export v1.04</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="css/app.css">
 </head>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.03
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.04
                     </h1>
                     <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
                 </div>
@@ -209,7 +209,13 @@
 
                             <div class="pt-4 border-t">
                                 <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
-                                <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Enter GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill. Wholesale per-kWh from the Amber API already includes GST. Defaults are indicative and inc GST — replace with the figures on your bill if they differ by network.</p>
+                                <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
+                                <div class="flex flex-wrap items-center gap-2 mb-3">
+                                    <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Prefill from Amber bill</label>
+                                    <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                                    <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
+                                </div>
+                                <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
                                         <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
@@ -337,6 +343,7 @@
     <script src="js/storage.js"></script>
     <script src="js/costs.js"></script>
     <script src="js/api.js"></script>
+    <script src="js/bill.js"></script>
     <script src="js/csv.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/calendar.js"></script>

@@ -117,4 +117,28 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid)');
         await expect(page.locator('#results-table-container')).toContainText('Origin Go Variable (Ausgrid)');
     });
+
+    test('Amber bill text file prefills editable charge fields', async ({ page }) => {
+        await page.click('#ratesDetailsToggle');
+        await expect(page.locator('#ratesDetails')).toBeVisible();
+        await expect(page.locator('#amberBillFile')).toBeAttached();
+        const bill = `Billing Period: 31 days
+Network - Daily 01 Jul - 31 Jul 31 0.7103 $22.02
+Metering Charge 01 Jul - 31 Jul 31 0.4294 $13.31
+Daily Supply Totals (excl GST): $35.33
+Network - Peak Demand 01 Jul - 31 Jul 6.67 kW 12.2397 $/kW/Day $81.59
+Demand Totals (excl GST): $81.59
+Amber Monthly Subscription 01 Jul - 31 Jul 31 0.7471 $23.16
+Amber Fee Totals (excl GST): $23.16
+`;
+        await page.setInputFiles('#amberBillFile', {
+            name: 'amber-bill.txt',
+            mimeType: 'text/plain',
+            buffer: Buffer.from(bill)
+        });
+        await expect(page.locator('#amberConnectionRate')).toHaveValue('125.367');
+        await expect(page.locator('#amberSubscriptionRate')).toHaveValue('82.181');
+        await expect(page.locator('#amberDemandRate')).toHaveValue('43.431');
+        await expect(page.locator('#amberBillStatus')).toContainText(/Prefill/i);
+    });
 });
