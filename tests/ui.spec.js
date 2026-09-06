@@ -68,6 +68,8 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#calendarSection')).toBeVisible();
 
         await page.click('#gstToggle', { force: true });
+        await expect(page.locator('#gstToggle')).toHaveCSS('opacity', '0');
+        await expect(page.locator('.gst-switch-track')).toBeVisible();
         await expect(page.locator('#resultsSection')).toBeVisible();
         await expect(page.locator('#results-table-container table')).toBeVisible();
 
