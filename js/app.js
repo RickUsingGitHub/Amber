@@ -179,7 +179,7 @@
         if (isHidden) {
             collapsible.classList.add('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Show';
-            configChevron.style.transform = 'rotate(-180deg)';
+            configChevron.style.transform = 'rotate(180deg)';
         } else {
             collapsible.classList.remove('hidden');
             toggleConfigBtn.querySelector('span').textContent = 'Hide';
