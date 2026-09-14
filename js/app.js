@@ -540,6 +540,7 @@
         $('endDate').value = endStr;
         localStorage.setItem('startDate', startStr);
         localStorage.setItem('endDate', endStr);
+        fetchAndCompare();
     }
 
     function defaultDateRange() {

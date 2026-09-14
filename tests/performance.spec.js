@@ -164,12 +164,13 @@ test.describe('Amber fetch and UI', () => {
         await expect(page.locator('#resultsDisclaimer')).not.toHaveText('');
     });
 
-    test('date preset Last 7 days fills a week ending yesterday', async ({ page }) => {
+    test('date preset Last 7 days fills a week ending yesterday and compares', async ({ page }) => {
         await page.click('[data-preset="7d"]');
         const start = await page.inputValue('#startDate');
         const end = await page.inputValue('#endDate');
         const startDate = new Date(start + 'T00:00:00');
         const endDate = new Date(end + 'T00:00:00');
         expect(Math.round((endDate - startDate) / 86400000)).toBe(6);
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
     });
 });
