@@ -173,4 +173,19 @@ test.describe('Amber fetch and UI', () => {
         expect(Math.round((endDate - startDate) / 86400000)).toBe(6);
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
     });
+
+    test('date preset Last 3 months is the previous three calendar months and compares', async ({ page }) => {
+        await page.click('[data-preset="3m"]');
+        const start = await page.inputValue('#startDate');
+        const end = await page.inputValue('#endDate');
+        const now = new Date();
+        const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        const expectedStart = new Date(yesterday.getFullYear(), yesterday.getMonth() - 3, 1);
+        const expectedEnd = new Date(yesterday.getFullYear(), yesterday.getMonth(), 0);
+        const pad = (n) => String(n).padStart(2, '0');
+        const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+        expect(start).toBe(fmt(expectedStart));
+        expect(end).toBe(fmt(expectedEnd));
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
+    });
 });

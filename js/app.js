@@ -531,6 +531,11 @@
             const last = new Date(yesterday.getFullYear(), yesterday.getMonth(), 0);
             startStr = Amber.formatForInput(first);
             endStr = Amber.formatForInput(last);
+        } else if (name === '3m') {
+            const first = new Date(yesterday.getFullYear(), yesterday.getMonth() - 3, 1);
+            const last = new Date(yesterday.getFullYear(), yesterday.getMonth(), 0);
+            startStr = Amber.formatForInput(first);
+            endStr = Amber.formatForInput(last);
         } else if (name === '90d') {
             startStr = Amber.addDays(yStr, -89);
         } else {
