@@ -8,7 +8,7 @@
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
     Amber.CACHE_BOUNDARY_DAYS = 3;
-    Amber.APP_VERSION = '1.12';
+    Amber.APP_VERSION = '1.13';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.

@@ -946,11 +946,17 @@
                 amberCost: c.totalAmberCost || 0,
                 otherCost: c.totalOtherCost || 0
             }];
+            let channelKwh = 0;
+            let channelAmber = 0;
+            let channelOther = 0;
             periodRows.forEach((row) => {
                 const adjustedAmberCost = Amber.adjustForGst(row.amberCost || 0, gstInclusive(), isFeedIn);
                 const adjustedOtherCost = Amber.adjustForGst(row.otherCost || 0, gstInclusive(), isFeedIn);
                 adjustedAmberTotal += adjustedAmberCost;
                 adjustedOtherTotal += adjustedOtherCost;
+                channelKwh += row.kwh || 0;
+                channelAmber += adjustedAmberCost;
+                channelOther += adjustedOtherCost;
                 tableHTML += `<tr>
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">${Amber.escapeHTML(c.type)}</span></td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
@@ -959,6 +965,15 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherCost.toFixed(2)}</td>
                 </tr>`;
             });
+            if (periodRows.length > 1) {
+                tableHTML += `<tr class="bg-gray-50 font-semibold">
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${Amber.escapeHTML(c.identifier)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${channelKwh.toFixed(1)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${channelAmber.toFixed(2)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${channelOther.toFixed(2)}</td>
+                </tr>`;
+            }
         });
 
         if (demandTariffInfo && demandTariffInfo.cost > 0) {

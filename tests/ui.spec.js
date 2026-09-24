@@ -30,19 +30,34 @@ test.describe('Amber UI flows', () => {
             await route.fulfill({
                 status: 200,
                 contentType: 'application/json',
-                body: JSON.stringify([{
-                    type: 'Usage',
-                    nemTime: `${startDateStr}T12:00:00+10:00`,
-                    date: startDateStr,
-                    kwh: 2.5,
-                    channelIdentifier: 'E1',
-                    quality: 'billable',
-                    perKwh: 25,
-                    renewables: 40,
-                    spotPerKwh: 20,
-                    duration: 30,
-                    channelType: 'general'
-                }])
+                body: JSON.stringify([
+                    {
+                        type: 'Usage',
+                        nemTime: `${startDateStr}T12:00:00+10:00`,
+                        date: startDateStr,
+                        kwh: 2.5,
+                        channelIdentifier: 'E1',
+                        quality: 'billable',
+                        perKwh: 25,
+                        renewables: 40,
+                        spotPerKwh: 20,
+                        duration: 30,
+                        channelType: 'general'
+                    },
+                    {
+                        type: 'Usage',
+                        nemTime: `${startDateStr}T17:30:00+10:00`,
+                        date: startDateStr,
+                        kwh: 1.0,
+                        channelIdentifier: 'E1',
+                        quality: 'billable',
+                        perKwh: 40,
+                        renewables: 40,
+                        spotPerKwh: 30,
+                        duration: 30,
+                        channelType: 'general'
+                    }
+                ])
             });
         });
         await page.goto('/');
@@ -130,6 +145,8 @@ test.describe('Amber UI flows', () => {
         await row.click();
         await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid, Flat)');
         await expect(page.locator('#results-table-container')).toContainText(/Origin Go Variable/);
+        await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid, TOU)');
+        await expect(page.locator('#results-table-container')).toContainText('Total');
     });
 
     test('Amber bill text file prefills editable charge fields', async ({ page }) => {

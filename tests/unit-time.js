@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.12', 'app version is 1.12');
+assert(Amber.APP_VERSION === '1.13', 'app version is 1.13');
 assert(Amber.canonicalNetwork('Ausgrid') === 'ausgrid', 'canonical Ausgrid');
 assert(Amber.canonicalNetwork('Endeavour Energy') === 'endeavour', 'canonical Endeavour');
 assert(Amber.planMatchesNetwork('Red Energy Living Energy Saver (Ausgrid, Flat)', {}, 'Ausgrid') === true, 'Ausgrid plan matches Ausgrid site');
