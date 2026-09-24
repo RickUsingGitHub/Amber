@@ -88,8 +88,8 @@
                 demand: { e: false }, asAt: AS_AT
             },
             'Red Energy Living Energy Saver (Ausgrid)': {
-                rateType: 'flat', daily: 85.37, flat: 29.6, feedIn: 7.0, cl: 16.5,
-                demand: { e: false }, asAt: '2026-08-30'
+                rateType: 'flat', daily: 122.5, flat: 28.0, feedIn: 2.5, cl: 15.75,
+                demand: { e: false }, asAt: '2026-09-08'
             }
         },
         NT: {
