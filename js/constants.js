@@ -8,7 +8,7 @@
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
     Amber.CACHE_BOUNDARY_DAYS = 3;
-    Amber.APP_VERSION = '1.10';
+    Amber.APP_VERSION = '1.11';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
@@ -30,6 +30,47 @@
     };
 
     Amber.WEEKDAY_INDEX = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+    Amber.canonicalNetwork = function (raw) {
+        const n = String(raw || '').toLowerCase();
+        if (/ausgrid/.test(n)) return 'ausgrid';
+        if (/endeavour/.test(n)) return 'endeavour';
+        if (/essential/.test(n)) return 'essential';
+        if (/energex/.test(n)) return 'energex';
+        if (/sa power|sapn/.test(n)) return 'sapn';
+        if (/citipower/.test(n)) return 'citipower';
+        if (/jemena/.test(n)) return 'jemena';
+        if (/powercor/.test(n)) return 'powercor';
+        if (/united energy/.test(n)) return 'united energy';
+        if (/ausnet/.test(n)) return 'ausnet';
+        if (/evoenergy/.test(n)) return 'evoenergy';
+        return null;
+    };
+
+    Amber.planNetworkKey = function (planName, plan) {
+        if (plan && plan.network) return Amber.canonicalNetwork(plan.network);
+        return Amber.canonicalNetwork(planName);
+    };
+
+    Amber.planMatchesNetwork = function (planName, plan, siteNetwork) {
+        const needed = Amber.planNetworkKey(planName, plan);
+        if (!needed) return true;
+        const site = Amber.canonicalNetwork(siteNetwork);
+        if (!site) return true;
+        return needed === site;
+    };
+
+    Amber.hintPlanForNetwork = function (siteNetwork) {
+        if (!siteNetwork) return null;
+        if (Amber.NETWORK_PLAN_HINTS[siteNetwork]) return Amber.NETWORK_PLAN_HINTS[siteNetwork];
+        const key = Amber.canonicalNetwork(siteNetwork);
+        if (!key) return null;
+        const names = Object.keys(Amber.NETWORK_PLAN_HINTS);
+        for (let i = 0; i < names.length; i++) {
+            if (Amber.canonicalNetwork(names[i]) === key) return Amber.NETWORK_PLAN_HINTS[names[i]];
+        }
+        return null;
+    };
 
     Amber.NETWORK_PLAN_HINTS = {
         'AusNet': '2026-27 VDO (AusNet Services)',

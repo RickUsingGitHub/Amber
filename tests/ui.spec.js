@@ -72,6 +72,7 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('.gst-switch-track')).toBeVisible();
         await expect(page.locator('#resultsSection')).toBeVisible();
         await expect(page.locator('#results-table-container table')).toBeVisible();
+        await expect(page.locator('#results-table-container')).toContainText(/Anytime|Peak|Off-peak|Shoulder|Controlled load|Feed-in/i);
 
         await page.click('#downloadCsvButton');
         await expect(page.locator('#csvDropdownMenu')).toBeVisible();
@@ -81,6 +82,14 @@ test.describe('Amber UI flows', () => {
         await expect(day).toBeVisible();
         await day.click();
         await expect(page.locator('#dailyGraphSection')).toBeVisible();
+    });
+
+    test('Ausgrid site hides Endeavour plans in the dropdown', async ({ page }) => {
+        await expect(page.locator('#siteSelectorRow')).toBeVisible();
+        const planOptions = await page.locator('#planSelector option').allTextContents();
+        expect(planOptions.some((t) => /Endeavour/.test(t))).toBe(false);
+        expect(planOptions.some((t) => /Ausgrid/.test(t))).toBe(true);
+        expect(planOptions.some((t) => /Essential/.test(t))).toBe(false);
     });
 
     test('mobile viewport keeps compare and presets usable', async ({ page }) => {

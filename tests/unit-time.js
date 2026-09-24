@@ -78,7 +78,30 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.10', 'app version is 1.10');
+assert(Amber.APP_VERSION === '1.11', 'app version is 1.11');
+assert(Amber.canonicalNetwork('Ausgrid') === 'ausgrid', 'canonical Ausgrid');
+assert(Amber.canonicalNetwork('Endeavour Energy') === 'endeavour', 'canonical Endeavour');
+assert(Amber.planMatchesNetwork('Red Energy Living Energy Saver (Ausgrid)', {}, 'Ausgrid') === true, 'Ausgrid plan matches Ausgrid site');
+assert(Amber.planMatchesNetwork('Red Energy Living Energy Saver (Endeavour)', {}, 'Ausgrid') === false, 'Endeavour plan hidden on Ausgrid');
+assert(Amber.planMatchesNetwork('Aurora Single Rate (Tariff 32)', {}, 'Ausgrid') === true, 'statewide plan still shown');
+assert(Amber.hintPlanForNetwork('Ausgrid') === '2026-27 DMO (Ausgrid)', 'hint DMO for Ausgrid');
+
+const touItem = { nemTime: '2026-08-12T17:30:00+10:00', processedTime: true, kwh: 2, perKwh: 20 };
+const dmoTou = Amber.supplierTemplates.NSW['2026-27 DMO TOU (Ausgrid)'];
+assert(Amber.getTouPeriod(Amber.clockPartsForItem(touItem, dmoTou, 'NSW'), dmoTou.tou, 0).period === 'peak', '17:30 is DMO Ausgrid peak');
+const offItem = { nemTime: '2026-08-12T10:00:00+10:00', processedTime: true, kwh: 1, perKwh: 10 };
+assert(Amber.getTouPeriod(Amber.clockPartsForItem(offItem, dmoTou, 'NSW'), dmoTou.tou, 0).period === 'offpeak', '10:00 is DMO Ausgrid off-peak');
+const ch = {
+    type: 'general',
+    usageData: [
+        { nemTime: '2026-08-12T17:30:00+10:00', processedTime: true, kwh: 2, perKwh: 20 },
+        { nemTime: '2026-08-12T10:00:00+10:00', processedTime: true, kwh: 1, perKwh: 10 }
+    ]
+};
+const broken = Amber.channelPeriodBreakdown(ch, dmoTou, 'NSW');
+assert(broken.length === 2, 'TOU breakdown has peak and off-peak rows');
+const peakRow = broken.find((r) => r.period === 'peak');
+assert(peakRow && peakRow.kwh === 2 && Math.abs(peakRow.otherCost - (2 * 60.20) / 100) < 1e-9, 'peak kWh and Red-style TOU cost');
 const redSaver = Amber.supplierTemplates.NSW['Red Energy Living Energy Saver (Ausgrid)'];
 assert(redSaver && redSaver.daily === 122.5 && redSaver.flat === 28.0, 'Red Living Energy Saver Ausgrid current inc-GST rates');
 const redEnd = Amber.supplierTemplates.NSW['Red Energy Living Energy Saver (Endeavour)'];

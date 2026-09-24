@@ -192,19 +192,45 @@
         $('otherSupplierHeading').textContent = planName ? `${planName} Details` : 'Other Supplier Details';
     }
 
+    function currentSiteNetwork() {
+        const site = selectedSite();
+        return site && site.network ? site.network : '';
+    }
+
+    function visiblePlanNames(selectedState) {
+        const plans = state.templates[selectedState] || {};
+        const siteNetwork = currentSiteNetwork();
+        return Object.keys(plans).filter((planName) =>
+            Amber.planMatchesNetwork(planName, plans[planName], siteNetwork)
+        );
+    }
+
     function updatePlanSelector(selectedState) {
         const planSelector = $('planSelector');
+        const previous = planSelector.value;
         planSelector.innerHTML = '<option value="">-- Custom --</option>';
-        if (state.templates[selectedState]) {
-            Object.keys(state.templates[selectedState]).forEach((planName) => {
-                const option = document.createElement('option');
-                option.value = planName;
-                option.textContent = planName;
-                if (!state.originalTemplates[selectedState] || !state.originalTemplates[selectedState][planName]) {
-                    option.style.color = '#1a56db';
-                }
-                planSelector.appendChild(option);
-            });
+        const names = visiblePlanNames(selectedState);
+        names.forEach((planName) => {
+            const option = document.createElement('option');
+            option.value = planName;
+            option.textContent = planName;
+            if (!state.originalTemplates[selectedState] || !state.originalTemplates[selectedState][planName]) {
+                option.style.color = '#1a56db';
+            }
+            planSelector.appendChild(option);
+        });
+        if (previous === '' || names.indexOf(previous) !== -1) {
+            planSelector.value = previous;
+            return;
+        }
+        const hintName = Amber.hintPlanForNetwork(currentSiteNetwork());
+        if (hintName && names.indexOf(hintName) !== -1) {
+            planSelector.value = hintName;
+        } else if (names.length) {
+            planSelector.value = names[0];
+        }
+        if (planSelector.value && planSelector.value !== previous) {
+            applyPlanTemplate();
         }
     }
 
@@ -577,6 +603,7 @@
         const match = state.sites.find((s) => s.id === saved) || state.sites.find((s) => s.status === 'active') || state.sites[0];
         select.value = match.id;
         state.currentSiteId = match.id;
+        updatePlanSelector(currentStateCode());
     }
 
     function selectedSite() {
@@ -670,7 +697,9 @@
         const host = $('allPlansTable');
         const stateCode = currentStateCode();
         const plans = state.templates[stateCode] || {};
-        const names = Object.keys(plans);
+        const names = Object.keys(plans).filter((planName) =>
+            Amber.planMatchesNetwork(planName, plans[planName], currentSiteNetwork())
+        );
         if (!names.length) {
             section.classList.add('hidden');
             return;
@@ -889,16 +918,17 @@
         let adjustedAmberTotal = 0;
         let adjustedOtherTotal = 0;
         let projectedMonthlyCostData = null;
+        const comparePlan = createPlanObjectFromForm();
         let tableHTML = `
             <p class="text-sm text-gray-500 mb-4">Period: ${numDays} days ${period}</p>
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
-                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amber</th>
-                        <th scope="col" class="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">${Amber.escapeHTML(planName)}</th>
+                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
+                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amber</th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">${Amber.escapeHTML(planName)}</th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">`;
@@ -906,17 +936,27 @@
         Object.values(channelTotals).forEach((c) => {
             if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) return;
             const isFeedIn = c.type === 'feedIn';
-            const adjustedAmberCost = Amber.adjustForGst(c.totalAmberCost || 0, gstInclusive(), isFeedIn);
-            const adjustedOtherCost = Amber.adjustForGst(c.totalOtherCost || 0, gstInclusive(), isFeedIn);
-            adjustedAmberTotal += adjustedAmberCost;
-            adjustedOtherTotal += adjustedOtherCost;
-            tableHTML += `<tr>
-                <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${Amber.escapeHTML(c.type)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">${(c.totalKWh || 0).toFixed(1)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedAmberCost.toFixed(2)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherCost.toFixed(2)}</td>
-            </tr>`;
+            const rows = Amber.channelPeriodBreakdown(c, comparePlan, currentStateCode());
+            const periodRows = rows.length ? rows : [{
+                period: c.type === 'feedIn' ? 'feedIn' : (c.type === 'controlledLoad' ? 'controlledLoad' : 'anytime'),
+                label: c.type === 'feedIn' ? 'Feed-in' : (c.type === 'controlledLoad' ? 'Controlled load' : 'Anytime'),
+                kwh: c.totalKWh || 0,
+                amberCost: c.totalAmberCost || 0,
+                otherCost: c.totalOtherCost || 0
+            }];
+            periodRows.forEach((row) => {
+                const adjustedAmberCost = Amber.adjustForGst(row.amberCost || 0, gstInclusive(), isFeedIn);
+                const adjustedOtherCost = Amber.adjustForGst(row.otherCost || 0, gstInclusive(), isFeedIn);
+                adjustedAmberTotal += adjustedAmberCost;
+                adjustedOtherTotal += adjustedOtherCost;
+                tableHTML += `<tr>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">${Amber.escapeHTML(c.type)}</span></td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedAmberCost.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherCost.toFixed(2)}</td>
+                </tr>`;
+            });
         });
 
         if (demandTariffInfo && demandTariffInfo.cost > 0) {
@@ -1536,6 +1576,7 @@
         $('siteSelector').addEventListener('change', () => {
             state.cachedChannelData = null;
             state.lastFetchTimestamp = null;
+            updatePlanSelector(currentStateCode());
             saveAllSettings();
         });
         $('rememberApiKey').addEventListener('change', () => {

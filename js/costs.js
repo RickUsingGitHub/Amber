@@ -13,8 +13,9 @@
         return q === 'estimated' || q === 'estimate';
     };
 
-    Amber.getTouRate = function (parts, touConfig, fallbackRate) {
-        if (!touConfig) return fallbackRate;
+    Amber.getTouPeriod = function (parts, touConfig, fallbackRate) {
+        const fallback = parseFloat(fallbackRate) || 0;
+        if (!touConfig) return { period: 'anytime', rate: fallback };
         const checkPeriod = (period) => {
             if (!period) return false;
             if (period.windows && period.windows.length > 0) {
@@ -22,12 +23,78 @@
             }
             return Amber.windowMatches(period, parts);
         };
-        if (checkPeriod(touConfig.peak)) return parseFloat(touConfig.peak.rate) || 0;
-        if (checkPeriod(touConfig.shoulder)) return parseFloat(touConfig.shoulder.rate) || 0;
-        if (touConfig.offpeak && touConfig.offpeak.rate != null && touConfig.offpeak.rate !== '') {
-            return parseFloat(touConfig.offpeak.rate) || 0;
+        if (checkPeriod(touConfig.peak)) {
+            return { period: 'peak', rate: parseFloat(touConfig.peak.rate) || 0 };
         }
-        return fallbackRate;
+        if (checkPeriod(touConfig.shoulder)) {
+            return { period: 'shoulder', rate: parseFloat(touConfig.shoulder.rate) || 0 };
+        }
+        if (touConfig.offpeak && touConfig.offpeak.rate != null && touConfig.offpeak.rate !== '') {
+            return { period: 'offpeak', rate: parseFloat(touConfig.offpeak.rate) || 0 };
+        }
+        return { period: 'offpeak', rate: fallback };
+    };
+
+    Amber.getTouRate = function (parts, touConfig, fallbackRate) {
+        return Amber.getTouPeriod(parts, touConfig, fallbackRate).rate;
+    };
+
+    Amber.PERIOD_LABELS = {
+        peak: 'Peak',
+        shoulder: 'Shoulder',
+        offpeak: 'Off-peak',
+        anytime: 'Anytime',
+        controlledLoad: 'Controlled load',
+        feedIn: 'Feed-in'
+    };
+
+    Amber.classifyUsagePeriod = function (item, channelType, planConfig, state) {
+        if (channelType === 'feedIn') {
+            return {
+                period: 'feedIn',
+                label: Amber.PERIOD_LABELS.feedIn,
+                rate: Amber.otherRateForItem(item, 'feedIn', planConfig, state)
+            };
+        }
+        if (channelType === 'controlledLoad') {
+            return {
+                period: 'controlledLoad',
+                label: Amber.PERIOD_LABELS.controlledLoad,
+                rate: Amber.otherRateForItem(item, 'controlledLoad', planConfig, state)
+            };
+        }
+        if (!planConfig || planConfig.rateType === 'flat') {
+            return {
+                period: 'anytime',
+                label: Amber.PERIOD_LABELS.anytime,
+                rate: parseFloat(planConfig && planConfig.flat) || 0
+            };
+        }
+        const parts = Amber.clockPartsForItem(item, planConfig, state);
+        const found = Amber.getTouPeriod(parts, planConfig.tou, parseFloat(planConfig.flat) || 0);
+        return {
+            period: found.period,
+            label: Amber.PERIOD_LABELS[found.period] || found.period,
+            rate: found.rate
+        };
+    };
+
+    Amber.channelPeriodBreakdown = function (channel, planConfig, state) {
+        const buckets = Object.create(null);
+        const order = ['peak', 'shoulder', 'offpeak', 'anytime', 'controlledLoad', 'feedIn'];
+        (channel.usageData || []).forEach((item) => {
+            const kwh = Amber.absKwh(item.kwh);
+            const perKwh = parseFloat(item.perKwh) || 0;
+            const cls = Amber.classifyUsagePeriod(item, channel.type, planConfig, state);
+            if (!buckets[cls.period]) {
+                buckets[cls.period] = { period: cls.period, label: cls.label, kwh: 0, amberCost: 0, otherCost: 0 };
+            }
+            buckets[cls.period].kwh += kwh;
+            buckets[cls.period].amberCost += (perKwh / 100) * kwh;
+            const other = (kwh * cls.rate) / 100;
+            buckets[cls.period].otherCost += channel.type === 'feedIn' ? -other : other;
+        });
+        return order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
     };
 
     Amber.getFeedInRate = function (parts, planConfig) {
