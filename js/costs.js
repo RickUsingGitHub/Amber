@@ -531,23 +531,48 @@
         });
         const bel = (tariff.belKwhPerDay || 0) * days;
         const freeKwh = Math.min(middayKwh, bel);
-        const addBack = freeKwh * (tariff.chargeIncGst || 0) / 100;
+        const chargedKwh = Math.max(0, middayKwh - bel);
+        const rate = tariff.chargeIncGst || 0;
+        const addBack = freeKwh * rate / 100;
+        const charge = chargedKwh * rate / 100;
         return {
             cost: intervalCost - addBack,
             intervalCost,
             middayKwh,
             freeKwh,
-            addBack
+            chargedKwh,
+            charge,
+            addBack,
+            chargeRate: rate
         };
     };
 
     Amber.applyAmberFeedInSettlement = function (channelTotals, site, numDays) {
         Object.keys(channelTotals || {}).forEach((id) => {
             const channel = channelTotals[id];
+            if (channel.amberExportCharge) {
+                channel.totalAmberCost -= channel.amberExportCharge;
+                channel.amberExportCharge = 0;
+                channel.amberExportChargeKwh = 0;
+                channel.amberExportChargeRate = 0;
+            }
+        });
+        Object.keys(channelTotals || {}).forEach((id) => {
+            const channel = channelTotals[id];
             const settled = Amber.settleAmberFeedIn(channel, site, numDays);
             if (!settled) return;
             channel.totalAmberCost = settled.cost;
             channel.amberFeedInSettlement = settled;
+            if (settled.charge > 0) {
+                const general = Object.keys(channelTotals).map((key) => channelTotals[key])
+                    .find((c) => c.type === 'general');
+                if (general) {
+                    general.totalAmberCost += settled.charge;
+                    general.amberExportCharge = settled.charge;
+                    general.amberExportChargeKwh = settled.chargedKwh;
+                    general.amberExportChargeRate = settled.chargeRate;
+                }
+            }
         });
     };
 

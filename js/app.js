@@ -971,7 +971,19 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}$${adjustedOtherCost.toFixed(2)}</td>
                 </tr>`;
             });
-            if (periodRows.length > 1) {
+            if (c.amberExportCharge) {
+                const exportAmber = Amber.adjustForGst(c.amberExportCharge, gstInclusive(), false);
+                adjustedAmberTotal += exportAmber;
+                channelAmber += exportAmber;
+                tableHTML += `<tr>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">export</span></td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">Export charge</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(c.amberExportChargeKwh || 0).toFixed(1)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}$${exportAmber.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$0.00</td>
+                </tr>`;
+            }
+            if (periodRows.length + (c.amberExportCharge ? 1 : 0) > 1) {
                 tableHTML += `<tr class="bg-gray-50 font-semibold">
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${Amber.escapeHTML(c.identifier)}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
