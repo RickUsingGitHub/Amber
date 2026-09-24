@@ -213,7 +213,7 @@
         names.forEach((planName) => {
             const option = document.createElement('option');
             option.value = planName;
-            option.textContent = planName;
+            option.textContent = Amber.planListLabel(planName, currentSiteNetwork());
             if (!state.originalTemplates[selectedState] || !state.originalTemplates[selectedState][planName]) {
                 option.style.color = '#1a56db';
             }
@@ -729,7 +729,7 @@
             }
             const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
             html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Compare using this plan">
-                <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(row.name)}</td>
+                <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(Amber.planListLabel(row.name, currentSiteNetwork()))}</td>
                 <td class="px-4 py-2 text-sm text-right">$${row.total.toFixed(2)}</td>
                 <td class="px-4 py-2 text-sm text-right ${cls}">${vs}</td>
             </tr>`;
@@ -776,7 +776,9 @@
         const planSelector = $('planSelector');
         if (!state.lastResultDataPayload) {
             for (const option of planSelector.options) {
-                option.textContent = option.value || '-- Custom --';
+                option.textContent = option.value
+                    ? Amber.planListLabel(option.value, currentSiteNetwork())
+                    : '-- Custom --';
             }
             return;
         }
@@ -813,7 +815,7 @@
                     ? ` ($${difference.toFixed(2)} cheaper)`
                     : ` ($${Math.abs(difference).toFixed(2)} more)`;
             }
-            option.textContent = option.value + savingsText;
+            option.textContent = Amber.planListLabel(option.value, currentSiteNetwork()) + savingsText;
         }
         planSelector.value = selectedName;
     }

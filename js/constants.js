@@ -8,7 +8,7 @@
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
     Amber.CACHE_BOUNDARY_DAYS = 3;
-    Amber.APP_VERSION = '1.11';
+    Amber.APP_VERSION = '1.12';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
@@ -60,6 +60,18 @@
         return needed === site;
     };
 
+    Amber.planListLabel = function (planName, siteNetwork) {
+        const siteKey = Amber.canonicalNetwork(siteNetwork);
+        if (!siteKey || !planName) return planName;
+        return String(planName).replace(/\(([^)]*)\)/g, (full, inner) => {
+            const parts = inner.split(',').map((s) => s.trim()).filter(Boolean);
+            const kept = parts.filter((part) => Amber.canonicalNetwork(part) !== siteKey);
+            if (kept.length === parts.length) return full;
+            if (!kept.length) return '';
+            return '(' + kept.join(', ') + ')';
+        }).replace(/\s{2,}/g, ' ').trim();
+    };
+
     Amber.hintPlanForNetwork = function (siteNetwork) {
         if (!siteNetwork) return null;
         if (Amber.NETWORK_PLAN_HINTS[siteNetwork]) return Amber.NETWORK_PLAN_HINTS[siteNetwork];
@@ -73,20 +85,20 @@
     };
 
     Amber.NETWORK_PLAN_HINTS = {
-        'AusNet': '2026-27 VDO (AusNet Services)',
-        'AusNet Services': '2026-27 VDO (AusNet Services)',
-        'CitiPower': '2026-27 VDO (CitiPower)',
-        'Citipower': '2026-27 VDO (CitiPower)',
-        'Jemena': '2026-27 VDO (Jemena)',
-        'Powercor': '2026-27 VDO (Powercor)',
-        'United Energy': '2026-27 VDO (United Energy)',
-        'Ausgrid': '2026-27 DMO (Ausgrid)',
-        'Endeavour': '2026-27 DMO (Endeavour)',
-        'Essential Energy': '2026-27 DMO (Essential Energy)',
-        'Essential': '2026-27 DMO (Essential Energy)',
-        'Energex': '2026-27 DMO (Energex)',
-        'SA Power Networks': '2026-27 DMO (SA Power Networks)',
-        'SAPN': '2026-27 DMO (SA Power Networks)'
+        'AusNet': '2026-27 VDO (AusNet Services, Flat)',
+        'AusNet Services': '2026-27 VDO (AusNet Services, Flat)',
+        'CitiPower': '2026-27 VDO (CitiPower, Flat)',
+        'Citipower': '2026-27 VDO (CitiPower, Flat)',
+        'Jemena': '2026-27 VDO (Jemena, Flat)',
+        'Powercor': '2026-27 VDO (Powercor, Flat)',
+        'United Energy': '2026-27 VDO (United Energy, Flat)',
+        'Ausgrid': '2026-27 DMO (Ausgrid, Flat)',
+        'Endeavour': '2026-27 DMO (Endeavour, Flat)',
+        'Essential Energy': '2026-27 DMO (Essential Energy, Flat)',
+        'Essential': '2026-27 DMO (Essential Energy, Flat)',
+        'Energex': '2026-27 DMO (Energex, Flat)',
+        'SA Power Networks': '2026-27 DMO (SA Power Networks, Flat)',
+        'SAPN': '2026-27 DMO (SA Power Networks, Flat)'
     };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;

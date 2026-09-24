@@ -86,10 +86,13 @@ test.describe('Amber UI flows', () => {
 
     test('Ausgrid site hides Endeavour plans in the dropdown', async ({ page }) => {
         await expect(page.locator('#siteSelectorRow')).toBeVisible();
-        const planOptions = await page.locator('#planSelector option').allTextContents();
-        expect(planOptions.some((t) => /Endeavour/.test(t))).toBe(false);
-        expect(planOptions.some((t) => /Ausgrid/.test(t))).toBe(true);
-        expect(planOptions.some((t) => /Essential/.test(t))).toBe(false);
+        const planValues = await page.locator('#planSelector option').evaluateAll((opts) => opts.map((o) => o.value));
+        const planLabels = await page.locator('#planSelector option').allTextContents();
+        expect(planValues.some((t) => /Endeavour/.test(t))).toBe(false);
+        expect(planValues.some((t) => /Ausgrid/.test(t))).toBe(true);
+        expect(planValues.some((t) => /Essential/.test(t))).toBe(false);
+        expect(planLabels.some((t) => /Living Energy Saver \(Flat\)/.test(t))).toBe(true);
+        expect(planLabels.some((t) => /Living Energy Saver \(TOU\)/.test(t))).toBe(true);
     });
 
     test('mobile viewport keeps compare and presets usable', async ({ page }) => {
@@ -119,14 +122,14 @@ test.describe('Amber UI flows', () => {
         await page.fill('#startDate', '2025-01-10');
         await page.fill('#endDate', '2025-01-10');
         await page.selectOption('#stateSelector', 'NSW');
-        await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid)');
+        await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid, Flat)');
         await page.click('#fetchData');
         await page.waitForSelector('#allPlansSection:not(.hidden)');
-        const row = page.locator('#allPlansTable tbody tr').filter({ hasText: 'Origin Go Variable (Ausgrid)' });
+        const row = page.locator('#allPlansTable tbody tr').filter({ hasText: 'Origin Go Variable (Flat)' });
         await expect(row).toBeVisible();
         await row.click();
-        await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid)');
-        await expect(page.locator('#results-table-container')).toContainText('Origin Go Variable (Ausgrid)');
+        await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid, Flat)');
+        await expect(page.locator('#results-table-container')).toContainText(/Origin Go Variable/);
     });
 
     test('Amber bill text file prefills editable charge fields', async ({ page }) => {
