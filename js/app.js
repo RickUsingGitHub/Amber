@@ -493,8 +493,14 @@
 
         const savedDaily = localStorage.getItem('dailyConnectionRate');
         if (savedDaily) $('dailyConnectionRate').value = savedDaily;
-        $('amberConnectionRate').value = localStorage.getItem('amberConnectionRate') || Amber.DEFAULT_AMBER_CONNECTION_CENTS;
-        $('amberSubscriptionRate').value = localStorage.getItem('amberSubscriptionRate') || Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS;
+        const storedConn = localStorage.getItem('amberConnectionRate');
+        const storedSub = localStorage.getItem('amberSubscriptionRate');
+        $('amberConnectionRate').value = (!storedConn || storedConn === '109.894')
+            ? Amber.DEFAULT_AMBER_CONNECTION_CENTS
+            : storedConn;
+        $('amberSubscriptionRate').value = (!storedSub || storedSub === '82.203')
+            ? Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS
+            : storedSub;
         $('amberDemandRate').value = localStorage.getItem('amberDemandRate') || Amber.DEFAULT_AMBER_DEMAND_CENTS;
 
         const savedDemand = localStorage.getItem('demandSettings');
