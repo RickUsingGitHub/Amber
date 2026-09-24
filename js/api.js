@@ -174,6 +174,14 @@
         const responseText = await response.text();
         if (!response.ok) {
             const detail = await Amber.parseErrorDetail(response, responseText);
+            const span = Amber.inclusiveDayCount(range.start, range.end);
+            if (response.status === 422 && span > 1 && /too large|maximum \d+ days/i.test(detail)) {
+                const midOffset = Math.ceil(span / 2) - 1;
+                const mid = Amber.addDays(range.start, midOffset);
+                const left = await Amber.fetchUsageRange(apiKey, siteId, { start: range.start, end: mid });
+                const right = await Amber.fetchUsageRange(apiKey, siteId, { start: Amber.addDays(mid, 1), end: range.end });
+                return left.concat(right);
+            }
             throw new Error(`Failed to fetch usage for ${range.start} to ${range.end}. Status: ${response.status}. Message: ${detail}`);
         }
         const apiResponseData = JSON.parse(responseText);

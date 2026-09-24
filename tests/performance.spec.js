@@ -71,7 +71,7 @@ test.describe('Amber fetch and UI', () => {
         await page.locator('#apiKey').waitFor();
     });
 
-    test('should fetch a 15-day range in one 30-day chunk', async ({ page }) => {
+    test('should fetch a 15-day range as 7-day chunks', async ({ page }) => {
         await page.fill('#startDate', '2025-01-01');
         await page.fill('#endDate', '2025-01-15');
 
@@ -83,14 +83,14 @@ test.describe('Amber fetch and UI', () => {
         await page.click('#fetchData');
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
 
-        expect(requestedUrls.length).toBe(1);
+        expect(requestedUrls.length).toBe(3);
         const usageValue = await page.locator('td:has-text("E1") + td + td').textContent();
         expect(usageValue.trim()).toBe('15.0');
     });
 
-    test('should fetch a long range as multiple 30-day chunks', async ({ page }) => {
+    test('should fetch a 21-day range as three 7-day chunks', async ({ page }) => {
         await page.fill('#startDate', '2025-01-01');
-        await page.fill('#endDate', '2025-03-15');
+        await page.fill('#endDate', '2025-01-21');
 
         const requestedUrls = [];
         page.on('request', (request) => {
@@ -104,7 +104,7 @@ test.describe('Amber fetch and UI', () => {
     });
 
     test('should keep successful chunks when one range fails', async ({ page }) => {
-        await page.route('**/usage*startDate=2025-01-31*', async (route) => {
+        await page.route('**/usage*startDate=2025-01-15*', async (route) => {
             await route.fulfill({
                 status: 500,
                 contentType: 'application/json',

@@ -2,13 +2,13 @@
     const Amber = root.Amber = root.Amber || {};
 
     Amber.API_URL = 'https://api.amber.com.au/v1';
-    Amber.FETCH_CHUNK_DAYS = 30;
+    Amber.FETCH_CHUNK_DAYS = 7;
     Amber.FETCH_CONCURRENCY = 3;
     Amber.FETCH_TIMEOUT_MS = 25000;
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
     Amber.CACHE_BOUNDARY_DAYS = 3;
-    Amber.APP_VERSION = '1.14';
+    Amber.APP_VERSION = '1.15';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.

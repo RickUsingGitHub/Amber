@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.14', 'app version is 1.14');
+assert(Amber.APP_VERSION === '1.15', 'app version is 1.15');
 assert(Amber.formatCentsPerKwh(60.2) === '(60.2c/kWh) ', 'format peak rate');
 assert(Amber.formatCentsPerKwh(28) === '(28c/kWh) ', 'format whole-cent rate');
 assert(Amber.canonicalNetwork('Ausgrid') === 'ausgrid', 'canonical Ausgrid');
@@ -154,13 +154,13 @@ assert(dmo && dmo.daily === 166 && dmo.flat === 33.14, 'DMO Ausgrid GST-inc publ
 const vdo = Amber.supplierTemplates.VIC['2026-27 VDO (CitiPower, Flat)'];
 assert(vdo && vdo.daily === 121.14 && vdo.flat === 25.96, 'VDO CitiPower GST-inc published rates');
 
-const thirtyDates = [];
-for (let i = 1; i <= 30; i++) thirtyDates.push(`2026-07-${String(i).padStart(2, '0')}`);
-const thirtyRanges = Amber.buildFetchRanges(thirtyDates);
-assert(thirtyRanges.length === 1 && thirtyRanges[0].start === '2026-07-01' && thirtyRanges[0].end === '2026-07-30', '30-day usage chunk');
-const thirtyOneDates = thirtyDates.concat(['2026-07-31']);
-const splitRanges = Amber.buildFetchRanges(thirtyOneDates);
-assert(splitRanges.length === 2 && splitRanges[0].end === '2026-07-30' && splitRanges[1].start === '2026-07-31', '31 days split into two chunks');
+const sevenDates = [];
+for (let i = 1; i <= 7; i++) sevenDates.push(`2026-07-${String(i).padStart(2, '0')}`);
+const sevenRanges = Amber.buildFetchRanges(sevenDates);
+assert(sevenRanges.length === 1 && sevenRanges[0].start === '2026-07-01' && sevenRanges[0].end === '2026-07-07', '7-day usage chunk');
+const eightDates = sevenDates.concat(['2026-07-08']);
+const splitRanges = Amber.buildFetchRanges(eightDates);
+assert(splitRanges.length === 2 && splitRanges[0].end === '2026-07-07' && splitRanges[1].start === '2026-07-08', '8 days split into two 7-day max chunks');
 
 assert(Amber.FETCH_SITES_TIMEOUT_MS > 0 && Amber.FETCH_SITES_TIMEOUT_MS <= Amber.FETCH_TIMEOUT_MS, 'sites timeout is finite and not longer than usage');
 
