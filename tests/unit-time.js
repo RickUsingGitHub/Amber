@@ -78,7 +78,33 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.15', 'app version is 1.15');
+assert(Amber.APP_VERSION === '1.16', 'app version is 1.16');
+assert(Amber.intervalEndInWindow({ timeValue: 1200 }, '10:00', '15:00') === true, 'noon is midday export window');
+assert(Amber.intervalEndInWindow({ timeValue: 1000 }, '10:00', '15:00') === false, '10:00 end is before midday window');
+assert(Amber.intervalEndInWindow({ timeValue: 1500 }, '10:00', '15:00') === true, '15:00 end is last midday interval');
+assert(Amber.intervalEndInWindow({ timeValue: 1605 }, '10:00', '15:00') === false, '16:05 is not midday');
+
+const fitChannel = {
+    type: 'feedIn',
+    tariff: 'EA029',
+    usageData: [{
+        nemTime: '2026-08-20T12:00:00+10:00',
+        processedTime: true,
+        kwh: 233.12,
+        perKwh: -1.643
+    }]
+};
+const fitSite = { network: 'Ausgrid', channels: [{ type: 'feedIn', tariff: 'EA029' }] };
+const settled = Amber.settleAmberFeedIn(fitChannel, fitSite, 31);
+assert(settled && Math.abs(settled.middayKwh - 233.12) < 1e-6, 'midday kWh from interval end');
+assert(Math.abs(settled.freeKwh - 6.83 * 31) < 1e-6, 'BEL is 6.83 kWh times 31 days');
+assert(settled.cost < settled.intervalCost, 'free midday allowance increases the solar credit');
+assert(Math.abs(settled.cost - (settled.intervalCost - settled.addBack)) < 1e-9, 'settled cost is interval minus BEL add-back');
+const noTariff = Amber.settleAmberFeedIn({
+    type: 'feedIn',
+    usageData: [{ nemTime: '2026-08-20T12:00:00+10:00', processedTime: true, kwh: 1, perKwh: -10 }]
+}, { network: 'Unknown' }, 31);
+assert(noTariff == null, 'no two-way tariff leaves interval FIT unchanged');
 assert(Amber.formatCentsPerKwh(60.2) === '(60.2c/kWh) ', 'format peak rate');
 assert(Amber.formatCentsPerKwh(28) === '(28c/kWh) ', 'format whole-cent rate');
 assert(Amber.canonicalNetwork('Ausgrid') === 'ausgrid', 'canonical Ausgrid');

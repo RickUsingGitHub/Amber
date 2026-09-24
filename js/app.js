@@ -1135,6 +1135,7 @@
         const numDays = Amber.inclusiveDayCount(startDateStr, endDateStr);
         const planConfig = createPlanObjectFromForm();
         const rates = readAmberRates();
+        Amber.applyAmberFeedInSettlement(state.cachedChannelData, selectedSite(), numDays);
         Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, currentStateCode());
         const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, currentStateCode());
         const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates.demandCents);
@@ -1303,6 +1304,7 @@
 
             Amber.processUsageData(selectedUsageData, channelTotalsSelectedPeriod, true);
             Object.values(channelTotalsSelectedPeriod).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
+            Amber.applyAmberFeedInSettlement(channelTotalsSelectedPeriod, site, numDays);
 
             const planConfig = createPlanObjectFromForm();
             const rates = readAmberRates();

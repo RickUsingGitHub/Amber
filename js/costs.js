@@ -103,7 +103,11 @@
             const other = (kwh * cls.rate) / 100;
             buckets[cls.period].otherCost += channel.type === 'feedIn' ? -other : other;
         });
-        return order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
+        const rows = order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
+        if (channel.type === 'feedIn' && rows.length === 1 && Number.isFinite(channel.totalAmberCost)) {
+            rows[0].amberCost = channel.totalAmberCost;
+        }
+        return rows;
     };
 
     Amber.formatCentsPerKwh = function (rate) {
@@ -471,6 +475,82 @@
         return { summaries, monthlyDemandInfo };
     };
 
+    Amber.EXPORT_TARIFFS = {
+        EA029: {
+            clock: 'local',
+            timeZone: 'Australia/Sydney',
+            middayStart: '10:00',
+            middayEnd: '15:00',
+            chargeIncGst: 1.3552,
+            belKwhPerDay: 6.83
+        }
+    };
+
+    Amber.intervalEndInWindow = function (parts, startHHMM, endHHMM) {
+        if (!parts || !startHHMM || !endHHMM) return false;
+        const t = parts.timeValue;
+        const start = parseInt(String(startHHMM).replace(':', ''), 10);
+        const end = parseInt(String(endHHMM).replace(':', ''), 10);
+        if (start < end) return t > start && t <= end;
+        return t > start || t <= end;
+    };
+
+    Amber.resolveExportTariff = function (site, channel) {
+        const code = (channel && channel.tariff) || '';
+        if (Amber.EXPORT_TARIFFS[code]) return Amber.EXPORT_TARIFFS[code];
+        const channels = (site && site.channels) || [];
+        for (let i = 0; i < channels.length; i++) {
+            const t = channels[i] && channels[i].tariff;
+            if (t && Amber.EXPORT_TARIFFS[t] && (channels[i].type === 'feedIn' || !channel)) {
+                return Amber.EXPORT_TARIFFS[t];
+            }
+        }
+        if (site && Amber.canonicalNetwork(site.network) === 'ausgrid' && channel && channel.type === 'feedIn') {
+            return Amber.EXPORT_TARIFFS.EA029;
+        }
+        return null;
+    };
+
+    Amber.settleAmberFeedIn = function (channel, site, numDays) {
+        if (!channel || channel.type !== 'feedIn') return null;
+        const tariff = Amber.resolveExportTariff(site, channel);
+        if (!tariff) return null;
+        const days = Number(numDays) || 0;
+        const opts = { clock: tariff.clock || 'local', timeZone: tariff.timeZone || 'Australia/Sydney' };
+        let intervalCost = 0;
+        let middayKwh = 0;
+        (channel.usageData || []).forEach((item) => {
+            const kwh = Amber.absKwh(item.kwh);
+            const perKwh = parseFloat(item.perKwh) || 0;
+            intervalCost += (perKwh / 100) * kwh;
+            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+            const parts = Amber.getClockParts(nem, opts);
+            if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
+                middayKwh += kwh;
+            }
+        });
+        const bel = (tariff.belKwhPerDay || 0) * days;
+        const freeKwh = Math.min(middayKwh, bel);
+        const addBack = freeKwh * (tariff.chargeIncGst || 0) / 100;
+        return {
+            cost: intervalCost - addBack,
+            intervalCost,
+            middayKwh,
+            freeKwh,
+            addBack
+        };
+    };
+
+    Amber.applyAmberFeedInSettlement = function (channelTotals, site, numDays) {
+        Object.keys(channelTotals || {}).forEach((id) => {
+            const channel = channelTotals[id];
+            const settled = Amber.settleAmberFeedIn(channel, site, numDays);
+            if (!settled) return;
+            channel.totalAmberCost = settled.cost;
+            channel.amberFeedInSettlement = settled;
+        });
+    };
+
     Amber.processUsageData = function (usageArray, channelTotalsObject, shouldCalculateTotals) {
         usageArray.forEach((item) => {
             if (!item.processedTime) {
@@ -494,6 +574,7 @@
         return {
             identifier: channel.identifier,
             type: channel.type,
+            tariff: channel.tariff,
             totalKWh: 0,
             totalAmberCost: 0,
             totalOtherCost: 0,
