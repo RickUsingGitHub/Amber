@@ -8,7 +8,7 @@
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
     Amber.CACHE_BOUNDARY_DAYS = 3;
-    Amber.APP_VERSION = '1.09';
+    Amber.APP_VERSION = '1.10';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
@@ -43,7 +43,9 @@
         'Endeavour': '2026-27 DMO (Endeavour)',
         'Essential Energy': '2026-27 DMO (Essential Energy)',
         'Essential': '2026-27 DMO (Essential Energy)',
-        'Energex': '2026-27 DMO (Energex)'
+        'Energex': '2026-27 DMO (Energex)',
+        'SA Power Networks': '2026-27 DMO (SA Power Networks)',
+        'SAPN': '2026-27 DMO (SA Power Networks)'
     };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;
