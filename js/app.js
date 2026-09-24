@@ -962,7 +962,7 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedAmberCost.toFixed(2)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherCost.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}$${adjustedOtherCost.toFixed(2)}</td>
                 </tr>`;
             });
             if (periodRows.length > 1) {

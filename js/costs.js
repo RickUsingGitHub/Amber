@@ -87,7 +87,16 @@
             const perKwh = parseFloat(item.perKwh) || 0;
             const cls = Amber.classifyUsagePeriod(item, channel.type, planConfig, state);
             if (!buckets[cls.period]) {
-                buckets[cls.period] = { period: cls.period, label: cls.label, kwh: 0, amberCost: 0, otherCost: 0 };
+                buckets[cls.period] = {
+                    period: cls.period,
+                    label: cls.label,
+                    kwh: 0,
+                    amberCost: 0,
+                    otherCost: 0,
+                    rate: cls.rate
+                };
+            } else if (buckets[cls.period].rate !== cls.rate) {
+                buckets[cls.period].rate = null;
             }
             buckets[cls.period].kwh += kwh;
             buckets[cls.period].amberCost += (perKwh / 100) * kwh;
@@ -95,6 +104,13 @@
             buckets[cls.period].otherCost += channel.type === 'feedIn' ? -other : other;
         });
         return order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
+    };
+
+    Amber.formatCentsPerKwh = function (rate) {
+        const n = parseFloat(rate);
+        if (!Number.isFinite(n)) return '';
+        const text = String(Number(n.toFixed(4)));
+        return `(${text}c/kWh) `;
     };
 
     Amber.getFeedInRate = function (parts, planConfig) {

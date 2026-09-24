@@ -147,6 +147,7 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#results-table-container')).toContainText(/Origin Go Variable/);
         await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid, TOU)');
         await expect(page.locator('#results-table-container')).toContainText('Total');
+        await expect(page.locator('#results-table-container')).toContainText(/c\/kWh/);
     });
 
     test('Amber bill text file prefills editable charge fields', async ({ page }) => {
