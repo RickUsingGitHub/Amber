@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.19', 'app version is 1.19');
+assert(Amber.APP_VERSION === '1.20', 'app version is 1.20');
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection default');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');
 assert(Amber.DEFAULT_AMBER_DEMAND_CENTS === 42.345, 'Amber demand default');
