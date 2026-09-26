@@ -19,7 +19,9 @@
         sitesApiKey: null,
         lastResultDataPayload: null,
         amberCostBaseline: null,
-        fetching: false
+        fetching: false,
+        teslaPoints: [],
+        nightChart: null
     };
 
     const configElements = {};
@@ -620,6 +622,7 @@
     function destroyCharts() {
         if (state.dailyUsageChart) { state.dailyUsageChart.destroy(); state.dailyUsageChart = null; }
         if (state.usageChart) { state.usageChart.destroy(); state.usageChart = null; }
+        if (state.nightChart) { state.nightChart.destroy(); state.nightChart = null; }
     }
 
     function setFetching(isFetching) {
@@ -1144,6 +1147,347 @@
             amberRates: rates,
             onDaySelect: selectCalendarDay
         });
+
+        try {
+            renderNightStats();
+            renderMoreStats();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // ---------- Overnight & backup reserve ----------
+
+    const NIGHT_SETTINGS_KEY = 'nightStatsSettings';
+    const TESLA_POINTS_KEY = 'teslaHomeLoad';
+
+    function currentTimeZone() {
+        return Amber.STATE_TIMEZONES[currentStateCode()] || 'Australia/Sydney';
+    }
+
+    function defaultLatLon() {
+        const ll = Amber.STATE_LAT_LON[currentStateCode()] || Amber.STATE_LAT_LON.NSW;
+        return `${ll[0]}, ${ll[1]}`;
+    }
+
+    function loadNightSettings() {
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(NIGHT_SETTINGS_KEY) || '{}') || {}; } catch (e) { saved = {}; }
+        const d = Amber.STATS_DEFAULTS;
+        $('nsBatteryKwh').value = saved.batteryKwh != null ? saved.batteryKwh : d.batteryKwh;
+        $('nsLatLon').value = saved.latLon || '';
+        $('nsCapKw').value = saved.capKw != null ? saved.capKw : d.capKw;
+        $('nsMarginPct').value = saved.marginPct != null ? saved.marginPct : d.marginPct;
+        $('nsEveningMin').value = saved.eveningMin != null ? saved.eveningMin : d.eveningMin;
+        $('nsMorningMin').value = saved.morningMin != null ? saved.morningMin : d.morningMin;
+        state.nightSourcePref = saved.source || null;
+        try {
+            const packed = JSON.parse(localStorage.getItem(TESLA_POINTS_KEY) || '[]');
+            state.teslaPoints = packed.map((p) => ({ t: p[0], kwh: p[1], dur: p[2] / 60 }));
+        } catch (e) {
+            state.teslaPoints = [];
+        }
+    }
+
+    function saveNightSettings() {
+        const checked = document.querySelector('input[name="nightSource"]:checked');
+        const s = {
+            batteryKwh: parseFloat($('nsBatteryKwh').value),
+            latLon: $('nsLatLon').value.trim(),
+            capKw: parseFloat($('nsCapKw').value),
+            marginPct: parseFloat($('nsMarginPct').value),
+            eveningMin: parseFloat($('nsEveningMin').value),
+            morningMin: parseFloat($('nsMorningMin').value),
+            source: checked ? checked.value : state.nightSourcePref
+        };
+        state.nightSourcePref = s.source;
+        try { localStorage.setItem(NIGHT_SETTINGS_KEY, JSON.stringify(s)); } catch (e) { /* ignore quota */ }
+    }
+
+    function saveTeslaPoints() {
+        try {
+            const packed = state.teslaPoints.map((p) => [p.t, Math.round(p.kwh * 10000) / 10000, Math.round(p.dur * 60 * 100) / 100]);
+            localStorage.setItem(TESLA_POINTS_KEY, JSON.stringify(packed));
+            return true;
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function nightOptions() {
+        const raw = ($('nsLatLon').value.trim() || defaultLatLon()).split(/[,\s]+/).map(parseFloat);
+        const fallback = Amber.STATE_LAT_LON[currentStateCode()] || Amber.STATE_LAT_LON.NSW;
+        const lat = Number.isFinite(raw[0]) && Math.abs(raw[0]) <= 66 ? raw[0] : fallback[0];
+        const lon = Number.isFinite(raw[1]) && Math.abs(raw[1]) <= 180 ? raw[1] : fallback[1];
+        const num = (id, dflt) => {
+            const v = parseFloat($(id).value);
+            return Number.isFinite(v) && v >= 0 ? v : dflt;
+        };
+        const d = Amber.STATS_DEFAULTS;
+        return {
+            lat,
+            lon,
+            timeZone: currentTimeZone(),
+            batteryKwh: num('nsBatteryKwh', d.batteryKwh),
+            capKw: num('nsCapKw', d.capKw) || Infinity,
+            marginPct: num('nsMarginPct', d.marginPct),
+            eveningMin: num('nsEveningMin', d.eveningMin),
+            morningMin: num('nsMorningMin', d.morningMin)
+        };
+    }
+
+    function updateTeslaStatus(extra) {
+        const pts = state.teslaPoints;
+        const tz = currentTimeZone();
+        let text = pts.length
+            ? `Loaded ${pts.length.toLocaleString()} readings, ${Amber.localDateStr(pts[0].t, tz)} to ${Amber.localDateStr(pts[pts.length - 1].t, tz)}. Kept in this browser only.`
+            : 'No Tesla data loaded. Add one Day export per day (a night spans two days).';
+        if (extra) text = `${extra} ${text}`;
+        $('nsTeslaStatus').textContent = text;
+    }
+
+    async function handleTeslaFiles(files) {
+        const tz = currentTimeZone();
+        const errors = [];
+        let added = 0;
+        for (const file of Array.from(files || [])) {
+            const text = await file.text();
+            const parsed = Amber.parseTeslaCsv(text, tz);
+            if (parsed.error) {
+                errors.push(`${file.name}: ${parsed.error}`);
+                continue;
+            }
+            state.teslaPoints = Amber.mergePoints(state.teslaPoints, parsed.points);
+            added++;
+        }
+        const stored = saveTeslaPoints();
+        let msg = added ? `Added ${added} file(s).` : '';
+        if (errors.length) msg += ` ${errors.join(' ')}`;
+        if (!stored) msg += ' (Too much to remember after a reload.)';
+        if (added) {
+            const tesla = document.querySelector('input[name="nightSource"][value="tesla"]');
+            if (tesla) tesla.checked = true;
+            saveNightSettings();
+        }
+        renderNightStats();
+        updateTeslaStatus(msg.trim());
+    }
+
+    function fmt(n, dp) {
+        return Number.isFinite(n) ? n.toFixed(dp == null ? 1 : dp) : '–';
+    }
+
+    function shortDate(dateStr) {
+        const d = new Date(dateStr + 'T00:00:00');
+        return d.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
+    }
+
+    function tile(label, value, sub) {
+        return `<div class="p-3 rounded-md bg-gray-50 border border-gray-200">
+            <div class="text-xs text-gray-500">${label}</div>
+            <div class="text-xl font-bold text-gray-900">${value}</div>
+            ${sub ? `<div class="text-xs text-gray-500">${sub}</div>` : ''}
+        </div>`;
+    }
+
+    function renderNightStats() {
+        const section = $('nightStatsSection');
+        if (!state.cachedChannelData) return;
+        section.classList.remove('hidden');
+        $('nsLatLon').placeholder = defaultLatLon();
+
+        const radios = document.querySelectorAll('input[name="nightSource"]');
+        let source = state.nightSourcePref || (state.teslaPoints.length ? 'tesla' : 'amber');
+        if (source === 'tesla' && !state.teslaPoints.length && !state.nightSourcePref) source = 'amber';
+        radios.forEach((r) => { r.checked = r.value === source; });
+        updateTeslaStatus();
+
+        const opts = nightOptions();
+        const note = $('nsNote');
+        const body = $('nsBody');
+        const chartWrap = $('nsChartWrap');
+        if (state.nightChart) { state.nightChart.destroy(); state.nightChart = null; }
+
+        let points;
+        let windows;
+        const notes = [];
+        if (source === 'tesla') {
+            points = state.teslaPoints;
+            windows = Amber.windowsForPoints(points, opts);
+        } else {
+            points = Amber.amberImportPoints(state.cachedChannelData);
+            windows = [];
+            for (let d = Amber.addDaysUtc(state.lastFetchedStartDate, -1); d <= state.lastFetchedEndDate; d = Amber.addDaysUtc(d, 1)) {
+                const w = Amber.nightWindow(d, opts);
+                if (w) windows.push(w);
+            }
+            notes.push('This is grid import from the Amber meter. It equals your overnight house load only if you have no battery (useful for sizing one). With a battery, the meter can\'t see what the battery supplies, and any overnight grid charging is counted — load Tesla data instead.');
+        }
+
+        const result = Amber.nightlyEnergy(points, windows, opts);
+        const summary = Amber.summariseNights(result, opts);
+
+        if (source === 'amber' && summary && summary.medianKwh < 1.5) {
+            notes.unshift(`Most nights imported almost nothing from the grid (typical ${fmt(summary.medianKwh)} kWh), so a battery is covering them and these figures understate your real load.`);
+        }
+        if (notes.length) {
+            note.innerHTML = notes.map((n) => `<p>${Amber.escapeHTML(n)}</p>`).join('');
+            note.classList.remove('hidden');
+        } else {
+            note.classList.add('hidden');
+        }
+
+        if (!summary) {
+            body.innerHTML = `<p class="text-sm text-gray-600">${source === 'tesla'
+                ? 'No complete nights in the Tesla data yet. Load consecutive Day exports so each night (evening and next morning) is covered.'
+                : 'No complete nights in this period.'}</p>`;
+            chartWrap.classList.add('hidden');
+            return;
+        }
+
+        const today = Amber.formatForInput(new Date());
+        const tonight = Amber.nightWindow(today, opts);
+        const extremes = Amber.nightLengthExtremes(today, opts);
+        const rTonight = summary.reserveFor(tonight.hours);
+        const rLongest = summary.reserveFor(extremes.longest.hours);
+        const pctText = (r) => {
+            if (r.pct == null) return '';
+            const cls = r.pct > 100 ? 'text-red-700' : 'text-green-700';
+            return `<span class="${cls} font-semibold">${fmt(Math.ceil(r.pct), 0)}%</span> of ${fmt(opts.batteryKwh)} kWh`;
+        };
+        const capText = Number.isFinite(opts.capKw) ? `loads above ${fmt(opts.capKw)} kW ignored` : 'no load cap';
+        const tz = opts.timeZone;
+
+        body.innerHTML = `
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                ${tile('Typical night (median)', `${fmt(summary.medianKwh)} kWh`, `avg ${fmt(summary.medianKw, 2)} kW over ${fmt(summary.medianHours)} h`)}
+                ${tile('Heavy night (90th pct)', `${fmt(summary.p90Kwh)} kWh`, `${summary.count} nights, ${capText}`)}
+                ${tile('Lightest / heaviest', `${fmt(summary.minKwh)} / ${fmt(summary.maxKwh)} kWh`, `${shortDate(summary.minDate)} / ${shortDate(summary.maxDate)}`)}
+                ${tile('Always-on base load', `${fmt(summary.baseKw, 2)} kW`, '10th percentile overnight')}
+            </div>
+            <div class="p-4 rounded-lg bg-indigo-50 text-sm text-gray-800">
+                <p class="font-semibold text-gray-900 mb-2">Suggested backup reserve</p>
+                <table class="min-w-full">
+                    <tr>
+                        <td class="py-1 pr-3">Tonight</td>
+                        <td class="py-1 pr-3 text-gray-600">${Amber.localClock(tonight.start, tz)} → ${Amber.localClock(tonight.end, tz)} (${fmt(tonight.hours)} h)</td>
+                        <td class="py-1 pr-3 text-right font-semibold">${fmt(rTonight.kwh)} kWh</td>
+                        <td class="py-1 text-right">${pctText(rTonight)}</td>
+                    </tr>
+                    <tr>
+                        <td class="py-1 pr-3">Longest night</td>
+                        <td class="py-1 pr-3 text-gray-600">${shortDate(extremes.longest.date)}: ${Amber.localClock(extremes.longest.start, tz)} → ${Amber.localClock(extremes.longest.end, tz)} (${fmt(extremes.longest.hours)} h)</td>
+                        <td class="py-1 pr-3 text-right font-semibold">${fmt(rLongest.kwh)} kWh</td>
+                        <td class="py-1 text-right">${pctText(rLongest)}</td>
+                    </tr>
+                </table>
+                <p class="text-xs text-gray-600 mt-2">${fmt(summary.p90Kw, 2)} kW (a heavy night's average draw) &times; night length + ${fmt(opts.marginPct, 0)}% margin.</p>
+            </div>`;
+
+        chartWrap.classList.remove('hidden');
+        const nights = result.nights;
+        const margin = 1 + opts.marginPct / 100;
+        if (root.Chart) {
+            state.nightChart = new root.Chart($('nightChart').getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: nights.map((n) => shortDate(n.date)),
+                    datasets: [
+                        {
+                            type: 'bar',
+                            label: 'Night use (kWh)',
+                            data: nights.map((n) => n.kwh),
+                            backgroundColor: 'rgba(79, 70, 229, 0.6)',
+                            borderColor: 'rgba(79, 70, 229, 1)',
+                            borderWidth: 1,
+                            order: 2
+                        },
+                        {
+                            type: 'line',
+                            label: 'Suggested reserve (kWh)',
+                            data: nights.map((n) => summary.p90Kw * n.hours * margin),
+                            borderColor: 'rgba(217, 119, 6, 1)',
+                            backgroundColor: 'rgba(217, 119, 6, 0.2)',
+                            borderDash: [6, 4],
+                            pointRadius: 0,
+                            borderWidth: 2,
+                            order: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        y: { beginAtZero: true, title: { display: true, text: 'kWh' } }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${fmt(ctx.parsed.y, 2)}`,
+                                afterBody: (items) => {
+                                    const n = nights[items[0].dataIndex];
+                                    if (!n) return [];
+                                    const lines = [`${Amber.localClock(n.start, tz)} → ${Amber.localClock(n.end, tz)} (${fmt(n.hours)} h)`,
+                                        `Avg ${fmt(n.avgKw, 2)} kW, base ${fmt(n.baseKw, 2)} kW`];
+                                    if (n.rawKwh - n.kwh > 0.05) lines.push(`Unclipped: ${fmt(n.rawKwh, 2)} kWh`);
+                                    return lines;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function renderMoreStats() {
+        if (!state.cachedChannelData) return;
+        const s = Amber.moreStats(state.cachedChannelData, { timeZone: currentTimeZone() });
+        const section = $('moreStatsSection');
+        if (!s.dayCount) { section.classList.add('hidden'); return; }
+        section.classList.remove('hidden');
+        const money = (v) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
+        const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)}%` : '–');
+        const rows = [
+            ['Average import price', s.avgImportCents != null ? `${s.avgImportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.importKwh, 0)} kWh imported, ${money(s.importCost)} energy cost`],
+            ['Average feed-in earned', s.avgExportCents != null ? `${s.avgExportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.exportKwh, 0)} kWh exported, ${money(s.exportEarn)} earned`],
+            ['Imported during price spikes (≥ 50c)', `${fmt(s.spikeImportKwh)} kWh`, `${money(s.spikeImportCost)} — ${pct(s.spikeImportCost, s.importCost)} of energy cost`],
+            ['Exported during price spikes (≥ 50c)', `${fmt(s.spikeExportKwh)} kWh`, `${money(s.spikeExportEarn)} — ${pct(s.spikeExportEarn, s.exportEarn)} of feed-in earnings`],
+            ['Imported at negative prices', `${fmt(s.negImportKwh)} kWh`, `${money(s.negImportCredit)} paid to you`],
+            ['Exported at negative prices', `${fmt(s.negExportKwh)} kWh`, `${money(s.negExportCost)} cost`],
+            ['Evening import (4–9 pm)', `${fmt(s.eveningImportKwh)} kWh`, `${pct(s.eveningImportKwh, s.importKwh)} of all import`],
+            ['Days with (almost) no grid import', `${s.gridFreeDays} of ${s.dayCount}`, 'under 0.5 kWh imported'],
+            ['Days exporting more than importing', `${s.netExportDays} of ${s.dayCount}`, '']
+        ];
+        $('moreStatsTable').innerHTML = `<table class="min-w-full divide-y divide-gray-200 text-sm"><tbody class="divide-y divide-gray-200">${rows.map((r) => `
+            <tr>
+                <td class="px-3 py-2 text-gray-900 font-medium">${Amber.escapeHTML(r[0])}</td>
+                <td class="px-3 py-2 text-right text-gray-900 whitespace-nowrap">${Amber.escapeHTML(r[1])}</td>
+                <td class="px-3 py-2 text-gray-500">${Amber.escapeHTML(r[2])}</td>
+            </tr>`).join('')}</tbody></table>`;
+    }
+
+    function setupNightStats() {
+        loadNightSettings();
+        $('nsLatLon').placeholder = defaultLatLon();
+        ['nsBatteryKwh', 'nsLatLon', 'nsCapKw', 'nsMarginPct', 'nsEveningMin', 'nsMorningMin'].forEach((id) => {
+            $(id).addEventListener('change', () => { saveNightSettings(); renderNightStats(); });
+        });
+        document.querySelectorAll('input[name="nightSource"]').forEach((r) => {
+            r.addEventListener('change', () => { saveNightSettings(); renderNightStats(); });
+        });
+        $('nsTeslaFiles').addEventListener('change', (e) => {
+            handleTeslaFiles(e.target.files).finally(() => { e.target.value = ''; });
+        });
+        $('nsTeslaClear').addEventListener('click', () => {
+            state.teslaPoints = [];
+            try { localStorage.removeItem(TESLA_POINTS_KEY); } catch (e) { /* ignore */ }
+            renderNightStats();
+            updateTeslaStatus('Cleared.');
+        });
+        updateTeslaStatus();
     }
 
     async function recalculateAndShow(skipGraphs) {
@@ -1178,6 +1522,8 @@
         $('averageGraphContainer').classList.add('hidden');
         $('dailyGraphSection').classList.add('hidden');
         $('allPlansSection').classList.add('hidden');
+        $('nightStatsSection').classList.add('hidden');
+        $('moreStatsSection').classList.add('hidden');
         downloadCsvButton.disabled = true;
         $('results-table-container').innerHTML = '';
         destroyCharts();
@@ -1551,6 +1897,7 @@
             $('stateSelector').appendChild(option);
         });
         loadAllSettings();
+        setupNightStats();
         if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
         if (!$('tou_shoulder_windows_container').children.length) addTouWindow('shoulder');
         setRatesDetailsOpen(localStorage.getItem('ratesDetailsOpen') === 'true', false);

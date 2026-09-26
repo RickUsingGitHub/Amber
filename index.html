@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.18</title>
+    <title>Amber Compare &amp; Export v1.19</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <link rel="stylesheet" href="css/app.css">
 </head>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.18
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.19
                     </h1>
                     <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
                 </div>
@@ -321,6 +321,65 @@
                         <canvas id="dailyChart"></canvas>
                     </div>
                 </div>
+
+                <div id="nightStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
+                    <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Overnight &amp; Backup Reserve</h3>
+                        <div class="flex items-center gap-4 text-sm" role="radiogroup" aria-label="Overnight data source">
+                            <label class="inline-flex items-center gap-1"><input type="radio" name="nightSource" value="tesla" class="h-4 w-4 text-indigo-600"> Tesla home load</label>
+                            <label class="inline-flex items-center gap-1"><input type="radio" name="nightSource" value="amber" class="h-4 w-4 text-indigo-600"> Amber grid import</label>
+                        </div>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-4">How much battery to hold back to get from dusk until solar takes over again, e.g. through a blackout. A night runs from shortly before sunset to shortly after sunrise at your location.</p>
+
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                        <div>
+                            <label for="nsBatteryKwh" class="block text-xs font-medium text-gray-700 mb-1">Battery usable (kWh)</label>
+                            <input type="number" id="nsBatteryKwh" step="0.1" min="0" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label for="nsLatLon" class="block text-xs font-medium text-gray-700 mb-1">Location (lat, lon)</label>
+                            <input type="text" id="nsLatLon" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm" placeholder="-33.87, 151.21">
+                        </div>
+                        <div>
+                            <label for="nsCapKw" class="block text-xs font-medium text-gray-700 mb-1" title="Loads above this (A/C, oven, EV charging) are assumed not to be backed up. Each interval is clipped at this power.">Ignore load above (kW)</label>
+                            <input type="number" id="nsCapKw" step="0.1" min="0" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label for="nsMarginPct" class="block text-xs font-medium text-gray-700 mb-1">Safety margin (%)</label>
+                            <input type="number" id="nsMarginPct" step="5" min="0" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label for="nsEveningMin" class="block text-xs font-medium text-gray-700 mb-1" title="Solar stops covering the house this long before sunset.">Night starts (min before sunset)</label>
+                            <input type="number" id="nsEveningMin" step="5" min="0" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label for="nsMorningMin" class="block text-xs font-medium text-gray-700 mb-1" title="Solar covers the house again this long after sunrise.">Night ends (min after sunrise)</label>
+                            <input type="number" id="nsMorningMin" step="5" min="0" class="w-full px-2 py-1 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                        </div>
+                        <div class="col-span-2">
+                            <label for="nsTeslaFiles" class="block text-xs font-medium text-gray-700 mb-1">Tesla app data (Day view &rarr; &hellip; &rarr; Download My Data, CSV)</label>
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <input type="file" id="nsTeslaFiles" accept=".csv,text/csv" multiple class="text-sm max-w-full">
+                                <button type="button" id="nsTeslaClear" class="text-sm text-indigo-600 hover:underline">Clear</button>
+                            </div>
+                            <p id="nsTeslaStatus" class="text-xs text-gray-500 mt-1"></p>
+                        </div>
+                    </div>
+
+                    <div id="nsNote" class="hidden mb-4 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
+                    <div id="nsBody"></div>
+                    <div id="nsChartWrap" class="hidden h-72 relative mt-4">
+                        <canvas id="nightChart"></canvas>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-3">Method: energy used in each night window, with every interval clipped at the "ignore load above" power. The suggested reserve is the 90th-percentile average overnight power &times; night length &times; (1 + margin). Winter nights are longest, so the longest-night figure is the one to set if you only set it once. A blackout on a cloudy day may not recharge the battery the next morning.</p>
+                </div>
+
+                <div id="moreStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">More Stats</h3>
+                    <p class="text-sm text-gray-500 mb-4">From Amber meter data for the selected period. Amber prices are wholesale-linked and include GST.</p>
+                    <div id="moreStatsTable"></div>
+                </div>
             </div>
 
             <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
@@ -348,6 +407,7 @@
     <script src="js/csv.js"></script>
     <script src="js/charts.js"></script>
     <script src="js/calendar.js"></script>
+    <script src="js/stats.js"></script>
     <script src="js/app.js"></script>
 </body>
 </html>

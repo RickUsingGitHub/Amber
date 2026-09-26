@@ -22,6 +22,8 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - IndexedDB cache, CSV export, GST toggle
 - Multi-site picker when your Amber account has more than one NMI
 - Editable Amber daily connection, subscription and demand rates
+- Overnight & Backup Reserve: energy used from dusk until solar takes over, with a suggested battery backup reserve for tonight and the longest night of the year. Uses Amber grid import, or your real home load from Tesla app "Download My Data" Day exports
+- More Stats: average import and feed-in prices, price-spike and negative-price exposure, evening import share, grid-free days
 
 ## Privacy
 
