@@ -1302,25 +1302,27 @@
                 rangeDates.push(dateStr);
             });
             const cache = await Amber.loadSiteCacheDates(db, site.id, rangeDates);
-            const cacheBoundary = Amber.localYesterday();
-            cacheBoundary.setDate(cacheBoundary.getDate() - (Amber.CACHE_BOUNDARY_DAYS - 1));
+            const emptyCutoff = Amber.emptyDayCutoff();
 
             const selectedUsageData = [];
             const datesToFetch = [];
             let processedDays = 0;
-            Amber.eachDateInclusive(new Date(startDateValue + 'T00:00:00'), new Date(clampedEnd + 'T00:00:00'), (dateStr, dateObj) => {
-                if (dateObj >= cacheBoundary) {
-                    datesToFetch.push(dateStr);
-                } else if (cache.byDate[dateStr]) {
-                    selectedUsageData.push(...cache.byDate[dateStr]);
+            let cachedDays = 0;
+            rangeDates.forEach((dateStr) => {
+                const cached = cache.byDate[dateStr];
+                if (Amber.cachedDayUsable(cached, dateStr, emptyCutoff)) {
+                    selectedUsageData.push(...cached);
+                    cachedDays++;
                     processedDays++;
-                    $('progressBar').style.width = `${(processedDays / numDays) * 100}%`;
                 } else {
                     datesToFetch.push(dateStr);
                 }
             });
+            $('progressBar').style.width = `${(processedDays / numDays) * 100}%`;
 
             const fetchRanges = Amber.buildFetchRanges(datesToFetch);
+            const fetchNote = `${cachedDays} of ${numDays} days from cache; fetching ${datesToFetch.length} day(s) from Amber`;
+            if (fetchRanges.length) showMessage(`${fetchNote} (0/${fetchRanges.length} chunks)...`);
             const chunkErrors = [];
             let completedChunks = 0;
             const cacheWrites = [];
@@ -1331,7 +1333,7 @@
                     processedDays += daysInThisRange;
                     completedChunks++;
                     $('progressBar').style.width = `${Math.min(100, (processedDays / numDays) * 100)}%`;
-                    $('message').textContent = `Fetching data from Amber (${completedChunks}/${fetchRanges.length} chunks)...`;
+                    $('message').textContent = `${fetchNote} (${completedChunks}/${fetchRanges.length} chunks)...`;
 
                     const dailyData = {};
                     data.forEach((item) => {
@@ -1340,13 +1342,14 @@
                         if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
                         dailyData[usageDateStr].push(item);
                     });
-                    Object.keys(dailyData).forEach((dateStr) => {
-                        const dayDate = new Date(dateStr + 'T00:00:00');
-                        if (dayDate < cacheBoundary) {
-                            cacheWrites.push({ id: `${site.id}_${dateStr}`, data: dailyData[dateStr] });
-                            cache.byDate[dateStr] = dailyData[dateStr];
+                    // Cache final days, and remember old days Amber has no data for.
+                    for (let d = range.start; d <= range.end; d = Amber.addDays(d, 1)) {
+                        const items = dailyData[d] || [];
+                        if (Amber.isCompleteDay(items) || (!items.length && d < emptyCutoff)) {
+                            cacheWrites.push({ id: `${site.id}_${d}`, data: items });
+                            cache.byDate[d] = items;
                         }
-                    });
+                    }
                     return data;
                 } catch (err) {
                     chunkErrors.push(err.message);
