@@ -5,9 +5,11 @@
     Amber.FETCH_CHUNK_DAYS = 7;
     Amber.FETCH_CONCURRENCY = 3;
     Amber.FETCH_TIMEOUT_MS = 25000;
+    // Waits between retries of a failed Amber request (a test can preset window.Amber.RETRY_DELAYS_MS).
+    Amber.RETRY_DELAYS_MS = Amber.RETRY_DELAYS_MS || [2000, 6000, 15000];
     Amber.FETCH_SITES_TIMEOUT_MS = 10000;
     Amber.CACHE_FRESH_MS = 60 * 60 * 1000;
-    Amber.APP_VERSION = '1.21';
+    Amber.APP_VERSION = '1.22';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.

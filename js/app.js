@@ -1324,6 +1324,7 @@
             const fetchNote = `${cachedDays} of ${numDays} days from cache; fetching ${datesToFetch.length} day(s) from Amber`;
             if (fetchRanges.length) showMessage(`${fetchNote} (0/${fetchRanges.length} chunks)...`);
             const chunkErrors = [];
+            const failedRanges = [];
             let completedChunks = 0;
             const cacheWrites = [];
             const chunkResults = await Amber.mapPool(fetchRanges, Amber.FETCH_CONCURRENCY, async (range) => {
@@ -1353,6 +1354,7 @@
                     return data;
                 } catch (err) {
                     chunkErrors.push(err.message);
+                    failedRanges.push({ range, busy: !!(err.network || err.status === 429) });
                     return [];
                 }
             });
@@ -1397,7 +1399,7 @@
             state.demandInfoForTooltip = monthlyDemandInfo;
 
             if (chunkErrors.length) {
-                showMessage(`Some days failed to load: ${chunkErrors[0]} Showing the data that did arrive.`, true);
+                showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
             } else {
                 hideMessage();
             }
@@ -1411,6 +1413,17 @@
         } finally {
             setFetching(false);
         }
+    }
+
+    function failedChunksMessage(failedRanges, chunkErrors) {
+        const ranges = failedRanges.map((f) => f.range).sort((a, b) => a.start.localeCompare(b.start));
+        const days = ranges.reduce((n, r) => n + Amber.inclusiveDayCount(r.start, r.end), 0);
+        const fmtDay = (d) => new Date(d + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short' });
+        const spans = ranges.map((r) => (r.start === r.end ? fmtDay(r.start) : `${fmtDay(r.start)}–${fmtDay(r.end)}`)).join(', ');
+        const reason = failedRanges.some((f) => f.busy)
+            ? 'Amber didn\'t respond, usually because of its limit of 50 requests per 5 minutes (shared with anything else using your Amber account).'
+            : chunkErrors[0];
+        return `Couldn't load ${days} day(s): ${spans}. ${reason} Totals below leave those days out. Loaded days are cached, so click Compare again in a few minutes to fill the gaps.`;
     }
 
     function formatBytes(bytes, decimals) {

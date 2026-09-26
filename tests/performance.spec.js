@@ -2,6 +2,9 @@ const { test, expect } = require('@playwright/test');
 
 async function seedKey(page) {
     await page.addInitScript(() => {
+        // Keep retry back-off short in tests.
+        window.Amber = window.Amber || {};
+        window.Amber.RETRY_DELAYS_MS = [50, 50, 50];
         function obfuscate(str) {
             const key = 'amber-compare-export-secure-key';
             return btoa(str.split('').map((char, i) =>
@@ -123,6 +126,35 @@ test.describe('Amber fetch and UI', () => {
         const usageValue = await page.locator('td:has-text("E1") + td + td').textContent();
         expect(Number(usageValue.trim())).toBeGreaterThan(0);
         expect(Number(usageValue.trim())).toBeLessThan(45);
+    });
+
+    test('retries "Failed to fetch" and recovers', async ({ page }) => {
+        let failures = 0;
+        await page.route('**/usage*startDate=2025-01-15*', async (route) => {
+            if (failures < 2) {
+                failures++;
+                await route.abort('failed');
+                return;
+            }
+            await route.fallback();
+        });
+        await page.fill('#startDate', '2025-01-01');
+        await page.fill('#endDate', '2025-02-14');
+        await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
+        expect(failures).toBe(2);
+        await expect(page.locator('#message')).not.toContainText("Couldn't load");
+    });
+
+    test('persistent "Failed to fetch" names the missing days and the rate limit', async ({ page }) => {
+        await page.route('**/usage*startDate=2025-01-15*', (route) => route.abort('failed'));
+        await page.fill('#startDate', '2025-01-01');
+        await page.fill('#endDate', '2025-02-14');
+        await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
+        const message = await page.textContent('#message');
+        expect(message).toContain("Couldn't load 7 day(s): 15 Jan–21 Jan");
+        expect(message).toContain('50 requests per 5 minutes');
     });
 
     test('Compare reuses prefetched sites instead of calling /sites again', async ({ page }) => {
