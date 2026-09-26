@@ -103,6 +103,38 @@
         });
     };
 
+    /**
+     * A day is final (safe to cache and reuse) when it has no estimated intervals
+     * and at least one channel covers the full 24 hours (NEM time has no DST).
+     */
+    Amber.isCompleteDay = function (items) {
+        if (!items || !items.length) return false;
+        const minutesByChannel = {};
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+            if (Amber.isEstimatedQuality && Amber.isEstimatedQuality(item.quality)) return false;
+            const ch = item.channelIdentifier || '?';
+            minutesByChannel[ch] = (minutesByChannel[ch] || 0) + (parseFloat(item.duration) || 30);
+        }
+        return Object.keys(minutesByChannel).some((ch) => minutesByChannel[ch] >= 1440);
+    };
+
+    /** Days with no data this old are remembered as empty (e.g. before the account started). */
+    Amber.EMPTY_DAY_CACHE_AGE_DAYS = 14;
+
+    Amber.emptyDayCutoff = function () {
+        const d = Amber.localYesterday();
+        d.setDate(d.getDate() - (Amber.EMPTY_DAY_CACHE_AGE_DAYS - 1));
+        return Amber.formatForInput(d);
+    };
+
+    /** Whether a cached day can be used instead of fetching it again. */
+    Amber.cachedDayUsable = function (items, dateStr, emptyCutoff) {
+        if (!items) return false;
+        if (items.length === 0) return dateStr < emptyCutoff;
+        return Amber.isCompleteDay(items);
+    };
+
     Amber.loadAllSiteCache = function (db, siteId) {
         return new Promise((resolve, reject) => {
             if (!siteId) {
