@@ -17,17 +17,7 @@ function amberDay(dateStr) {
     return out;
 }
 
-function teslaDay(dateStr) {
-    let csv = 'Date time,Home (kW),Solar (kW),Powerwall (kW),Grid (kW),Energy Remaining (%)\n';
-    for (let i = 0; i < 288; i++) {
-        const h = Math.floor(i / 12);
-        const kw = h === 19 ? 2.5 : 0.45;
-        csv += `${dateStr}T${pad(h)}:${pad((i % 12) * 5)}:00+10:00,${kw},0,${kw},0,50\n`;
-    }
-    return csv;
-}
-
-test.describe('Overnight & Backup Reserve', () => {
+test.describe('More Stats', () => {
     test.beforeEach(async ({ page }) => {
         await page.addInitScript(() => {
             const key = 'amber-compare-export-secure-key';
@@ -55,40 +45,21 @@ test.describe('Overnight & Backup Reserve', () => {
         await page.goto('/');
     });
 
-    test('Amber-only stats, then Tesla upload', async ({ page }) => {
-        await page.fill('#startDate', '2025-07-01');
-        await page.fill('#endDate', '2025-07-07');
-        await page.click('#fetchData');
-        await page.waitForSelector('#nightStatsSection:not(.hidden)');
-
-        await expect(page.locator('#nsNote')).toContainText('grid import');
-        await expect(page.locator('#nsBody')).toContainText('Suggested backup reserve');
-        await expect(page.locator('#nsBody')).toContainText('Longest night');
-        await expect(page.locator('#moreStatsSection')).toBeVisible();
-        await expect(page.locator('#moreStatsTable')).toContainText('Average import price');
-
-        const files = ['2025-07-01', '2025-07-02', '2025-07-03'].map((d) => ({
-            name: `tesla-${d}.csv`, mimeType: 'text/csv', buffer: Buffer.from(teslaDay(d))
-        }));
-        await page.setInputFiles('#nsTeslaFiles', files);
-        await expect(page.locator('#nsTeslaStatus')).toContainText('Added 3 file(s)');
-        await expect(page.locator('input[name="nightSource"][value="tesla"]')).toBeChecked();
-        await expect(page.locator('#nsNote')).toBeHidden();
-        await expect(page.locator('#nsBody')).toContainText('2 nights');
-
-        await page.fill('#nsBatteryKwh', '27');
-        await page.dispatchEvent('#nsBatteryKwh', 'change');
-        await expect(page.locator('#nsBody')).toContainText('of 27.0 kWh');
-
-        await page.waitForTimeout(1500);
-        await page.locator('#nightStatsSection').screenshot({ path: 'test-results/night-stats.png' });
-        await page.locator('#moreStatsSection').screenshot({ path: 'test-results/more-stats.png' });
-
+    test('shows More Stats and no overnight section', async ({ page }) => {
+        await page.addInitScript(() => {
+            localStorage.setItem('teslaHomeLoad', '[[1,2,5]]');
+            localStorage.setItem('nightStatsSettings', '{}');
+        });
         await page.reload();
         await page.fill('#startDate', '2025-07-01');
         await page.fill('#endDate', '2025-07-07');
         await page.click('#fetchData');
-        await page.waitForSelector('#nightStatsSection:not(.hidden)');
-        await expect(page.locator('#nsTeslaStatus')).toContainText('Loaded 864 readings');
+        await page.waitForSelector('#moreStatsSection:not(.hidden)');
+        await expect(page.locator('#moreStatsTable')).toContainText('Average import price');
+        await expect(page.locator('#moreStatsTable')).toContainText('Imported during price spikes');
+        await expect(page.locator('#nightStatsSection')).toHaveCount(0);
+        const leftovers = await page.evaluate(() => [localStorage.getItem('teslaHomeLoad'), localStorage.getItem('nightStatsSettings')]);
+        expect(leftovers).toEqual([null, null]);
+        await page.locator('#moreStatsSection').screenshot({ path: 'test-results/more-stats.png' });
     });
 });
