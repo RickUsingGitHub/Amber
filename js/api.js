@@ -47,25 +47,44 @@
         }
     };
 
+    /** Browser-level network failure ("Failed to fetch", "NetworkError…", Safari "Load failed"). */
+    Amber.isNetworkError = function (err) {
+        if (!err) return false;
+        if (err.name === 'TypeError') return true;
+        return /failed to fetch|networkerror|load failed|network request failed/i.test(err.message || '');
+    };
+
+    function retryDelay(attempt) {
+        const delays = Amber.RETRY_DELAYS_MS || [2000, 6000, 15000];
+        return delays[Math.min(attempt, delays.length - 1)];
+    }
+
+    /**
+     * Retries 429/5xx and network failures with increasing waits. Amber allows 50 requests
+     * per 5 minutes per account, and an over-limit reply can surface in the browser as a
+     * bare network error ("Failed to fetch"), so those get the same back-off.
+     */
     Amber.fetchWithRetry = async function (url, options, retries, timeoutMs) {
-        const maxAttempts = (retries != null ? retries : 2);
+        const maxAttempts = retries != null ? retries : 1 + (Amber.RETRY_DELAYS_MS || [0, 0, 0]).length;
         let lastError = null;
         for (let attempt = 0; attempt < maxAttempts; attempt++) {
+            const isLast = attempt === maxAttempts - 1;
             try {
                 const response = await Amber.fetchWithTimeout(url, options, timeoutMs);
-                if (response.status === 429 || response.status === 503) {
-                    const retryAfter = response.headers.get('Retry-After');
-                    const reset = response.headers.get('RateLimit-Reset');
-                    let waitMs = Math.min(1000 * Math.pow(2, attempt), 4000);
-                    if (retryAfter) {
-                        const asInt = parseInt(retryAfter, 10);
-                        waitMs = Number.isFinite(asInt) ? asInt * 1000 : waitMs;
-                    } else if (reset) {
-                        const asInt = parseInt(reset, 10);
-                        if (Number.isFinite(asInt)) waitMs = Math.max(waitMs, asInt * 1000);
+                if (response.status === 429 || response.status >= 500) {
+                    let waitMs = retryDelay(attempt);
+                    const retryAfter = parseInt(response.headers.get('Retry-After'), 10);
+                    const reset = parseInt(response.headers.get('RateLimit-Reset'), 10);
+                    if (Number.isFinite(retryAfter)) waitMs = Math.max(waitMs, retryAfter * 1000);
+                    else if (Number.isFinite(reset)) waitMs = Math.max(waitMs, reset * 1000);
+                    waitMs = Math.min(waitMs, 60000);
+                    lastError = new Error(response.status === 429 ? 'Rate limited by Amber (429)' : `Amber server error (${response.status})`);
+                    lastError.status = response.status;
+                    if (isLast) {
+                        // Hand the real response back so callers can show Amber's message.
+                        if (response.status >= 500) return response;
+                        break;
                     }
-                    lastError = new Error(`Rate limited (${response.status})`);
-                    if (attempt === maxAttempts - 1) break;
                     await Amber.sleep(waitMs);
                     continue;
                 }
@@ -73,9 +92,14 @@
             } catch (err) {
                 lastError = err;
                 const timedOut = err && /Timed out after/.test(err.message);
-                if (timedOut || attempt === maxAttempts - 1) break;
-                await Amber.sleep(400 * (attempt + 1));
+                if (timedOut || isLast) break;
+                await Amber.sleep(Amber.isNetworkError(err) ? retryDelay(attempt) : 400 * (attempt + 1));
             }
+        }
+        if (lastError && Amber.isNetworkError(lastError)) {
+            const e = new Error('No response from Amber (network error or rate limit)');
+            e.network = true;
+            throw e;
         }
         throw lastError || new Error('Request failed after retries');
     };
