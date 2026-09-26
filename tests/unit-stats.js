@@ -119,3 +119,12 @@ if (failed) {
     process.exit(1);
 }
 console.log('stats tests passed');
+
+// Cache-busting tags on index.html must match the app version.
+const html = require('fs').readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
+const tags = html.match(/\?v=[0-9.]+"/g) || [];
+if (!tags.length || tags.some((t) => t !== `?v=${Amber.APP_VERSION}"`)) {
+    console.error(`FAIL: index.html ?v= tags must all be ?v=${Amber.APP_VERSION}`);
+    process.exit(1);
+}
+console.log(`ok: ${tags.length} asset links tagged ?v=${Amber.APP_VERSION}`);
