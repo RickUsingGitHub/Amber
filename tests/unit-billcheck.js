@@ -85,5 +85,14 @@ assert(near(mb.total.amberTotal - mb.total.amberDemand, whole.amberTotal - whole
 assert(near(mb.total.otherTotal, whole.otherTotal, 1e-6), 'monthly competitor totals sum to the period');
 assert(near(mb.total.amberDemand, whole.amberDemand, 1e-6), 'monthly demand sums match (both per-month)');
 
+// Other date layouts
+[['Billing period 1 Jul 2025 - 31 Jul 2025', '2025-07-01', '2025-07-31'],
+ ['Bill period: 01 July 2025 to 31 July 2025', '2025-07-01', '2025-07-31'],
+ ['Billing Period 1st June 2025 – 30th June 2025', '2025-06-01', '2025-06-30'],
+ ['Period 1/7/25 - 31/7/25', '2025-07-01', '2025-07-31']].forEach(([t, a, b]) => {
+    const p = Amber.parseBillPeriod(Amber.normalizeBillText(t));
+    assert(p.start === a && p.end === b, `period from "${t}"`);
+});
+
 if (failed) { console.error(`${failed} bill check test(s) failed`); process.exit(1); }
 console.log('bill check tests passed');

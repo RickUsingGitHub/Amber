@@ -47,9 +47,17 @@ test('bill check and monthly breakdown', async ({ page }) => {
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/');
 
-    await page.click('#ratesDetailsToggle');
-    await page.setInputFiles('#amberBillFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
+    // Visible before any bill, with its own upload button
     await expect(page.locator('#billCheckSection')).toBeVisible();
+    await expect(page.locator('#billCheckBody')).toContainText('Upload an Amber bill');
+
+    // A file it can't read explains what was missing and shows the extracted text
+    await page.setInputFiles('#billCheckFile', { name: 'odd.txt', mimeType: 'text/plain', buffer: Buffer.from('Some statement\nTotal due $12.00\n') });
+    await expect(page.locator('#billCheckBody')).toContainText("Couldn't check odd.txt");
+    await expect(page.locator('#billCheckBody')).toContainText('billing period dates');
+    await expect(page.locator('#billCheckBody details pre')).toContainText('Total due $12.00');
+
+    await page.setInputFiles('#billCheckFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
     await expect(page.locator('#billCheckPeriod')).toContainText(/1 July? 2025 to 31 July? 2025 \(31 days\)/);
     await page.click('#billCheckLoad');
     await page.waitForSelector('#billCheckBody table');

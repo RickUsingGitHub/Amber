@@ -93,14 +93,21 @@
     async function handleAmberBillFile(file) {
         if (!file) return;
         setAmberBillStatus('Reading bill…', false);
+        state.billCheckError = null;
         try {
             const text = await Amber.readBillFile(file, loadPdfJs);
-            applyAmberBillRates(Amber.parseAmberBillText(text));
+            const parsed = Amber.parseAmberBillText(text);
+            if (!parsed.check || !parsed.check.ok) {
+                state.billCheckError = { name: file.name, check: parsed.check || {}, text: Amber.normalizeBillText(text) };
+                renderBillCheck();
+            }
+            applyAmberBillRates(parsed);
         } catch (err) {
             setAmberBillStatus(err && err.message ? err.message : 'Could not read that file.', true);
+            state.billCheckError = { name: file.name, message: err && err.message ? err.message : 'Could not read that file.' };
+            renderBillCheck();
         } finally {
-            const input = $('amberBillFile');
-            if (input) input.value = '';
+            ['amberBillFile', 'billCheckFile'].forEach((id) => { const input = $(id); if (input) input.value = ''; });
         }
     }
 
@@ -1228,13 +1235,32 @@
     }
 
     function renderBillCheck() {
-        const section = $('billCheckSection');
         const bill = state.billCheck;
-        if (!bill || !bill.ok) { section.classList.add('hidden'); return; }
-        section.classList.remove('hidden');
+        const body = $('billCheckBody');
+        $('billCheckClear').classList.toggle('hidden', !bill && !state.billCheckError);
+        if (state.billCheckError) {
+            const e = state.billCheckError;
+            $('billCheckLoad').classList.add('hidden');
+            $('billCheckPeriod').textContent = '';
+            const found = (e.check && e.check.found) || [];
+            const missing = e.check && !e.check.start ? 'the billing period dates' : 'enough bill lines';
+            body.innerHTML = `<div class="p-3 rounded-md bg-amber-50 text-amber-800 text-sm">
+                <p class="font-medium">Couldn't check ${Amber.escapeHTML(e.name || 'that bill')}.</p>
+                <p>${e.message ? Amber.escapeHTML(e.message) : `Couldn't find ${missing}. Found: ${found.length ? Amber.escapeHTML(found.join(', ')) : 'nothing recognisable'}.`}</p>
+            </div>
+            ${e.text ? `<details class="mt-3 text-xs text-gray-600"><summary class="cursor-pointer">Show the text read from the bill</summary>
+                <p class="mt-2">This stays in your browser. Copying the charges part to the developer helps fix the reader.</p>
+                <pre class="mt-2 p-2 bg-gray-50 border rounded whitespace-pre-wrap break-words max-h-80 overflow-auto">${Amber.escapeHTML(e.text.substring(0, 6000))}</pre></details>` : ''}`;
+            return;
+        }
+        if (!bill || !bill.ok) {
+            $('billCheckLoad').classList.add('hidden');
+            $('billCheckPeriod').textContent = '';
+            body.innerHTML = '<p class="text-sm text-gray-600">Upload an Amber bill (the PDF Amber emails you) to check each line against your meter data. It also fills in the Amber charges from the bill.</p>';
+            return;
+        }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);
         $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days). Bill charges are ex GST; meter figures are shown the same way.`;
-        const body = $('billCheckBody');
         const loaded = state.cachedChannelData && state.lastFetchedStartDate
             && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end;
         $('billCheckLoad').classList.toggle('hidden', !!loaded);
@@ -1296,8 +1322,10 @@
             $('endDate').value = bill.end;
             fetchAndCompare();
         });
+        $('billCheckFile').addEventListener('change', (e) => handleAmberBillFile(e.target.files[0]));
         $('billCheckClear').addEventListener('click', () => {
             state.billCheck = null;
+            state.billCheckError = null;
             try { localStorage.removeItem(BILL_CHECK_KEY); } catch (e) { /* ignore */ }
             renderBillCheck();
         });
