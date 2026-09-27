@@ -175,7 +175,7 @@
         let rangeStart = datesToFetch[0];
         let rangeEnd = datesToFetch[0];
         const getDaysBetween = (start, end) =>
-            (new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / (1000 * 3600 * 24) + 1;
+            Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / (1000 * 3600 * 24)) + 1; // DST-safe
 
         for (let i = 1; i < datesToFetch.length; i++) {
             const nextDay = new Date(rangeEnd + 'T00:00:00');

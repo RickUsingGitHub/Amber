@@ -915,6 +915,15 @@
         updateDayNavButtons();
     }
 
+    /** Per-month demand lines ("Jul: 6.67 kW × 31 d") when a range spans several months. */
+    function demandMonthsHtml(months) {
+        if (!months || months.length < 2) return '';
+        return months.map((m) => {
+            const name = new Date(`${m.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
+            return `<div class="text-xs font-normal">${name}: ${(m.maxDemandKwh * 2).toFixed(2)} kW × ${m.days || 0} d</div>`;
+        }).join('');
+    }
+
     async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
         const planName = $('planName').value.trim() || 'Other Supplier';
         const period = `(${startDateStr} to ${endDateStr})`;
@@ -1017,7 +1026,7 @@
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Max: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    <div class="text-xs">X ${demandTariffInfo.demandDays} days</div>
+                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">X ${demandTariffInfo.demandDays} days</div>`}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedDemandCost.toFixed(2)}</td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
@@ -1035,7 +1044,7 @@
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Max: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    <div class="text-xs">X ${dayCount} applicable days</div>
+                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">X ${dayCount} applicable days</div>`}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherDemandCost.toFixed(2)}</td>

@@ -28,21 +28,43 @@
         Amber._chartPluginsRegistered = true;
     };
 
-    function intervalIndexFromNem(nemTimeStr, minutesPerSlot, slotsPerDay) {
-        const hours = parseInt(nemTimeStr.substring(11, 13), 10);
-        const minutes = parseInt(nemTimeStr.substring(14, 16), 10);
-        const index = hours * (60 / minutesPerSlot) + Math.floor(minutes / minutesPerSlot);
-        if (index >= 0 && index < slotsPerDay) return index;
-        return null;
-    }
-
     function competitorTooltip(label, channelType, planConfig, state, dateStr) {
         if (!planConfig) return '';
         const [hh, mm] = String(label).split(':');
-        const day = dateStr || '2026-01-05';
-        const dummy = { nemTime: `${day}T${hh}:${mm}:00+10:00`, processedTime: true };
+        const day = dateStr || '2026-07-06'; // a winter Monday when no day is selected
+        const nem = Amber.localWallToNemIso(day, parseInt(hh, 10), parseInt(mm, 10), zoneFor(state));
+        const dummy = { nemTime: nem, processedTime: true };
         const rate = Amber.otherRateForItem(dummy, channelType, planConfig, state);
         return `Competitor: ${rate.toFixed(2)} c/kWh`;
+    }
+
+    function zoneFor(state) {
+        return Amber.STATE_TIMEZONES[state] || 'Australia/Sydney';
+    }
+
+    /** Add an interval's kWh (and price) into local-time slots. */
+    function accumulate(slots, item, slotMinutes, timeZone, dateFilter, withPrice) {
+        const kwh = Amber.absKwh(item.kwh);
+        const price = parseFloat(item.perKwh) || 0;
+        Amber.intervalLocalSlots(item, slotMinutes, timeZone).forEach((piece) => {
+            if (dateFilter && piece.parts.dateStr !== dateFilter) return;
+            const index = Math.floor((piece.parts.hours * 60 + piece.parts.minutes) / slotMinutes);
+            const slot = slots[index];
+            if (!slot) return;
+            slot.kwh += kwh * piece.fraction;
+            if (withPrice) {
+                slot.price = (slot.price || 0) + price;
+                slot.count += 1;
+            }
+        });
+    }
+
+    /** Number of distinct usage days (Amber's day) with data, for averaging. */
+    function daysWithData(channel) {
+        const days = new Set();
+        (channel && channel.usageData || []).forEach((item) => days.add(Amber.usageDateStr(item)));
+        days.delete('');
+        return days.size;
     }
 
     function makeTooltipCallbacks(planConfig, state, dateStr) {
@@ -68,36 +90,17 @@
         const generalChannel = Object.values(channelData).find((c) => c.type === 'general');
         const feedInChannel = Object.values(channelData).find((c) => c.type === 'feedIn');
         const controlledLoadChannel = Object.values(channelData).find((c) => c.type === 'controlledLoad');
-        const numDays = options.numDays || 1;
+        const timeZone = zoneFor(options.state);
+        // Average over days that actually have data (failed or missing days would dilute it).
+        const numDays = daysWithData(generalChannel || feedInChannel) || options.numDays || 1;
+        const newSlots = (n) => Array.from({ length: n }, () => ({ kwh: 0, price: 0, count: 0 }));
 
-        const intervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
-        (generalChannel && generalChannel.usageData || []).forEach((item) => {
-            const index = intervalIndexFromNem(item.nemTime, 30, 48);
-            if (index == null) return;
-            intervals[index].totalKwh += Amber.absKwh(item.kwh);
-            intervals[index].totalCents += parseFloat(item.perKwh) || 0;
-            intervals[index].count += 1;
-        });
-
-        const feedInIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0, totalCents: 0, count: 0 }));
-        if (feedInChannel && feedInChannel.usageData) {
-            feedInChannel.usageData.forEach((item) => {
-                const index = intervalIndexFromNem(item.nemTime, 30, 48);
-                if (index == null) return;
-                feedInIntervals[index].totalKwh += Amber.absKwh(item.kwh);
-                feedInIntervals[index].totalCents += parseFloat(item.perKwh) || 0;
-                feedInIntervals[index].count += 1;
-            });
-        }
-
-        const controlledLoadIntervals = Array.from({ length: 48 }, () => ({ totalKwh: 0 }));
-        if (controlledLoadChannel && controlledLoadChannel.usageData) {
-            controlledLoadChannel.usageData.forEach((item) => {
-                const index = intervalIndexFromNem(item.nemTime, 30, 48);
-                if (index == null) return;
-                controlledLoadIntervals[index].totalKwh += Amber.absKwh(item.kwh);
-            });
-        }
+        const intervals = newSlots(48);
+        (generalChannel && generalChannel.usageData || []).forEach((item) => accumulate(intervals, item, 30, timeZone, null, true));
+        const feedInIntervals = newSlots(48);
+        (feedInChannel && feedInChannel.usageData || []).forEach((item) => accumulate(feedInIntervals, item, 30, timeZone, null, true));
+        const controlledLoadIntervals = newSlots(48);
+        (controlledLoadChannel && controlledLoadChannel.usageData || []).forEach((item) => accumulate(controlledLoadIntervals, item, 30, timeZone, null, false));
 
         const labels = [];
         for (let i = 0; i < 48; i++) {
@@ -106,16 +109,16 @@
             labels.push(`${hour.toString().padStart(2, '0')}:${minute}`);
         }
 
-        const avgUsageData = intervals.map((i) => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
-        const avgFeedInData = feedInIntervals.map((i) => numDays > 0 ? (-i.totalKwh / numDays) * 2 : 0);
-        const avgControlledLoadData = controlledLoadIntervals.map((i) => numDays > 0 ? (i.totalKwh / numDays) * 2 : 0);
-        const avgPriceData = intervals.map((i) => i.count > 0 ? (i.totalCents / i.count) : 0);
-        const avgFeedInPriceData = feedInIntervals.map((i) => i.count > 0 ? (-i.totalCents / i.count) : 0);
+        const avgUsageData = intervals.map((i) => numDays > 0 ? (i.kwh / numDays) * 2 : 0);
+        const avgFeedInData = feedInIntervals.map((i) => numDays > 0 ? (-i.kwh / numDays) * 2 : 0);
+        const avgControlledLoadData = controlledLoadIntervals.map((i) => numDays > 0 ? (i.kwh / numDays) * 2 : 0);
+        const avgPriceData = intervals.map((i) => i.count > 0 ? (i.price / i.count) : 0);
+        const avgFeedInPriceData = feedInIntervals.map((i) => i.count > 0 ? (-i.price / i.count) : 0);
 
         const avgDailyGeneralKwh = (generalChannel && generalChannel.totalKWh || 0) / numDays;
         const avgDailyFeedInKwh = (feedInChannel && feedInChannel.totalKWh || 0) / numDays;
         const avgDailyControlledLoadKwh = (controlledLoadChannel && controlledLoadChannel.totalKWh || 0) / numDays;
-        const generalAvgPrice = (generalChannel && generalChannel.totalKWh > 0 ? ((generalChannel.totalAmberCost * 100) / generalChannel.totalKWh) : 0).toFixed(2);
+        const generalAvgPrice = (generalChannel && generalChannel.totalKWh > 0 ? ((((generalChannel.totalAmberCost || 0) - (generalChannel.amberExportCharge || 0)) * 100) / generalChannel.totalKWh) : 0).toFixed(2);
         const feedInAvgPrice = (feedInChannel && feedInChannel.totalKWh > 0 ? ((-feedInChannel.totalAmberCost * 100) / feedInChannel.totalKWh) : 0).toFixed(2);
         const controlledLoadAvgPrice = (controlledLoadChannel && controlledLoadChannel.totalKWh > 0 ? ((controlledLoadChannel.totalAmberCost * 100) / controlledLoadChannel.totalKWh) : 0).toFixed(2);
 
@@ -224,7 +227,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: `Average 24-Hour Usage & Spot Price (${options.startDate} to ${options.endDate})`
+                        text: `Average 24-Hour Usage & Price, local time (${options.startDate} to ${options.endDate})`
                     },
                     tooltip: {
                         position: 'cursor',
@@ -249,33 +252,23 @@
         const feedInChannel = Object.values(channelData).find((c) => c.type === 'feedIn');
         const controlledLoadChannel = Object.values(channelData).find((c) => c.type === 'controlledLoad');
 
-        const dayData = (generalChannel && generalChannel.usageData || []).filter((item) => Amber.usageDateStr(item) === selectedDateStr);
-        const intervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: null, count: 0 }));
-        dayData.forEach((item) => {
-            const index = intervalIndexFromNem(item.nemTime, 5, 288);
-            if (index == null) return;
-            intervals[index].kwh += Amber.absKwh(item.kwh);
-            intervals[index].price = (intervals[index].price || 0) + (parseFloat(item.perKwh) || 0);
-            intervals[index].count += 1;
-        });
+        // Plot the local calendar day on a local-time axis (DST aware). Each reading is
+        // spread over its own length, so 30-minute data isn't drawn as 6x 5-minute spikes.
+        const timeZone = zoneFor(options.state);
+        const onLocalDay = (item) => Amber.intervalLocalSlots(item, 30, timeZone).some((p) => p.parts.dateStr === selectedDateStr);
+        const newSlots = (n) => Array.from({ length: n }, () => ({ kwh: 0, price: null, count: 0 }));
 
-        const feedInIntervals = Array.from({ length: 288 }, () => ({ kwh: 0, price: 0, count: 0 }));
-        const dayDataFeedIn = (feedInChannel && feedInChannel.usageData || []).filter((item) => Amber.usageDateStr(item) === selectedDateStr);
-        dayDataFeedIn.forEach((item) => {
-            const index = intervalIndexFromNem(item.nemTime, 5, 288);
-            if (index == null) return;
-            feedInIntervals[index].kwh += Amber.absKwh(item.kwh);
-            feedInIntervals[index].price += parseFloat(item.perKwh) || 0;
-            feedInIntervals[index].count += 1;
-        });
+        const dayData = (generalChannel && generalChannel.usageData || []).filter(onLocalDay);
+        const intervals = newSlots(288);
+        dayData.forEach((item) => accumulate(intervals, item, 5, timeZone, selectedDateStr, true));
 
-        const controlledLoadIntervals = Array.from({ length: 288 }, () => ({ kwh: 0 }));
-        const dayDataControlled = (controlledLoadChannel && controlledLoadChannel.usageData || []).filter((item) => Amber.usageDateStr(item) === selectedDateStr);
-        dayDataControlled.forEach((item) => {
-            const index = intervalIndexFromNem(item.nemTime, 5, 288);
-            if (index == null) return;
-            controlledLoadIntervals[index].kwh += Amber.absKwh(item.kwh);
-        });
+        const dayDataFeedIn = (feedInChannel && feedInChannel.usageData || []).filter(onLocalDay);
+        const feedInIntervals = newSlots(288);
+        dayDataFeedIn.forEach((item) => accumulate(feedInIntervals, item, 5, timeZone, selectedDateStr, true));
+
+        const dayDataControlled = (controlledLoadChannel && controlledLoadChannel.usageData || []).filter(onLocalDay);
+        const controlledLoadIntervals = newSlots(288);
+        dayDataControlled.forEach((item) => accumulate(controlledLoadIntervals, item, 5, timeZone, selectedDateStr, false));
 
         const labels = intervals.map((_, i) => {
             const hour = Math.floor(i / 12).toString().padStart(2, '0');
@@ -425,7 +418,7 @@
                     }
                 },
                 plugins: {
-                    title: { display: true, text: `Usage & Spot Price for ${selectedDateStr}${qualityNote}${renewNote}` },
+                    title: { display: true, text: `Usage & Price for ${selectedDateStr} (local time)${qualityNote}${renewNote}` },
                     tooltip: {
                         position: 'cursor',
                         callbacks: makeTooltipCallbacks(options.planConfig, options.state, selectedDateStr)
