@@ -97,6 +97,16 @@ assert(near(mb.total.amberDemand, whole.amberDemand, 1e-6), 'monthly demand sums
     assert(p.start === a && p.end === b, `period from "${t}"`);
 });
 
+// Amber's font: private-use glyphs for brackets and dash (as seen by pdfplumber)
+const pua = Amber.normalizeBillText('Billing Period: 31 days \ue08101/08/2026 \ue088 31/08/2026\ue082 Time period: 01/08/2026\ue08931/08/2026');
+assert(pua.includes('(01/08/2026 - 31/08/2026)'), `PUA brackets/dash restored (${pua})`);
+let pp = Amber.parseBillPeriod(pua);
+assert(pp.start === '2026-08-01' && pp.end === '2026-08-31', 'period with PUA dash');
+pp = Amber.parseBillPeriod(Amber.normalizeBillText('Due Date 14/09/2026 Time period: 01/08/2026 31/08/2026 Usage'));
+assert(pp.start === '2026-08-01' && pp.end === '2026-08-31', 'Time period with space-only separator, ignoring due date');
+pp = Amber.parseBillPeriod(Amber.normalizeBillText('Issued 05/09/2026 Paid 06/09/2026'));
+assert(!pp.start, 'two unrelated nearby dates (1 day apart) are not a period');
+
 const fromName = Amber.parseBillPeriod('no dates here', '20260801-20260831.pdf');
 assert(fromName.start === '2026-08-01' && fromName.end === '2026-08-31' && fromName.fromFileName, 'period from Amber file name');
 const viaFile = Amber.parseAmberBillText('Usage 744.00 kWh 0.2000 $/kWh $148.80\nCHARGES TOTAL $254.95', '20260801-20260831.pdf').check;

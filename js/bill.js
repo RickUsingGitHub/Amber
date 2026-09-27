@@ -13,8 +13,14 @@
     }
 
     Amber.normalizeBillText = function (raw) {
+        // Amber's bill font maps brackets and dashes to private-use glyphs
+        // (\ue081/\ue082 ≈ "(" ")", \ue088/\ue089 ≈ "-"), so restore them before stripping.
         return String(raw || '')
-            .replace(/[–—]/g, '-')
+            .replace(/\u00a0/g, ' ')
+            .replace(/[\ue081]/g, '(')
+            .replace(/[\ue082]/g, ')')
+            .replace(/[–—−‒‐‑―\ue088\ue089]/g, '-')
+            .replace(/[\ue000-\uf8ff]/g, ' ')
             .replace(/¢/g, 'c')
             .replace(/[^\x20-\x7E\n]/g, ' ')
             .replace(/[ \t]+/g, ' ')
@@ -133,10 +139,24 @@
         const text = String(rawText || '').replace(/(\d)\s*\/\s*(?=\d)/g, '$1/');
         const range = new RegExp(`${DATE_RE}\\s*(?:-+|to)\\s*${DATE_RE}`, 'i');
         const ok = (start, end) => start && end && end >= start ? { start, end } : null;
-        const near = text.match(/Bill(?:ing)? Period[\s\S]{0,160}/i);
-        let m = (near && near[0].match(range)) || text.match(range);
-        let found = m && ok(auDateToIso(m[1]), auDateToIso(m[2]));
+        // Two dates separated only by spaces (the dash may have been an unreadable glyph):
+        // accept when 1–120 days apart.
+        const spaced = new RegExp(`${DATE_RE}\\s+${DATE_RE}`, 'i');
+        const plausible = (m) => {
+            if (!m) return null;
+            const r = ok(auDateToIso(m[1]), auDateToIso(m[2]));
+            if (!r) return null;
+            const days = Amber.inclusiveDayCount ? Amber.inclusiveDayCount(r.start, r.end) : 2;
+            return days >= 2 && days <= 121 ? r : null;
+        };
+        const labelled = (label) => {
+            const at = text.match(new RegExp(`${label}[\\s\\S]{0,160}`, 'i'));
+            return at ? (plausible(at[0].match(range)) || plausible(at[0].match(spaced))) : null;
+        };
+        let found = labelled('Time\\s*period') || labelled('Bill(?:ing)?\\s*Period')
+            || plausible(text.match(range)) || plausible(text.match(spaced));
         if (found) return found;
+        let m;
 
         m = text.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s*(?:-+|to)\s*(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/i);
         if (m) {
