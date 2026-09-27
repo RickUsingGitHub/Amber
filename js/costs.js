@@ -544,12 +544,14 @@
             timeZone: 'Australia/Sydney',
             middayStart: '10:00',
             middayEnd: '15:00',
+            // Export charge 1.23 c/kWh ex GST (bill "Export Charge Energy" 0.0123 $/kWh).
             chargeIncGst: 1.3552,
+            chargeExGst: 1.232,
             belKwhPerDay: 6.83,
-            // Export reward for evening exports (credit, as billed; 4.01 c/kWh on the Aug 2026 bill).
+            // Evening export reward window. Amber's feed-in prices already include the reward,
+            // so it is only measured (for Bill Check), never credited again.
             rewardStart: '16:00',
-            rewardEnd: '21:00',
-            rewardCents: 4.01
+            rewardEnd: '21:00'
         }
     };
 
@@ -596,22 +598,28 @@
             if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
                 middayKwh += kwh;
             }
-            if (tariff.rewardCents && Amber.intervalEndInWindow(parts, tariff.rewardStart, tariff.rewardEnd)) {
+            if (tariff.rewardStart && Amber.intervalEndInWindow(parts, tariff.rewardStart, tariff.rewardEnd)) {
                 rewardKwh += kwh;
             }
         });
-        const reward = rewardKwh * (tariff.rewardCents || 0) / 100;
+        /*
+         * Amber's feed-in prices already net the network export charge off every midday kWh
+         * (ex GST; feed-in carries no GST) and add the evening reward. The bill instead charges
+         * only midday exports above the basic export level (BEL), as usage with GST. So: add the
+         * embedded charge back onto the credit for all midday kWh, and charge the kWh above BEL
+         * on usage. Checked against an Amber bill: credit $6.70, export charge $0.26 ex GST.
+         */
         const bel = (tariff.belKwhPerDay || 0) * days;
         const freeKwh = Math.min(middayKwh, bel);
         const chargedKwh = Math.max(0, middayKwh - bel);
-        const rate = tariff.chargeIncGst || 0;
-        const addBack = freeKwh * rate / 100;
+        const exRate = tariff.chargeExGst != null ? tariff.chargeExGst : (tariff.chargeIncGst || 0) / 1.1;
+        const rate = tariff.chargeIncGst != null ? tariff.chargeIncGst : exRate * 1.1;
+        const addBack = middayKwh * exRate / 100;
         const charge = chargedKwh * rate / 100;
         return {
-            cost: intervalCost - addBack - reward,
+            cost: intervalCost - addBack,
             intervalCost,
             rewardKwh,
-            reward,
             middayKwh,
             freeKwh,
             chargedKwh,

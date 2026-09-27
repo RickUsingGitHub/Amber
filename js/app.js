@@ -1310,11 +1310,13 @@
         if (totals.dataDays < days) notes.push(`Meter data is missing for ${days - totals.dataDays} day(s) of the bill period.`);
         const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
         if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
+        if (bill.otherCost) notes.push(`The charges total includes $${bill.otherCost.toFixed(2)} of other charges from the bill (e.g. a card payment fee) that aren't in meter data.`);
+        if (bill.voucherCredit) notes.push(`Vouchers & concessions of $${bill.voucherCredit.toFixed(2)} (ex GST) are credited on the bill but aren't part of this check.`);
         if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
         const reward = rows.find((r) => r.key === 'exportRewardKwh');
         if (reward) {
             notes.push(reward.ok
-                ? 'Export reward kWh match your 4–9 pm exports: they are part of total exports (not extra), and the app credits the reward on them.'
+                ? 'Export reward kWh match your 4–9 pm exports: they are part of total exports (not extra), and the reward is already included in Amber\'s feed-in prices.'
                 : 'Export reward kWh don\'t match your 4–9 pm exports, so the reward window may be different.');
         }
         notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
