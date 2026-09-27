@@ -1273,7 +1273,7 @@
         }
         const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, periodOpts());
         const rows = Amber.compareBill(bill, totals);
-        const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' ? 2 : 1)} ${unit}`);
+        const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' || Math.abs(v) < 10 ? 2 : 1)} ${unit}`);
         const fmtDiff = (v, unit) => {
             if (Math.abs(v) < (unit === '$' ? 0.005 : 0.05)) return '—';
             return (v > 0 ? '+' : '−') + fmtVal(Math.abs(v), unit);
@@ -1308,7 +1308,7 @@
         const reward = rows.find((r) => r.key === 'exportRewardKwh');
         if (reward) {
             notes.push(reward.ok
-                ? 'Export reward kWh match your 4–9 pm exports, so they are part of total exports (not extra). The app doesn\'t yet add the reward credit itself.'
+                ? 'Export reward kWh match your 4–9 pm exports: they are part of total exports (not extra), and the app credits the reward on them.'
                 : 'Export reward kWh don\'t match your 4–9 pm exports, so the reward window may be different.');
         }
         notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
