@@ -107,6 +107,21 @@ assert(pp.start === '2026-08-01' && pp.end === '2026-08-31', 'Time period with s
 pp = Amber.parseBillPeriod(Amber.normalizeBillText('Issued 05/09/2026 Paid 06/09/2026'));
 assert(!pp.start, 'two unrelated nearby dates (1 day apart) are not a period');
 
+// Export credits table (Aug 2026 bill layout, Amber font dashes)
+const credits = Amber.parseAmberBillText(`Time period: 01/08/2026 \ue088 31/08/2026
+Usage 900.00 kWh 0.2000 $/kWh $180.00
+CHARGES TOTAL $300.00
+YOUR EXPORT CREDITS
+Charge Description Dates Amount Rate ($/kWh) Credit
+Export Reward Energy 01 Aug \ue088 31 Aug 1.25 kWh 0.0401 $0.05
+Solar Exports 01 Aug \ue088 31 Aug 44.39 kWh 0.1428 $6.34
+Export Totals (excl GST): $6.39`).check;
+assert(credits.feedInKwh === 44.39, `solar exports kWh from the Solar Exports row (got ${credits.feedInKwh})`);
+assert(credits.feedInCredit === 6.39, 'export credit is the Export Totals line');
+assert(credits.exportRewardKwh === 1.25 && credits.exportRewardCredit === 0.05, 'export reward row');
+const creditRows = Object.fromEntries(Amber.compareBill(credits, { importKwh: 900, amberUsage: 198, amberDemand: 0, amberConnection: 0, amberSubscription: 0, amberCharges: 330, exportKwh: 44.4, amberFeedIn: -6.3, eveningExportKwh: 1.2 }).map((r) => [r.key, r]));
+assert(creditRows.feedInKwh.ok && creditRows.feedInCredit.ok && creditRows.exportRewardKwh.ok, 'exports, credit and reward compare OK');
+
 const fromName = Amber.parseBillPeriod('no dates here', '20260801-20260831.pdf');
 assert(fromName.start === '2026-08-01' && fromName.end === '2026-08-31' && fromName.fromFileName, 'period from Amber file name');
 const viaFile = Amber.parseAmberBillText('Usage 744.00 kWh 0.2000 $/kWh $148.80\nCHARGES TOTAL $254.95', '20260801-20260831.pdf').check;

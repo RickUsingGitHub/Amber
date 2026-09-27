@@ -1305,6 +1305,12 @@
         const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
         if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
         if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
+        const reward = rows.find((r) => r.key === 'exportRewardKwh');
+        if (reward) {
+            notes.push(reward.ok
+                ? 'Export reward kWh match your 4–9 pm exports, so they are part of total exports (not extra). The app doesn\'t yet add the reward credit itself.'
+                : 'Export reward kWh don\'t match your 4–9 pm exports, so the reward window may be different.');
+        }
         notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
         html += `<ul class="text-xs text-gray-600 mt-3 space-y-1 list-disc pl-5">${notes.map((n) => `<li>${Amber.escapeHTML(n)}</li>`).join('')}</ul>`;
         body.innerHTML = html;
