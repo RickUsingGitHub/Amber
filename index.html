@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.24</title>
+    <title>Amber Compare &amp; Export v1.25</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.24">
+    <link rel="stylesheet" href="css/app.css?v=1.25">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.24
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.25
                     </h1>
                     <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
                 </div>
@@ -261,12 +261,14 @@
                 </div>
             </div>
 
-            <div id="billCheckSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+            <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
                 <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
                     <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
-                    <div class="flex items-center gap-3">
-                        <button id="billCheckLoad" type="button" class="bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
-                        <button id="billCheckClear" type="button" class="text-sm text-indigo-600 hover:underline">Clear</button>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
+                        <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                        <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
+                        <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
                     </div>
                 </div>
                 <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
@@ -362,18 +364,18 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.24"></script>
-    <script src="js/time.js?v=1.24"></script>
-    <script src="js/templates.js?v=1.24"></script>
-    <script src="js/storage.js?v=1.24"></script>
-    <script src="js/costs.js?v=1.24"></script>
-    <script src="js/api.js?v=1.24"></script>
-    <script src="js/bill.js?v=1.24"></script>
-    <script src="js/csv.js?v=1.24"></script>
-    <script src="js/charts.js?v=1.24"></script>
-    <script src="js/calendar.js?v=1.24"></script>
-    <script src="js/stats.js?v=1.24"></script>
-    <script src="js/monthly.js?v=1.24"></script>
-    <script src="js/app.js?v=1.24"></script>
+    <script src="js/constants.js?v=1.25"></script>
+    <script src="js/time.js?v=1.25"></script>
+    <script src="js/templates.js?v=1.25"></script>
+    <script src="js/storage.js?v=1.25"></script>
+    <script src="js/costs.js?v=1.25"></script>
+    <script src="js/api.js?v=1.25"></script>
+    <script src="js/bill.js?v=1.25"></script>
+    <script src="js/csv.js?v=1.25"></script>
+    <script src="js/charts.js?v=1.25"></script>
+    <script src="js/calendar.js?v=1.25"></script>
+    <script src="js/stats.js?v=1.25"></script>
+    <script src="js/monthly.js?v=1.25"></script>
+    <script src="js/app.js?v=1.25"></script>
 </body>
 </html>

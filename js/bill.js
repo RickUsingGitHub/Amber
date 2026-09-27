@@ -101,11 +101,40 @@
         return price;
     };
 
+    const MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+
+    /** "01/07/2026", "1/7/26", "1 Jul 2026", "01 July 2026" -> "2026-07-01". */
     function auDateToIso(s) {
-        const m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-        if (!m) return null;
-        return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+        const str = String(s || '').trim();
+        let m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+        let day;
+        let month;
+        let year;
+        if (m) {
+            day = +m[1]; month = +m[2]; year = +m[3];
+        } else {
+            m = str.match(/^(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{2,4})$/);
+            if (!m) return null;
+            day = +m[1]; month = MONTHS[m[2].substring(0, 3).toLowerCase()]; year = +m[3];
+        }
+        if (year < 100) year += 2000;
+        if (!month || month > 12 || day < 1 || day > 31) return null;
+        return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     }
+
+    const DATE_RE = '(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}|\\d{1,2}(?:st|nd|rd|th)?\\s+[A-Za-z]{3,9}\\.?,?\\s+\\d{2,4})';
+
+    /** Billing period start/end, preferring text near "Billing Period". */
+    Amber.parseBillPeriod = function (text) {
+        const range = new RegExp(`${DATE_RE}\\s*(?:-+|to|–)\\s*${DATE_RE}`, 'i');
+        const near = text.match(/Billing Period[\s\S]{0,120}/i);
+        const m = (near && near[0].match(range)) || text.match(range);
+        if (!m) return { start: null, end: null };
+        const start = auDateToIso(m[1]);
+        const end = auDateToIso(m[2]);
+        if (!start || !end || end < start) return { start: null, end: null };
+        return { start, end };
+    };
 
     function money(re, text) {
         const m = text.match(re);
@@ -117,13 +146,13 @@
      * charges summary); null when a line isn't found.
      */
     Amber.parseBillCheck = function (text) {
-        const period = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-+\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
+        const period = Amber.parseBillPeriod(text);
         const usage = text.match(/\bUsage\s+([\d,]+(?:\.\d+)?)\s*kWh\s+[\d.]+\s*\$\s*\/\s*kWh\s+\$\s*([\d,]+(?:\.\d+)?)/i);
         const demandRow = text.match(/Network\s*-\s*Peak Demand[\s\S]{0,120}?([\d.]+)\s*kW\s+[\d.]+\s*\$\s*\/\s*kW\s*\/\s*Day\s*\$?\s*([\d,.]+)/i);
         const feedIn = text.match(/(?:Feed[- ]?in|Solar Export|Export(?:ed)?(?: Energy)?|Credits?)[^\n$]{0,60}?([\d,]+(?:\.\d+)?)\s*kWh[^\n$]{0,60}?(-)?\s*\$\s*(-)?\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
         const check = {
-            start: period ? auDateToIso(period[1]) : null,
-            end: period ? auDateToIso(period[2]) : null,
+            start: period.start,
+            end: period.end,
             usageKwh: usage ? toNumber(usage[1]) : null,
             usageCost: usage ? toNumber(usage[2]) : money(/Usage Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text),
             demandKw: demandRow ? toNumber(demandRow[1]) : null,
@@ -137,8 +166,9 @@
             feedInKwh: feedIn ? toNumber(feedIn[1]) : null,
             feedInCredit: feedIn ? toNumber(feedIn[4]) : null
         };
-        const found = Object.keys(check).filter((k) => check[k] != null);
-        check.ok = !!(check.start && check.end && found.length > 3);
+        const found = Object.keys(check).filter((k) => check[k] != null && k !== 'start' && k !== 'end');
+        check.found = found;
+        check.ok = !!(check.start && check.end && found.length >= 2);
         return check;
     };
 
