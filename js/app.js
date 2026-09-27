@@ -936,6 +936,12 @@
         }).join('');
     }
 
+    /** "$12.34" / "−$6.45" (proper minus sign before the dollar sign). */
+    function money(v) {
+        const n = Number(v) || 0;
+        return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
+    }
+
     async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
         const planName = $('planName').value.trim() || 'Other Supplier';
         const period = `(${startDateStr} to ${endDateStr})`;
@@ -988,8 +994,8 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">${Amber.escapeHTML(c.type)}</span></td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedAmberCost.toFixed(2)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}$${adjustedOtherCost.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedAmberCost)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}${money(adjustedOtherCost)}</td>
                 </tr>`;
             });
             if (c.amberExportCharge) {
@@ -1000,7 +1006,7 @@
                     <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">export</span></td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">Export charge</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(c.amberExportChargeKwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}$${exportAmber.toFixed(2)}</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}${money(exportAmber)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$0.00</td>
                 </tr>`;
             }
@@ -1009,8 +1015,8 @@
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${Amber.escapeHTML(c.identifier)}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${channelKwh.toFixed(1)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${channelAmber.toFixed(2)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${channelOther.toFixed(2)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelAmber)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelOther)}</td>
                 </tr>`;
             }
         });
@@ -1032,16 +1038,16 @@
                 month: maxDemandDateTimeObj.toLocaleString('default', { month: 'long' })
             };
             tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">
                     <span id="amber-demand-tooltip-trigger" class="cursor-help border-b border-dotted border-gray-500">Amber Demand Tariff</span>
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Max: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
                     ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">X ${demandTariffInfo.demandDays} days</div>`}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedDemandCost.toFixed(2)}</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"></td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
             </tr>`;
         }
 
@@ -1052,14 +1058,14 @@
             const maxDemandDateTime = otherDemandTariffInfo.maxDemandTime || '';
             const dayCount = otherDemandTariffInfo.applicableDaysCount || numDays;
             tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} Demand Tariff</td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} Demand Tariff</td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Max: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
                     ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">X ${dayCount} applicable days</div>`}
                 </td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
-                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">$${adjustedOtherDemandCost.toFixed(2)}</td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
             </tr>`;
         }
 
@@ -1070,19 +1076,19 @@
         adjustedOtherTotal += otherDailyConnection;
 
         tableHTML += `<tr class="font-semibold border-t">
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${amberConnectionCost.toFixed(2)}</td>
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${otherDailyConnection.toFixed(2)}</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberConnectionCost)}</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(otherDailyConnection)}</td>
         </tr>
         <tr class="font-semibold">
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">$${amberSubscriptionCost.toFixed(2)}</td>
-            <td class="px-6 py-2 whitespace-nowrap text-sm text-gray-900 text-right">N/A</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberSubscriptionCost)}</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">N/A</td>
         </tr>
         <tr class="bg-gray-50 font-bold">
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedAmberTotal.toFixed(2)}</td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-right">$${adjustedOtherTotal.toFixed(2)}</td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedAmberTotal)}</td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedOtherTotal)}</td>
         </tr></tbody></table>`;
 
         const savings = adjustedOtherTotal - adjustedAmberTotal;
