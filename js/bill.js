@@ -203,6 +203,10 @@
             subscriptionCost: money(/Amber Fee Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text)
                 ?? money(/Amber Monthly Subscription\s+\$\s*([\d,.]+)/i, text),
             gst: money(/GST\s*-?\s*10%\s+\$\s*([\d,.]+)/i, text),
+            otherCost: money(/Other Total\s*\(\s*excl GST\):?\s*\$\s*([\d,.]+)/i, text)
+                ?? money(/Other Charges\s+\$\s*([\d,.]+)/i, text),
+            voucherCredit: money(/Voucher[s]? & Concession Totals\s*\(\s*excl GST\):?\s*\$\s*([\d,.]+)/i, text)
+                ?? money(/Vouchers & Concessions\s+\$\s*([\d,.]+)/i, text),
             chargesTotal: money(/CHARGES TOTAL\s+\$\s*([\d,.]+)/i, text),
             feedInKwh: exportCredits ? exportCredits.exportKwh : (feedIn ? toNumber(feedIn[1]) : null),
             feedInCredit: exportCredits ? exportCredits.credit : (feedIn ? toNumber(feedIn[4]) : null),
@@ -210,7 +214,7 @@
             exportRewardCredit: exportCredits ? exportCredits.rewardCredit : null,
             exportRows: exportCredits ? exportCredits.rows : null
         };
-        const found = Object.keys(check).filter((k) => check[k] != null && !['start', 'end', 'exportRows', 'periodFromFileName'].includes(k));
+        const found = Object.keys(check).filter((k) => check[k] != null && !['start', 'end', 'exportRows', 'periodFromFileName', 'otherCost', 'voucherCredit'].includes(k));
         check.found = found;
         check.ok = !!(check.start && check.end && found.length >= 2);
         return check;
@@ -227,19 +231,22 @@
         if (start < 0) return null;
         const endRel = text.substring(start).search(/Export Totals/i);
         const section = text.substring(start, endRel >= 0 ? start + endRel + 60 : start + 1500);
-        const rowRe = /([A-Za-z][A-Za-z ]*?)\s+\d{1,2}\s+[A-Za-z]{3,9}\s*-\s*\d{1,2}\s+[A-Za-z]{3,9}\s+([\d,]+(?:\.\d+)?)\s*kWh\s+([\d.]+)\s+-?\$\s*([\d,]+(?:\.\d+)?)/gi;
+        const rowRe = /([A-Za-z][A-Za-z /&.'-]*?)\s+\d{1,2}\s+[A-Za-z]{3,9}\s*-\s*\d{1,2}\s+[A-Za-z]{3,9}\s+([\d,]+(?:\.\d+)?)\s*kWh\s+([\d.]+)\s+-?\$\s*([\d,]+(?:\.\d+)?)/gi;
         const rows = [];
         let m;
         while ((m = rowRe.exec(section))) {
             rows.push({ label: m[1].replace(/^(Charge Description|Dates|Amount|Rate|Credit|\(\$\/kWh\)|\s)+/i, '').trim(), kwh: toNumber(m[2]), rate: toNumber(m[3]), credit: toNumber(m[4]) });
         }
         if (!rows.length) return null;
-        const solar = rows.find((r) => /solar|export(?!.*reward)/i.test(r.label) && !/reward/i.test(r.label));
         const reward = rows.find((r) => /reward/i.test(r.label));
+        // Exported kWh: the credits summary "Solar Exports N kWh" line, else the largest
+        // non-reward row (e.g. "Solar Exports" or "Wholesale Export Credit/Charge").
+        const summary = text.match(/Solar Exports\s+([\d,]+(?:\.\d+)?)\s*kWh/i);
+        const main = rows.filter((r) => r !== reward).sort((a, b) => b.kwh - a.kwh)[0];
         const total = section.match(/Export Totals\s*\(excl GST\):?\s*\$\s*([\d,.]+)/i);
         return {
             rows,
-            exportKwh: solar ? solar.kwh : rows.reduce((s, r) => s + r.kwh, 0),
+            exportKwh: summary ? toNumber(summary[1]) : (main ? main.kwh : null),
             credit: total ? toNumber(total[1]) : rows.reduce((s, r) => s + r.credit, 0),
             rewardKwh: reward ? reward.kwh : null,
             rewardCredit: reward ? reward.credit : null
@@ -267,8 +274,11 @@
         add('demandCost', 'Demand charges', '$', check.demandCost, ex(totals.amberDemand), dollarTol);
         add('supplyCost', 'Daily supply', '$', check.supplyCost, ex(totals.amberConnection), dollarTol);
         add('subscriptionCost', 'Amber subscription', '$', check.subscriptionCost, ex(totals.amberSubscription), dollarTol);
-        add('gst', 'GST', '$', check.gst, totals.amberCharges - ex(totals.amberCharges), dollarTol);
-        add('chargesTotal', 'Charges total (inc GST)', '$', check.chargesTotal, totals.amberCharges, dollarTol);
+        // Other charges (e.g. card payment fee) aren't in meter data: take them from the bill.
+        const other = (check.otherCost || 0) * 1.1;
+        const charges = totals.amberCharges + other;
+        add('gst', 'GST', '$', check.gst, charges - ex(charges), dollarTol);
+        add('chargesTotal', 'Charges total (inc GST)', '$', check.chargesTotal, charges, dollarTol);
         add('feedInKwh', 'Solar exports', 'kWh', check.feedInKwh, totals.exportKwh, kwhTol);
         add('feedInCredit', 'Export credits', '$', check.feedInCredit, -totals.amberFeedIn, dollarTol);
         add('exportRewardKwh', 'Export reward (4–9 pm exports)', 'kWh', check.exportRewardKwh, totals.eveningExportKwh, (b) => Math.max(0.3, Math.abs(b) * 0.05));

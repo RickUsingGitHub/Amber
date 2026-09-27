@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.30', 'app version is 1.30');
+assert(Amber.APP_VERSION === '1.31', 'app version is 1.31');
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection default');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');
 assert(Amber.DEFAULT_AMBER_DEMAND_CENTS === 42.345, 'Amber demand default');
@@ -102,7 +102,8 @@ const settled = Amber.settleAmberFeedIn(fitChannel, fitSite, 31);
 assert(settled && Math.abs(settled.middayKwh - 233.12) < 1e-6, 'midday kWh from interval end');
 assert(Math.abs(settled.freeKwh - 6.83 * 31) < 1e-6, 'BEL is 6.83 kWh times 31 days');
 assert(settled.cost < settled.intervalCost, 'free midday allowance increases the solar credit');
-assert(Math.abs(settled.cost - (settled.intervalCost - settled.addBack)) < 1e-9, 'settled cost is interval minus BEL add-back');
+assert(Math.abs(settled.cost - (settled.intervalCost - settled.addBack)) < 1e-9, 'settled cost is interval minus add-back');
+assert(Math.abs(settled.addBack - 233.12 * 1.232 / 100) < 1e-9, 'add-back removes the ex-GST charge embedded in every midday kWh');
 assert(Math.abs(settled.chargedKwh - (233.12 - 6.83 * 31)) < 1e-6, 'export charge kWh is midday above BEL');
 assert(Math.abs(settled.charge - settled.chargedKwh * 1.3552 / 100) < 1e-9, 'export charge uses EA029 GST-inc rate');
 const totals = {

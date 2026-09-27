@@ -63,7 +63,7 @@ for (let d = 0; d < 14; d++) dates.push(Amber.addDays('2026-04-01', d));
 const ranges = Amber.buildFetchRanges(dates, 7);
 assert(ranges.length === 2 && ranges[0].end === '2026-04-07', `DST-safe 7-day chunks (got ${JSON.stringify(ranges)})`);
 
-// Ausgrid EA029 export reward: 4.01c/kWh on exports 4-9 pm local
+// Ausgrid EA029: evening reward kWh are measured but not credited (already in Amber's feed-in price)
 const fi = { B1: Object.assign(Amber.emptyChannel({ identifier: 'B1', type: 'feedIn', tariff: 'EA029' })) };
 Amber.processUsageData([
     { nemTime: '2026-08-10T12:00:00+10:00', date: '2026-08-10', kwh: 1, perKwh: -10, duration: 30, channelIdentifier: 'B1' },
@@ -71,8 +71,9 @@ Amber.processUsageData([
     { nemTime: '2026-08-10T21:30:00+10:00', date: '2026-08-10', kwh: 1, perKwh: -5, duration: 30, channelIdentifier: 'B1' }
 ], fi, true);
 const settled = Amber.settleAmberFeedIn(fi.B1, { network: 'Ausgrid' }, 1);
-assert(near(settled.rewardKwh, 2) && near(settled.reward, 0.0802), `reward on 4-9 pm exports only (${settled.rewardKwh} kWh, $${settled.reward})`);
-assert(near(settled.cost, settled.intervalCost - settled.addBack - 0.0802), 'reward credited in feed-in cost');
+assert(near(settled.rewardKwh, 2), `reward kWh counts 4-9 pm exports only (${settled.rewardKwh})`);
+assert(near(settled.cost, settled.intervalCost - settled.addBack), 'reward is not credited a second time');
+assert(near(settled.addBack, 1 * 1.232 / 100), 'add-back is the ex-GST charge on all midday kWh');
 
 if (failed) { console.error(`${failed} demand/time test(s) failed`); process.exit(1); }
 console.log('demand/time tests passed');

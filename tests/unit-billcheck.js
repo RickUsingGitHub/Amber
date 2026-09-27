@@ -122,6 +122,33 @@ assert(credits.exportRewardKwh === 1.25 && credits.exportRewardCredit === 0.05, 
 const creditRows = Object.fromEntries(Amber.compareBill(credits, { importKwh: 900, amberUsage: 198, amberDemand: 0, amberConnection: 0, amberSubscription: 0, amberCharges: 330, exportKwh: 44.4, amberFeedIn: -6.3, eveningExportKwh: 1.2 }).map((r) => [r.key, r]));
 assert(creditRows.feedInKwh.ok && creditRows.feedInCredit.ok && creditRows.exportRewardKwh.ok, 'exports, credit and reward compare OK');
 
+// EA025 bill layout: card fee under Other Charges, "Wholesale Export Credit/Charge" row, vouchers
+const ea025 = Amber.parseAmberBillText(`Billing Period: 31 days (19/08/2026 \ue088 18/09/2026)
+Usage 480.09 kWh 0.1626 $/kWh $78.06
+Network Daily Supply Charges 31 days 1.0616 $/Day $32.91
+Other Charges $2.31
+Amber Monthly Subscription $23.16
+GST - 10% $13.61
+CHARGES TOTAL $150.05
+CREDITS SUMMARY
+Solar Exports 320.32 kWh 0.0209 $/kWh $6.70
+Vouchers & Concessions $9.09
+Card Payment Processing Fee 19 Aug - 19 Aug 1 $2.3100 $2.31
+Other Total ( excl GST): $2.31
+YOUR EXPORT CREDITS
+Charge Description Dates Amount Rate ($/kWh) Credit
+Export Reward Energy 19 Aug - 18 Sep 18.79 kWh 0.0383 $0.72
+Wholesale Export Credit/Charge 19 Aug - 18 Sep 320.32 kWh 0.0187 $5.98
+Export Totals (excl GST): $6.70
+Voucher & Concession Totals ( excl GST): $9.09`).check;
+assert(ea025.feedInKwh === 320.32 && ea025.feedInCredit === 6.7, `exports not double-counted (got ${ea025.feedInKwh} kWh)`);
+assert(ea025.exportRows[1].label === 'Wholesale Export Credit/Charge', `row label keeps "/" (${ea025.exportRows[1].label})`);
+assert(ea025.otherCost === 2.31 && ea025.voucherCredit === 9.09, 'other charges and vouchers');
+// Meter totals for that bill period (from its 5-minute data)
+const ea025Totals = { importKwh: 480.092, amberUsage: 85.848, amberDemand: 0, amberConnection: 36.204, amberSubscription: 25.476, amberCharges: 147.528, exportKwh: 320.322, amberFeedIn: -6.700, eveningExportKwh: 18.786 };
+const ea025Rows = Amber.compareBill(ea025, ea025Totals);
+assert(ea025Rows.every((r) => r.ok), `EA025 bill checks out line by line (${ea025Rows.filter((r) => !r.ok).map((r) => r.key).join(', ')})`);
+
 const fromName = Amber.parseBillPeriod('no dates here', '20260801-20260831.pdf');
 assert(fromName.start === '2026-08-01' && fromName.end === '2026-08-31' && fromName.fromFileName, 'period from Amber file name');
 const viaFile = Amber.parseAmberBillText('Usage 744.00 kWh 0.2000 $/kWh $148.80\nCHARGES TOTAL $254.95', '20260801-20260831.pdf').check;
