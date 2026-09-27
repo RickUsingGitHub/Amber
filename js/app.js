@@ -72,6 +72,11 @@
     }
 
     function applyAmberBillRates(parsed) {
+        if (parsed && parsed.check && parsed.check.ok) {
+            state.billCheck = parsed.check;
+            try { localStorage.setItem(BILL_CHECK_KEY, JSON.stringify(parsed.check)); } catch (e) { /* ignore */ }
+            renderBillCheck();
+        }
         if (!parsed || !parsed.ok) {
             setAmberBillStatus('Could not find daily connection, subscription or demand rates in that file. You can type them from the charges page.', true);
             return;
@@ -1159,6 +1164,144 @@
         } catch (err) {
             console.error(err);
         }
+        try {
+            renderMonthly();
+            renderBillCheck();
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    // ---------- Monthly breakdown ----------
+
+    function periodOpts() {
+        return { site: selectedSite(), planConfig: createPlanObjectFromForm(), state: currentStateCode(), amberRates: readAmberRates() };
+    }
+
+    function renderMonthly() {
+        const section = $('monthlySection');
+        if (!state.cachedChannelData || !state.lastFetchedStartDate) { section.classList.add('hidden'); return; }
+        const { rows, total } = Amber.monthlyBreakdown(state.cachedChannelData, state.lastFetchedStartDate, state.lastFetchedEndDate, periodOpts());
+        const gst = gstInclusive();
+        const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
+        const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
+        const planName = $('planName').value.trim() || 'Other Supplier';
+        const view = (r) => {
+            const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
+            const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
+            return { amberTotal, otherTotal, diff: otherTotal - amberTotal };
+        };
+        const label = (r) => {
+            if (r.month === 'Total') return 'Total';
+            const name = new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+            return r.partial ? `${name} <span class="text-xs text-gray-500">(part)</span>` : name;
+        };
+        const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
+        const th = (t, right) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${t}</th>`;
+        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
+            ${th('Month')}${th('Days', 1)}${th('Import kWh', 1)}${th('Export kWh', 1)}${th('Usage', 1)}${th('Feed-in', 1)}${th('Demand', 1)}${th('Fixed', 1)}${th('Amber', 1)}${th(Amber.escapeHTML(planName), 1)}${th('Difference', 1)}
+        </tr></thead><tbody class="divide-y divide-gray-200">`;
+        rows.concat([total]).forEach((r) => {
+            const v = view(r);
+            const isTotal = r.month === 'Total';
+            const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
+            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber ' : 'Other '}${money(Math.abs(v.diff))} cheaper`;
+            const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
+            html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
+                ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
+                ${td(money(adj(r.amberUsage)), 1)}${td(money(r.amberFeedIn || 0), 1)}${td(money(adj(r.amberDemand)), 1)}${td(money(adj(r.amberConnection + r.amberSubscription)), 1)}
+                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, diffCls)}
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        html += `<p class="text-xs text-gray-500 mt-2">Usage includes any Ausgrid export charge, as on the bill. Fixed = daily connection + Amber subscription. ${gst ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}.</p>`;
+        $('monthlyTable').innerHTML = html;
+        section.classList.remove('hidden');
+    }
+
+    // ---------- Bill check ----------
+
+    const BILL_CHECK_KEY = 'amberBillCheck';
+
+    function fmtDate(iso) {
+        return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    }
+
+    function renderBillCheck() {
+        const section = $('billCheckSection');
+        const bill = state.billCheck;
+        if (!bill || !bill.ok) { section.classList.add('hidden'); return; }
+        section.classList.remove('hidden');
+        const days = Amber.inclusiveDayCount(bill.start, bill.end);
+        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days). Bill charges are ex GST; meter figures are shown the same way.`;
+        const body = $('billCheckBody');
+        const loaded = state.cachedChannelData && state.lastFetchedStartDate
+            && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end;
+        $('billCheckLoad').classList.toggle('hidden', !!loaded);
+        if (!loaded) {
+            const yesterday = Amber.formatForInput(Amber.localYesterday());
+            body.innerHTML = bill.end > yesterday
+                ? '<p class="text-sm text-gray-600">The bill period hasn\'t finished yet, so there is no complete meter data to check against.</p>'
+                : '<p class="text-sm text-gray-600">Click <span class="font-medium">Load bill period</span> to fetch your meter data for these dates and compare it line by line.</p>';
+            return;
+        }
+        const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, periodOpts());
+        const rows = Amber.compareBill(bill, totals);
+        const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' ? 2 : 1)} ${unit}`);
+        const fmtDiff = (v, unit) => {
+            if (Math.abs(v) < (unit === '$' ? 0.005 : 0.05)) return '—';
+            return (v > 0 ? '+' : '−') + fmtVal(Math.abs(v), unit);
+        };
+        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
+            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
+            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bill</th>
+            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Meter data</th>
+            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Difference</th>
+            <th class="px-3 py-2"></th></tr></thead><tbody class="divide-y divide-gray-200">`;
+        rows.forEach((r) => {
+            html += `<tr class="${r.ok ? '' : 'bg-amber-50'}">
+                <td class="px-3 py-2 text-gray-900">${Amber.escapeHTML(r.label)}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.bill, r.unit)}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.meter, r.unit)}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap ${r.ok ? 'text-gray-600' : 'text-amber-800 font-semibold'}">${fmtDiff(r.diff, r.unit)}</td>
+                <td class="px-3 py-2 text-center">${r.ok ? '<span class="text-green-700" aria-label="matches">✓</span>' : '<span class="text-amber-700" aria-label="check">⚠</span>'}</td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+
+        const notes = [];
+        const bad = rows.filter((r) => !r.ok).map((r) => r.key);
+        if (!rows.length) notes.push('No matching lines were found on this bill.');
+        if (bad.includes('demandCost') && !bad.includes('demandKw') && totals.demandDays && totals.demandDays !== days) {
+            notes.push(`Peak demand matches but the charge doesn't: the bill charges demand for all ${days} days, while Amber's data marks only ${totals.demandDays} days as demand days.`);
+        }
+        if (totals.dataDays < days) notes.push(`Meter data is missing for ${days - totals.dataDays} day(s) of the bill period.`);
+        const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
+        if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
+        if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
+        notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
+        html += `<ul class="text-xs text-gray-600 mt-3 space-y-1 list-disc pl-5">${notes.map((n) => `<li>${Amber.escapeHTML(n)}</li>`).join('')}</ul>`;
+        body.innerHTML = html;
+    }
+
+    function setupBillCheck() {
+        try {
+            const saved = JSON.parse(localStorage.getItem(BILL_CHECK_KEY) || 'null');
+            if (saved && saved.ok) state.billCheck = saved;
+        } catch (e) { /* ignore */ }
+        $('billCheckLoad').addEventListener('click', () => {
+            const bill = state.billCheck;
+            if (!bill) return;
+            $('startDate').value = bill.start;
+            $('endDate').value = bill.end;
+            fetchAndCompare();
+        });
+        $('billCheckClear').addEventListener('click', () => {
+            state.billCheck = null;
+            try { localStorage.removeItem(BILL_CHECK_KEY); } catch (e) { /* ignore */ }
+            renderBillCheck();
+        });
+        renderBillCheck();
     }
 
     // ---------- More stats ----------
@@ -1630,6 +1773,7 @@
         });
         loadAllSettings();
         clearRetiredStatsStorage();
+        setupBillCheck();
         if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
         if (!$('tou_shoulder_windows_container').children.length) addTouWindow('shoulder');
         setRatesDetailsOpen(localStorage.getItem('ratesDetailsOpen') === 'true', false);

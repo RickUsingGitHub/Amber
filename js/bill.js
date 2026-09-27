@@ -101,6 +101,75 @@
         return price;
     };
 
+    function auDateToIso(s) {
+        const m = String(s || '').match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (!m) return null;
+        return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    }
+
+    function money(re, text) {
+        const m = text.match(re);
+        return m ? toNumber(m[1]) : null;
+    }
+
+    /**
+     * Bill line items for the bill check. Amounts are as printed on the bill (ex GST in the
+     * charges summary); null when a line isn't found.
+     */
+    Amber.parseBillCheck = function (text) {
+        const period = text.match(/(\d{1,2}\/\d{1,2}\/\d{4})\s*-+\s*(\d{1,2}\/\d{1,2}\/\d{4})/);
+        const usage = text.match(/\bUsage\s+([\d,]+(?:\.\d+)?)\s*kWh\s+[\d.]+\s*\$\s*\/\s*kWh\s+\$\s*([\d,]+(?:\.\d+)?)/i);
+        const demandRow = text.match(/Network\s*-\s*Peak Demand[\s\S]{0,120}?([\d.]+)\s*kW\s+[\d.]+\s*\$\s*\/\s*kW\s*\/\s*Day\s*\$?\s*([\d,.]+)/i);
+        const feedIn = text.match(/(?:Feed[- ]?in|Solar Export|Export(?:ed)?(?: Energy)?|Credits?)[^\n$]{0,60}?([\d,]+(?:\.\d+)?)\s*kWh[^\n$]{0,60}?(-)?\s*\$\s*(-)?\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
+        const check = {
+            start: period ? auDateToIso(period[1]) : null,
+            end: period ? auDateToIso(period[2]) : null,
+            usageKwh: usage ? toNumber(usage[1]) : null,
+            usageCost: usage ? toNumber(usage[2]) : money(/Usage Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text),
+            demandKw: demandRow ? toNumber(demandRow[1]) : null,
+            demandCost: demandRow ? toNumber(demandRow[2]) : money(/Network Demand Charges\s+\$\s*([\d,.]+)/i, text),
+            supplyCost: money(/Daily Supply Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text)
+                ?? money(/Network Daily Supply Charges[^\n$]*\$\s*\/\s*Day\s+\$\s*([\d,.]+)/i, text),
+            subscriptionCost: money(/Amber Fee Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text)
+                ?? money(/Amber Monthly Subscription\s+\$\s*([\d,.]+)/i, text),
+            gst: money(/GST\s*-?\s*10%\s+\$\s*([\d,.]+)/i, text),
+            chargesTotal: money(/CHARGES TOTAL\s+\$\s*([\d,.]+)/i, text),
+            feedInKwh: feedIn ? toNumber(feedIn[1]) : null,
+            feedInCredit: feedIn ? toNumber(feedIn[4]) : null
+        };
+        const found = Object.keys(check).filter((k) => check[k] != null);
+        check.ok = !!(check.start && check.end && found.length > 3);
+        return check;
+    };
+
+    /**
+     * Compare bill lines with meter-data totals (from Amber.periodTotals, GST-inclusive).
+     * Bill charges are ex GST, so meter charges are divided by 1.1 to match.
+     * Returns rows { key, label, unit, bill, meter, diff, ok } for lines present on the bill.
+     */
+    Amber.compareBill = function (check, totals) {
+        const ex = (v) => v / 1.1;
+        const rows = [];
+        const add = (key, label, unit, bill, meter, tol) => {
+            if (bill == null || meter == null || !Number.isFinite(meter)) return;
+            const diff = meter - bill;
+            rows.push({ key, label, unit, bill, meter, diff, ok: Math.abs(diff) <= tol(bill) });
+        };
+        const kwhTol = (b) => Math.max(1, Math.abs(b) * 0.01);
+        const dollarTol = (b) => Math.max(0.5, Math.abs(b) * 0.01);
+        add('usageKwh', 'Usage', 'kWh', check.usageKwh, totals.importKwh, kwhTol);
+        add('usageCost', 'Usage charges', '$', check.usageCost, ex(totals.amberUsage), dollarTol);
+        add('demandKw', 'Peak demand', 'kW', check.demandKw, totals.demandKw, () => 0.05);
+        add('demandCost', 'Demand charges', '$', check.demandCost, ex(totals.amberDemand), dollarTol);
+        add('supplyCost', 'Daily supply', '$', check.supplyCost, ex(totals.amberConnection), dollarTol);
+        add('subscriptionCost', 'Amber subscription', '$', check.subscriptionCost, ex(totals.amberSubscription), dollarTol);
+        add('gst', 'GST', '$', check.gst, totals.amberCharges - ex(totals.amberCharges), dollarTol);
+        add('chargesTotal', 'Charges total (inc GST)', '$', check.chargesTotal, totals.amberCharges, dollarTol);
+        add('feedInKwh', 'Feed-in', 'kWh', check.feedInKwh, totals.exportKwh, kwhTol);
+        add('feedInCredit', 'Feed-in credit', '$', check.feedInCredit, -totals.amberFeedIn, dollarTol);
+        return rows;
+    };
+
     Amber.parseAmberBillText = function (raw) {
         const text = Amber.normalizeBillText(raw);
         const days = Amber.inferBillDays(text);
@@ -116,6 +185,7 @@
         if (subscriptionCents != null) found.push('subscription');
         if (demandCents != null) found.push('demand');
         return {
+            check: Amber.parseBillCheck(text),
             days,
             exGst,
             connectionCents,
