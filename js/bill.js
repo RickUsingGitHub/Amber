@@ -188,6 +188,7 @@
         const period = Amber.parseBillPeriod(text, fileName);
         const usage = text.match(/\bUsage\s+([\d,]+(?:\.\d+)?)\s*kWh\s+[\d.]+\s*\$\s*\/\s*kWh\s+\$\s*([\d,]+(?:\.\d+)?)/i);
         const demandRow = text.match(/Network\s*-\s*Peak Demand[\s\S]{0,120}?([\d.]+)\s*kW\s+[\d.]+\s*\$\s*\/\s*kW\s*\/\s*Day\s*\$?\s*([\d,.]+)/i);
+        const exportCredits = Amber.parseExportCredits(text);
         const feedIn = text.match(/(?:Feed[- ]?in|Solar Export|Export(?:ed)?(?: Energy)?|Credits?)[^\n$]{0,60}?([\d,]+(?:\.\d+)?)\s*kWh[^\n$]{0,60}?(-)?\s*\$\s*(-)?\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
         const check = {
             start: period.start,
@@ -203,13 +204,46 @@
                 ?? money(/Amber Monthly Subscription\s+\$\s*([\d,.]+)/i, text),
             gst: money(/GST\s*-?\s*10%\s+\$\s*([\d,.]+)/i, text),
             chargesTotal: money(/CHARGES TOTAL\s+\$\s*([\d,.]+)/i, text),
-            feedInKwh: feedIn ? toNumber(feedIn[1]) : null,
-            feedInCredit: feedIn ? toNumber(feedIn[4]) : null
+            feedInKwh: exportCredits ? exportCredits.exportKwh : (feedIn ? toNumber(feedIn[1]) : null),
+            feedInCredit: exportCredits ? exportCredits.credit : (feedIn ? toNumber(feedIn[4]) : null),
+            exportRewardKwh: exportCredits ? exportCredits.rewardKwh : null,
+            exportRewardCredit: exportCredits ? exportCredits.rewardCredit : null,
+            exportRows: exportCredits ? exportCredits.rows : null
         };
-        const found = Object.keys(check).filter((k) => check[k] != null && k !== 'start' && k !== 'end');
+        const found = Object.keys(check).filter((k) => check[k] != null && !['start', 'end', 'exportRows', 'periodFromFileName'].includes(k));
         check.found = found;
         check.ok = !!(check.start && check.end && found.length >= 2);
         return check;
+    };
+
+    /**
+     * "YOUR EXPORT CREDITS" table: rows like "Solar Exports 01 Aug - 31 Aug 44.39 kWh 0.1428 $6.34"
+     * and "Export Reward Energy ... 1.25 kWh 0.0401 $0.05", then "Export Totals (excl GST): $6.39".
+     * Export reward kWh (Ausgrid EA029 evening exports) are part of total exports, so exported
+     * kWh come from the Solar Exports row; the credit is the section total.
+     */
+    Amber.parseExportCredits = function (text) {
+        const start = text.search(/EXPORT CREDITS/i);
+        if (start < 0) return null;
+        const endRel = text.substring(start).search(/Export Totals/i);
+        const section = text.substring(start, endRel >= 0 ? start + endRel + 60 : start + 1500);
+        const rowRe = /([A-Za-z][A-Za-z ]*?)\s+\d{1,2}\s+[A-Za-z]{3,9}\s*-\s*\d{1,2}\s+[A-Za-z]{3,9}\s+([\d,]+(?:\.\d+)?)\s*kWh\s+([\d.]+)\s+-?\$\s*([\d,]+(?:\.\d+)?)/gi;
+        const rows = [];
+        let m;
+        while ((m = rowRe.exec(section))) {
+            rows.push({ label: m[1].replace(/^(Charge Description|Dates|Amount|Rate|Credit|\(\$\/kWh\)|\s)+/i, '').trim(), kwh: toNumber(m[2]), rate: toNumber(m[3]), credit: toNumber(m[4]) });
+        }
+        if (!rows.length) return null;
+        const solar = rows.find((r) => /solar|export(?!.*reward)/i.test(r.label) && !/reward/i.test(r.label));
+        const reward = rows.find((r) => /reward/i.test(r.label));
+        const total = section.match(/Export Totals\s*\(excl GST\):?\s*\$\s*([\d,.]+)/i);
+        return {
+            rows,
+            exportKwh: solar ? solar.kwh : rows.reduce((s, r) => s + r.kwh, 0),
+            credit: total ? toNumber(total[1]) : rows.reduce((s, r) => s + r.credit, 0),
+            rewardKwh: reward ? reward.kwh : null,
+            rewardCredit: reward ? reward.credit : null
+        };
     };
 
     /**
@@ -235,8 +269,9 @@
         add('subscriptionCost', 'Amber subscription', '$', check.subscriptionCost, ex(totals.amberSubscription), dollarTol);
         add('gst', 'GST', '$', check.gst, totals.amberCharges - ex(totals.amberCharges), dollarTol);
         add('chargesTotal', 'Charges total (inc GST)', '$', check.chargesTotal, totals.amberCharges, dollarTol);
-        add('feedInKwh', 'Feed-in', 'kWh', check.feedInKwh, totals.exportKwh, kwhTol);
-        add('feedInCredit', 'Feed-in credit', '$', check.feedInCredit, -totals.amberFeedIn, dollarTol);
+        add('feedInKwh', 'Solar exports', 'kWh', check.feedInKwh, totals.exportKwh, kwhTol);
+        add('feedInCredit', 'Export credits', '$', check.feedInCredit, -totals.amberFeedIn, dollarTol);
+        add('exportRewardKwh', 'Export reward (4–9 pm exports)', 'kWh', check.exportRewardKwh, totals.eveningExportKwh, (b) => Math.max(0.3, Math.abs(b) * 0.05));
         return rows;
     };
 

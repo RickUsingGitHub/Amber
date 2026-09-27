@@ -50,9 +50,16 @@
             amberSubscription: (rates.subscriptionCents * days) / 100,
             channels: ct
         };
+        const timeZone = Amber.STATE_TIMEZONES[o.state] || 'Australia/Sydney';
+        out.eveningExportKwh = 0;
         Object.values(ct).forEach((c) => {
             if (c.type === 'feedIn') {
                 out.exportKwh += c.totalKWh;
+                // Exports ending 4–9 pm local (Ausgrid EA029 export reward window).
+                c.usageData.forEach((item) => {
+                    const parts = Amber.getClockParts(item.nemTime, { clock: 'local', timeZone });
+                    if (parts.hours >= 16 && parts.hours < 21) out.eveningExportKwh += Amber.absKwh(item.kwh);
+                });
                 out.amberFeedIn += c.totalAmberCost;
             } else {
                 if (c.type === 'controlledLoad') out.controlledKwh += c.totalKWh; else out.generalKwh += c.totalKWh;
