@@ -96,7 +96,7 @@
         state.billCheckError = null;
         try {
             const text = await Amber.readBillFile(file, loadPdfJs);
-            const parsed = Amber.parseAmberBillText(text);
+            const parsed = Amber.parseAmberBillText(text, file.name);
             if (!parsed.check || !parsed.check.ok) {
                 state.billCheckError = { name: file.name, check: parsed.check || {}, text: Amber.normalizeBillText(text) };
                 renderBillCheck();
@@ -1260,7 +1260,7 @@
             return;
         }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);
-        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days). Bill charges are ex GST; meter figures are shown the same way.`;
+        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are ex GST; meter figures are shown the same way.`;
         const loaded = state.cachedChannelData && state.lastFetchedStartDate
             && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end;
         $('billCheckLoad').classList.toggle('hidden', !!loaded);

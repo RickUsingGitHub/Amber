@@ -89,10 +89,18 @@ assert(near(mb.total.amberDemand, whole.amberDemand, 1e-6), 'monthly demand sums
 [['Billing period 1 Jul 2025 - 31 Jul 2025', '2025-07-01', '2025-07-31'],
  ['Bill period: 01 July 2025 to 31 July 2025', '2025-07-01', '2025-07-31'],
  ['Billing Period 1st June 2025 – 30th June 2025', '2025-06-01', '2025-06-30'],
- ['Period 1/7/25 - 31/7/25', '2025-07-01', '2025-07-31']].forEach(([t, a, b]) => {
+ ['Period 1/7/25 - 31/7/25', '2025-07-01', '2025-07-31'],
+ ['Billing Period: 31 days ( 01 / 08 / 2026 - 31 / 08 / 2026 )', '2026-08-01', '2026-08-31'],
+ ['Network - Daily 01 Aug - 31 Aug 2026 31 0.7103', '2026-08-01', '2026-08-31'],
+ ['Network - Daily 15 Dec - 14 Jan 2026 31 0.7103', '2025-12-15', '2026-01-14']].forEach(([t, a, b]) => {
     const p = Amber.parseBillPeriod(Amber.normalizeBillText(t));
     assert(p.start === a && p.end === b, `period from "${t}"`);
 });
+
+const fromName = Amber.parseBillPeriod('no dates here', '20260801-20260831.pdf');
+assert(fromName.start === '2026-08-01' && fromName.end === '2026-08-31' && fromName.fromFileName, 'period from Amber file name');
+const viaFile = Amber.parseAmberBillText('Usage 744.00 kWh 0.2000 $/kWh $148.80\nCHARGES TOTAL $254.95', '20260801-20260831.pdf').check;
+assert(viaFile.ok && viaFile.periodFromFileName, 'bill check ok with period from file name');
 
 if (failed) { console.error(`${failed} bill check test(s) failed`); process.exit(1); }
 console.log('bill check tests passed');
