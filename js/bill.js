@@ -124,16 +124,35 @@
 
     const DATE_RE = '(\\d{1,2}\\/\\d{1,2}\\/\\d{2,4}|\\d{1,2}(?:st|nd|rd|th)?\\s+[A-Za-z]{3,9}\\.?,?\\s+\\d{2,4})';
 
-    /** Billing period start/end, preferring text near "Billing Period". */
-    Amber.parseBillPeriod = function (text) {
-        const range = new RegExp(`${DATE_RE}\\s*(?:-+|to|–)\\s*${DATE_RE}`, 'i');
-        const near = text.match(/Billing Period[\s\S]{0,120}/i);
-        const m = (near && near[0].match(range)) || text.match(range);
-        if (!m) return { start: null, end: null };
-        const start = auDateToIso(m[1]);
-        const end = auDateToIso(m[2]);
-        if (!start || !end || end < start) return { start: null, end: null };
-        return { start, end };
+    /**
+     * Billing period start/end. Tries, in order: a date range near "Billing Period", any date
+     * range in the text, "01 Aug - 31 Aug 2026" (year on the end only), then the file name
+     * (Amber names bills like 20260801-20260831.pdf).
+     */
+    Amber.parseBillPeriod = function (rawText, fileName) {
+        const text = String(rawText || '').replace(/(\d)\s*\/\s*(?=\d)/g, '$1/');
+        const range = new RegExp(`${DATE_RE}\\s*(?:-+|to)\\s*${DATE_RE}`, 'i');
+        const ok = (start, end) => start && end && end >= start ? { start, end } : null;
+        const near = text.match(/Bill(?:ing)? Period[\s\S]{0,160}/i);
+        let m = (near && near[0].match(range)) || text.match(range);
+        let found = m && ok(auDateToIso(m[1]), auDateToIso(m[2]));
+        if (found) return found;
+
+        m = text.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s*(?:-+|to)\s*(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/i);
+        if (m) {
+            const endIso = auDateToIso(`${m[3]} ${m[4]} ${m[5]}`);
+            let startIso = auDateToIso(`${m[1]} ${m[2]} ${m[5]}`);
+            if (startIso && endIso && startIso > endIso) startIso = auDateToIso(`${m[1]} ${m[2]} ${+m[5] - 1}`);
+            found = ok(startIso, endIso);
+            if (found) return found;
+        }
+
+        m = String(fileName || '').match(/(20\d{2})(\d{2})(\d{2})\D{0,3}(20\d{2})(\d{2})(\d{2})/);
+        if (m) {
+            found = ok(`${m[1]}-${m[2]}-${m[3]}`, `${m[4]}-${m[5]}-${m[6]}`);
+            if (found) { found.fromFileName = true; return found; }
+        }
+        return { start: null, end: null };
     };
 
     function money(re, text) {
@@ -145,14 +164,15 @@
      * Bill line items for the bill check. Amounts are as printed on the bill (ex GST in the
      * charges summary); null when a line isn't found.
      */
-    Amber.parseBillCheck = function (text) {
-        const period = Amber.parseBillPeriod(text);
+    Amber.parseBillCheck = function (text, fileName) {
+        const period = Amber.parseBillPeriod(text, fileName);
         const usage = text.match(/\bUsage\s+([\d,]+(?:\.\d+)?)\s*kWh\s+[\d.]+\s*\$\s*\/\s*kWh\s+\$\s*([\d,]+(?:\.\d+)?)/i);
         const demandRow = text.match(/Network\s*-\s*Peak Demand[\s\S]{0,120}?([\d.]+)\s*kW\s+[\d.]+\s*\$\s*\/\s*kW\s*\/\s*Day\s*\$?\s*([\d,.]+)/i);
         const feedIn = text.match(/(?:Feed[- ]?in|Solar Export|Export(?:ed)?(?: Energy)?|Credits?)[^\n$]{0,60}?([\d,]+(?:\.\d+)?)\s*kWh[^\n$]{0,60}?(-)?\s*\$\s*(-)?\s*\(?([\d,]+(?:\.\d+)?)\)?/i);
         const check = {
             start: period.start,
             end: period.end,
+            periodFromFileName: !!period.fromFileName,
             usageKwh: usage ? toNumber(usage[1]) : null,
             usageCost: usage ? toNumber(usage[2]) : money(/Usage Totals\s*\(excl GST\):\s*\$\s*([\d,.]+)/i, text),
             demandKw: demandRow ? toNumber(demandRow[1]) : null,
@@ -200,7 +220,7 @@
         return rows;
     };
 
-    Amber.parseAmberBillText = function (raw) {
+    Amber.parseAmberBillText = function (raw, fileName) {
         const text = Amber.normalizeBillText(raw);
         const days = Amber.inferBillDays(text);
         const exGst = Amber.billRatesAreExGst(text);
@@ -215,7 +235,7 @@
         if (subscriptionCents != null) found.push('subscription');
         if (demandCents != null) found.push('demand');
         return {
-            check: Amber.parseBillCheck(text),
+            check: Amber.parseBillCheck(text, fileName),
             days,
             exGst,
             connectionCents,
