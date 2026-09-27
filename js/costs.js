@@ -189,7 +189,51 @@
         });
     };
 
+    /** Split channel data into calendar months (by usage date). */
+    Amber.splitChannelsByMonth = function (channelTotals) {
+        const months = {};
+        Object.keys(channelTotals || {}).forEach((id) => {
+            const c = channelTotals[id];
+            (c.usageData || []).forEach((item) => {
+                const key = Amber.usageDateStr(item).substring(0, 7);
+                if (!key) return;
+                const month = months[key] || (months[key] = {});
+                if (!month[id]) month[id] = { identifier: c.identifier, type: c.type, usageData: [] };
+                month[id].usageData.push(item);
+            });
+        });
+        return months;
+    };
+
+    function combineMonthly(results, daysKey) {
+        const used = results.filter((r) => r.info && r.info.cost > 0);
+        if (!used.length) return null;
+        const peak = used.reduce((a, b) => (b.info.maxDemandKwh > a.info.maxDemandKwh ? b : a));
+        const combined = Object.assign({}, peak.info, {
+            cost: used.reduce((s, r) => s + r.info.cost, 0),
+            months: used.map((r) => ({ month: r.month, cost: r.info.cost, maxDemandKwh: r.info.maxDemandKwh, maxDemandTime: r.info.maxDemandTime, days: r.info[daysKey] }))
+        });
+        combined[daysKey] = used.reduce((s, r) => s + (r.info[daysKey] || 0), 0);
+        return combined;
+    }
+
+    /**
+     * Amber (network) demand charge. Demand is billed per calendar month: each month's
+     * own peak × that month's demand days, summed across the range.
+     */
     Amber.calculateDemandTariff = function (channelTotals, amberDemandCents) {
+        const months = Amber.splitChannelsByMonth(channelTotals);
+        const keys = Object.keys(months).sort();
+        if (keys.length > 1) {
+            const combined = combineMonthly(keys.map((k) => ({
+                month: k, info: Amber.calculateMonthDemandTariff(months[k], amberDemandCents)
+            })), 'demandDays');
+            return combined || { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
+        }
+        return Amber.calculateMonthDemandTariff(channelTotals, amberDemandCents);
+    };
+
+    Amber.calculateMonthDemandTariff = function (channelTotals, amberDemandCents) {
         const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
         const empty = { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
@@ -232,7 +276,26 @@
         };
     };
 
+    /** Competitor demand charge, also per calendar month (clipped to the selected range). */
     Amber.calculateOtherDemandTariff = function (channelTotals, startDateStr, endDateStr, planConfig, state) {
+        const months = Amber.splitChannelsByMonth(channelTotals);
+        const keys = Object.keys(months).sort();
+        if (keys.length > 1) {
+            const combined = combineMonthly(keys.map((k) => {
+                const y = parseInt(k.substring(0, 4), 10);
+                const m = parseInt(k.substring(5, 7), 10);
+                const monthStart = `${k}-01`;
+                const monthEnd = `${k}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+                const from = startDateStr && startDateStr > monthStart ? startDateStr : monthStart;
+                const to = endDateStr && endDateStr < monthEnd ? endDateStr : monthEnd;
+                return { month: k, info: Amber.calculateMonthOtherDemandTariff(months[k], from, to, planConfig, state) };
+            }), 'applicableDaysCount');
+            return combined || { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0, applicableDaysCount: 0 };
+        }
+        return Amber.calculateMonthOtherDemandTariff(channelTotals, startDateStr, endDateStr, planConfig, state);
+    };
+
+    Amber.calculateMonthOtherDemandTariff = function (channelTotals, startDateStr, endDateStr, planConfig, state) {
         const empty = { cost: 0, maxDemandKwh: 0, maxDemandTime: null, dailyCharge: 0, applicableDaysCount: 0 };
         const demand = planConfig && planConfig.demand;
         if (!demand || !demand.e) return empty;

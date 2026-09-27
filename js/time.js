@@ -137,6 +137,41 @@
         };
     };
 
+    /** NEM (+10:00) ISO string for an instant in ms. */
+    Amber.msToNemIso = function (ms) {
+        return new Date(ms + 10 * 3600000).toISOString().substring(0, 19) + '+10:00';
+    };
+
+    /** Wall-clock time in a timezone (DST aware) -> NEM ISO string. */
+    Amber.localWallToNemIso = function (dateStr, hours, minutes, timeZone) {
+        const target = Date.UTC(+dateStr.substring(0, 4), +dateStr.substring(5, 7) - 1, +dateStr.substring(8, 10), hours, minutes);
+        let ms = target - 10 * 3600000;
+        for (let i = 0; i < 2; i++) {
+            const p = Amber.getClockParts(Amber.msToNemIso(ms), { clock: 'local', timeZone });
+            const offset = Date.UTC(p.year, p.month - 1, p.day, p.hours, p.minutes) - ms;
+            ms = target - offset;
+        }
+        return Amber.msToNemIso(ms);
+    };
+
+    /**
+     * Local-time slots covered by one usage interval: [{ parts, fraction }] at slotMinutes
+     * resolution. A 30-minute reading shown on a 5-minute axis is spread over 6 slots.
+     */
+    Amber.intervalLocalSlots = function (item, slotMinutes, timeZone) {
+        const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
+        const endMs = Date.parse(nem) + 1000;
+        const duration = parseFloat(item.duration) || 30;
+        if (!Number.isFinite(endMs)) return [];
+        const pieces = Math.max(1, Math.round(duration / slotMinutes));
+        const out = [];
+        for (let k = 0; k < pieces; k++) {
+            const startMs = endMs - duration * 60000 + k * (duration / pieces) * 60000;
+            out.push({ parts: Amber.getClockParts(Amber.msToNemIso(startMs), { clock: 'local', timeZone }), fraction: 1 / pieces });
+        }
+        return out;
+    };
+
     Amber.clockOptionsForState = function (state, planConfig) {
         const clock = (planConfig && planConfig.clock) || 'local';
         const timeZone = (planConfig && planConfig.timeZone) || Amber.STATE_TIMEZONES[state] || 'Australia/Sydney';
