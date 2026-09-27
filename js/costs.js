@@ -545,7 +545,11 @@
             middayStart: '10:00',
             middayEnd: '15:00',
             chargeIncGst: 1.3552,
-            belKwhPerDay: 6.83
+            belKwhPerDay: 6.83,
+            // Export reward for evening exports (credit, as billed; 4.01 c/kWh on the Aug 2026 bill).
+            rewardStart: '16:00',
+            rewardEnd: '21:00',
+            rewardCents: 4.01
         }
     };
 
@@ -582,6 +586,7 @@
         const opts = { clock: tariff.clock || 'local', timeZone: tariff.timeZone || 'Australia/Sydney' };
         let intervalCost = 0;
         let middayKwh = 0;
+        let rewardKwh = 0;
         (channel.usageData || []).forEach((item) => {
             const kwh = Amber.absKwh(item.kwh);
             const perKwh = parseFloat(item.perKwh) || 0;
@@ -591,7 +596,11 @@
             if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
                 middayKwh += kwh;
             }
+            if (tariff.rewardCents && Amber.intervalEndInWindow(parts, tariff.rewardStart, tariff.rewardEnd)) {
+                rewardKwh += kwh;
+            }
         });
+        const reward = rewardKwh * (tariff.rewardCents || 0) / 100;
         const bel = (tariff.belKwhPerDay || 0) * days;
         const freeKwh = Math.min(middayKwh, bel);
         const chargedKwh = Math.max(0, middayKwh - bel);
@@ -599,8 +608,10 @@
         const addBack = freeKwh * rate / 100;
         const charge = chargedKwh * rate / 100;
         return {
-            cost: intervalCost - addBack,
+            cost: intervalCost - addBack - reward,
             intervalCost,
+            rewardKwh,
+            reward,
             middayKwh,
             freeKwh,
             chargedKwh,
