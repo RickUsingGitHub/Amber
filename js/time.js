@@ -103,6 +103,37 @@
         return fmt;
     }
 
+    function zoneBag(timeZone, instant) {
+        const bag = {};
+        for (const part of formatterForZone(timeZone).formatToParts(instant)) {
+            if (part.type !== 'literal') bag[part.type] = part.value;
+        }
+        return bag;
+    }
+
+    function clockParts(year, month, day, hours, minutes, seconds, weekday) {
+        return {
+            year, month, day, hours, minutes, seconds, weekday,
+            dateStr: `${year}-${pad(month)}-${pad(day)}`,
+            timeValue: hours * 100 + minutes
+        };
+    }
+
+    // Zone UTC offset (ms) at the start of each UTC hour. Intl is slow, and a year of
+    // 5-minute data asks for the same hour twelve times per channel.
+    const zoneOffsets = Object.create(null);
+
+    function zoneOffsetAtHour(timeZone, hour) {
+        const cache = zoneOffsets[timeZone] || (zoneOffsets[timeZone] = Object.create(null));
+        let offset = cache[hour];
+        if (offset === undefined) {
+            const ms = hour * 3600000;
+            const b = zoneBag(timeZone, new Date(ms));
+            offset = cache[hour] = Date.UTC(+b.year, +b.month - 1, +b.day, +b.hour, +b.minute, +b.second) - ms;
+        }
+        return offset;
+    }
+
     /**
      * Clock used for TOU / demand windows.
      * - clock 'nem' or 'aest': hours from the NEM string (always UTC+10)
@@ -116,25 +147,21 @@
         }
 
         const instant = new Date(nemTimeStr);
-        if (Number.isNaN(instant.getTime())) return Amber.parseNemParts(nemTimeStr);
+        const ms = instant.getTime();
+        if (Number.isNaN(ms)) return Amber.parseNemParts(nemTimeStr);
 
-        const fmt = formatterForZone(opts.timeZone);
-        const bag = {};
-        for (const part of fmt.formatToParts(instant)) {
-            if (part.type !== 'literal') bag[part.type] = part.value;
+        // Same offset at both ends of the hour: no DST change inside it, so shift and read UTC.
+        const hour = Math.floor(ms / 3600000);
+        const offset = zoneOffsetAtHour(opts.timeZone, hour);
+        if (offset === zoneOffsetAtHour(opts.timeZone, hour + 1)) {
+            const local = new Date(ms + offset);
+            return clockParts(local.getUTCFullYear(), local.getUTCMonth() + 1, local.getUTCDate(),
+                local.getUTCHours(), local.getUTCMinutes(), local.getUTCSeconds(), local.getUTCDay());
         }
-        const hours = parseInt(bag.hour, 10);
-        const minutes = parseInt(bag.minute, 10);
-        const year = parseInt(bag.year, 10);
-        const month = parseInt(bag.month, 10);
-        const day = parseInt(bag.day, 10);
-        return {
-            year, month, day, hours, minutes,
-            seconds: parseInt(bag.second, 10) || 0,
-            weekday: weekdayFromName(bag.weekday),
-            dateStr: `${year}-${pad(month)}-${pad(day)}`,
-            timeValue: hours * 100 + minutes
-        };
+
+        const bag = zoneBag(opts.timeZone, instant);
+        return clockParts(parseInt(bag.year, 10), parseInt(bag.month, 10), parseInt(bag.day, 10),
+            parseInt(bag.hour, 10), parseInt(bag.minute, 10), parseInt(bag.second, 10) || 0, weekdayFromName(bag.weekday));
     };
 
     /** NEM (+10:00) ISO string for an instant in ms. */

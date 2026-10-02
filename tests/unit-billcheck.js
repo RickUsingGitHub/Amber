@@ -74,16 +74,37 @@ const wrong = Object.assign({}, c, { usageKwh: 760, demandCost: 35 });
 const wrongRows = Object.fromEntries(Amber.compareBill(wrong, totals).map((r) => [r.key, r]));
 assert(!wrongRows.usageKwh.ok && !wrongRows.demandCost.ok && wrongRows.supplyCost.ok, 'mismatches are flagged');
 
-// Monthly breakdown sums to the whole period and handles partial months
+// Monthly breakdown: whole calendar months only, each costed like periodTotals for that month
 const plan = { rateType: 'flat', flat: 30, feedIn: 5, daily: 100 };
 const opts = { amberRates: rates, state: 'NSW', planConfig: plan };
-const mb = Amber.monthlyBreakdown(ct, '2025-07-15', '2025-08-10', opts);
-assert(mb.rows.length === 2 && mb.rows[0].partial && mb.rows[0].days === 17 && mb.rows[1].days === 10, 'partial months clipped to range');
-assert(mb.rows[1].dataDays === 0 && mb.rows[0].dataDays === 17, 'data days counted per month (no August data)');
-const whole = Amber.periodTotals(ct, '2025-07-15', '2025-08-10', opts);
+const julyDates = ct.E1.usageData.map((i) => i.date);
+assert(Amber.fullMonths(julyDates.concat(['2025-06-30', '2025-08-01', '2025-08-02'])).join() === '2025-07', 'only whole months count');
+assert(Amber.fullMonths(julyDates.filter((d) => d !== '2025-07-20')).length === 0, 'a missing day drops the month');
+assert(Amber.fullMonths(['2024-02-01'].concat(Array.from({ length: 28 }, (_, i) => `2024-02-${String(i + 1).padStart(2, '0')}`))).length === 0, 'leap February needs 29 days');
+
+const twoMonths = julyData();
+const june = [];
+for (let d = 1; d <= 30; d++) {
+    const date = `2025-06-${String(d).padStart(2, '0')}`;
+    const next = d === 30 ? '2025-07-01' : `2025-06-${String(d + 1).padStart(2, '0')}`;
+    for (let i = 1; i <= 48; i++) {
+        const h = Math.floor(i / 2);
+        const nemTime = i === 48 ? `${next}T00:00:00+10:00` : `${date}T${String(h).padStart(2, '0')}:${i % 2 ? '30' : '00'}:00+10:00`;
+        june.push({ nemTime, date, kwh: d === 3 && i === 38 ? 2 : 0.4, perKwh: 25, duration: 30, channelIdentifier: 'E1', quality: 'billable', tariffInformation: { demandWindow: h >= 15 && h < 21 } });
+        june.push({ nemTime, date, kwh: h >= 10 && h < 14 ? 0.8 : 0, perKwh: -3, duration: 30, channelIdentifier: 'B1', quality: 'billable' });
+    }
+}
+Amber.processUsageData(june, twoMonths, true);
+const mb = Amber.monthlyBreakdown(twoMonths, ['2025-06', '2025-07'], opts);
+assert(mb.rows.length === 2 && mb.rows[0].days === 30 && mb.rows[1].days === 31 && mb.rows[0].dataDays === 30, 'one row per whole month');
+const julyOnly = Amber.periodTotals(ct, '2025-07-01', '2025-07-31', opts);
+assert(near(mb.rows[1].amberTotal, julyOnly.amberTotal) && near(mb.rows[1].otherTotal, julyOnly.otherTotal), 'July row matches July costed on its own');
+assert(near(mb.rows[0].importKwh, 30 * 48 * 0.4 + 1.6) && mb.rows[0].demandKw > mb.rows[1].demandKw, 'June row has June usage and its own demand peak');
+const whole = Amber.periodTotals(twoMonths, '2025-06-01', '2025-07-31', opts);
 assert(near(mb.total.amberTotal - mb.total.amberDemand, whole.amberTotal - whole.amberDemand, 1e-6), 'monthly Amber (ex demand) sums to the period');
 assert(near(mb.total.otherTotal, whole.otherTotal, 1e-6), 'monthly competitor totals sum to the period');
 assert(near(mb.total.amberDemand, whole.amberDemand, 1e-6), 'monthly demand sums match (both per-month)');
+assert(Amber.monthlyBreakdown(twoMonths, ['2025-07'], opts).rows.length === 1, 'months not asked for are left out');
 
 // Other date layouts
 [['Billing period 1 Jul 2025 - 31 Jul 2025', '2025-07-01', '2025-07-31'],

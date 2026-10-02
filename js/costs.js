@@ -128,8 +128,8 @@
         return defaultRate;
     };
 
-    Amber.clockPartsForItem = function (item, planConfig, state) {
-        const opts = Amber.clockOptionsForState(state, planConfig);
+    /** Clock parts for an interval, cached on the item per clock and timezone. */
+    Amber.itemClockParts = function (item, opts) {
         const key = (opts.clock || 'local') + '|' + (opts.timeZone || '');
         if (!item._clockParts) item._clockParts = Object.create(null);
         if (item._clockParts[key]) return item._clockParts[key];
@@ -137,6 +137,10 @@
         const parts = Amber.getClockParts(nem, opts);
         item._clockParts[key] = parts;
         return parts;
+    };
+
+    Amber.clockPartsForItem = function (item, planConfig, state) {
+        return Amber.itemClockParts(item, Amber.clockOptionsForState(state, planConfig));
     };
 
     Amber.otherRateForItem = function (item, channelType, planConfig, state) {
@@ -593,8 +597,7 @@
             const kwh = Amber.absKwh(item.kwh);
             const perKwh = parseFloat(item.perKwh) || 0;
             intervalCost += (perKwh / 100) * kwh;
-            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
-            const parts = Amber.getClockParts(nem, opts);
+            const parts = Amber.itemClockParts(item, opts);
             if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
                 middayKwh += kwh;
             }
