@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.31', 'app version is 1.31');
+assert(Amber.APP_VERSION === '1.32', 'app version is 1.32');
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection default');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');
 assert(Amber.DEFAULT_AMBER_DEMAND_CENTS === 42.345, 'Amber demand default');
@@ -203,6 +203,31 @@ const splitRanges = Amber.buildFetchRanges(eightDates);
 assert(splitRanges.length === 2 && splitRanges[0].end === '2026-07-07' && splitRanges[1].start === '2026-07-08', '8 days split into two 7-day max chunks');
 
 assert(Amber.FETCH_SITES_TIMEOUT_MS > 0 && Amber.FETCH_SITES_TIMEOUT_MS <= Amber.FETCH_TIMEOUT_MS, 'sites timeout is finite and not longer than usage');
+
+// Local clock (cached hourly offsets) matches Intl every 5 minutes across DST changes,
+// including Adelaide's half-hour offset and Lord Howe's half-hour DST shift.
+const weekdays = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+function intlClock(nem, timeZone) {
+    const fmt = new Intl.DateTimeFormat('en-AU', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', weekday: 'short', hourCycle: 'h23' });
+    const b = {};
+    fmt.formatToParts(new Date(nem)).forEach((p) => { b[p.type] = p.value; });
+    return [+b.year, +b.month, +b.day, +b.hour, +b.minute, +b.second, weekdays[b.weekday.slice(0, 3)]].join(',');
+}
+let clockMismatches = 0;
+let clockChecks = 0;
+['Australia/Sydney', 'Australia/Adelaide', 'Australia/Brisbane', 'Australia/Lord_Howe'].forEach((timeZone) => {
+    ['2026-04-04', '2026-10-03'].forEach((day) => {
+        const start = Date.parse(`${day}T00:00:00+10:00`);
+        for (let ms = start; ms < start + 2 * 86400000; ms += 5 * 60000) {
+            const nem = Amber.msToNemIso(ms);
+            const p = Amber.getClockParts(nem, { clock: 'local', timeZone });
+            const got = [p.year, p.month, p.day, p.hours, p.minutes, p.seconds, p.weekday].join(',');
+            clockChecks += 1;
+            if (got !== intlClock(nem, timeZone) || p.timeValue !== p.hours * 100 + p.minutes || p.dateStr !== `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`) clockMismatches += 1;
+        }
+    });
+});
+assert(clockMismatches === 0, `local clock matches Intl across DST changes (${clockMismatches}/${clockChecks} mismatches)`);
 
 if (failed) {
     console.error(`\n${failed} assertion(s) failed`);

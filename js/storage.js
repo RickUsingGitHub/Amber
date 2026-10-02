@@ -109,12 +109,17 @@
      */
     Amber.isCompleteDay = function (items) {
         if (!items || !items.length) return false;
+        if (Amber.isEstimatedQuality && items.some((item) => Amber.isEstimatedQuality(item.quality))) return false;
+        return Amber.coversWholeDay(items);
+    };
+
+    /** At least one channel has readings for the full 24 hours (estimated or not). */
+    Amber.coversWholeDay = function (items) {
+        if (!items || !items.length) return false;
         const minutesByChannel = {};
         for (let i = 0; i < items.length; i++) {
-            const item = items[i];
-            if (Amber.isEstimatedQuality && Amber.isEstimatedQuality(item.quality)) return false;
-            const ch = item.channelIdentifier || '?';
-            minutesByChannel[ch] = (minutesByChannel[ch] || 0) + (parseFloat(item.duration) || 30);
+            const ch = items[i].channelIdentifier || '?';
+            minutesByChannel[ch] = (minutesByChannel[ch] || 0) + (parseFloat(items[i].duration) || 30);
         }
         return Object.keys(minutesByChannel).some((ch) => minutesByChannel[ch] >= 1440);
     };
@@ -141,11 +146,11 @@
                 resolve({ byDate: {}, dates: [] });
                 return;
             }
+            const prefix = `${siteId}_`;
             const transaction = db.transaction([STORE_NAME], 'readonly');
             const store = transaction.objectStore(STORE_NAME);
-            const request = store.getAll();
+            const request = store.getAll(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
             request.onsuccess = (event) => {
-                const prefix = `${siteId}_`;
                 const byDate = {};
                 const dates = [];
                 (event.target.result || []).forEach((rec) => {
