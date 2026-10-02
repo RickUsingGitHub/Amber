@@ -57,7 +57,7 @@
                 out.exportKwh += c.totalKWh;
                 // Exports ending 4–9 pm local (Ausgrid EA029 export reward window).
                 c.usageData.forEach((item) => {
-                    const parts = Amber.getClockParts(item.nemTime, { clock: 'local', timeZone });
+                    const parts = Amber.itemClockParts(item, { clock: 'local', timeZone });
                     if (parts.hours >= 16 && parts.hours < 21) out.eveningExportKwh += Amber.absKwh(item.kwh);
                 });
                 out.amberFeedIn += c.totalAmberCost;
@@ -83,24 +83,35 @@
         return out;
     };
 
-    /** Per-calendar-month rows (clipped to [startDateStr, endDateStr]) plus a total row. */
-    Amber.monthlyBreakdown = function (channelTotals, startDateStr, endDateStr, opts) {
-        const rows = [];
-        let month = startDateStr.substring(0, 7);
-        const lastMonth = endDateStr.substring(0, 7);
-        while (month <= lastMonth) {
-            const monthStart = `${month}-01`;
+    /** Calendar months (YYYY-MM), oldest first, in which every day is one of dateStrs. */
+    Amber.fullMonths = function (dateStrs) {
+        const counts = {};
+        new Set(dateStrs).forEach((d) => {
+            const month = String(d).substring(0, 7);
+            counts[month] = (counts[month] || 0) + 1;
+        });
+        return Object.keys(counts).filter((m) => counts[m] === daysInMonth(m)).sort();
+    };
+
+    /** One row per whole calendar month in months (YYYY-MM), plus a total row. */
+    Amber.monthlyBreakdown = function (channelTotals, months, opts) {
+        // Split the data by month once, so each month only scans its own intervals.
+        const byMonth = {};
+        months.forEach((m) => { byMonth[m] = {}; });
+        Object.keys(channelTotals || {}).forEach((id) => {
+            const src = channelTotals[id];
+            months.forEach((m) => { byMonth[m][id] = Amber.emptyChannel(src); });
+            (src.usageData || []).forEach((item) => {
+                const bucket = byMonth[Amber.usageDateStr(item).substring(0, 7)];
+                if (bucket) bucket[id].usageData.push(item);
+            });
+        });
+        const rows = months.map((month) => {
             const monthEnd = `${month}-${String(daysInMonth(month)).padStart(2, '0')}`;
-            const from = startDateStr > monthStart ? startDateStr : monthStart;
-            const to = endDateStr < monthEnd ? endDateStr : monthEnd;
-            const t = Amber.periodTotals(channelTotals, from, to, opts);
+            const t = Amber.periodTotals(byMonth[month], `${month}-01`, monthEnd, opts);
             t.month = month;
-            t.partial = t.days < daysInMonth(month);
-            rows.push(t);
-            const y = parseInt(month.substring(0, 4), 10);
-            const m = parseInt(month.substring(5, 7), 10);
-            month = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, '0')}`;
-        }
+            return t;
+        });
         const sumKeys = ['days', 'dataDays', 'generalKwh', 'controlledKwh', 'exportKwh', 'importKwh', 'amberUsage', 'amberExportCharge',
             'amberFeedIn', 'amberDemand', 'amberConnection', 'amberSubscription', 'amberCharges', 'amberTotal', 'otherTotal', 'otherTotalExGst'];
         const total = { month: 'Total' };

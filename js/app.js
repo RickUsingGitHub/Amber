@@ -6,6 +6,7 @@
         originalTemplates: Amber.cloneTemplates(),
         cachedChannelData: null,
         cachedAllChannelData: null,
+        monthly: null,
         dailySummaries: {},
         demandInfoForTooltip: null,
         lastFetchedStartDate: null,
@@ -1191,10 +1192,52 @@
         return { site: selectedSite(), planConfig: createPlanObjectFromForm(), state: currentStateCode(), amberRates: readAmberRates() };
     }
 
+    /**
+     * Channel data for every whole calendar month of meter data: complete days cached by
+     * earlier fetches plus this fetch's period (which may still hold estimated days).
+     */
+    async function loadMonthlyData(db, siteId, channels, rangeItems) {
+        let cache = { byDate: {} };
+        try {
+            cache = await Amber.loadAllSiteCache(db, siteId);
+        } catch (err) {
+            console.error(err);
+        }
+        const byDate = {};
+        rangeItems.forEach((item) => {
+            const dateStr = Amber.usageDateStr(item);
+            (byDate[dateStr] || (byDate[dateStr] = [])).push(item);
+        });
+        Object.keys(cache.byDate).forEach((dateStr) => {
+            if (!byDate[dateStr] && Amber.isCompleteDay(cache.byDate[dateStr])) byDate[dateStr] = cache.byDate[dateStr];
+        });
+        const months = Amber.fullMonths(Object.keys(byDate).filter((d) => Amber.coversWholeDay(byDate[d])));
+        const wanted = new Set(months);
+        const channelData = {};
+        channels.forEach((c) => { channelData[c.identifier] = Amber.emptyChannel(c); });
+        Object.keys(byDate).sort().forEach((dateStr) => {
+            if (wanted.has(dateStr.substring(0, 7))) Amber.processUsageData(byDate[dateStr], channelData, false);
+        });
+        Object.values(channelData).forEach((c) => c.usageData.sort((a, b) => (a.nemTime < b.nemTime ? -1 : (a.nemTime > b.nemTime ? 1 : 0))));
+        return { months, channelData };
+    }
+
     function renderMonthly() {
         const section = $('monthlySection');
-        if (!state.cachedChannelData || !state.lastFetchedStartDate) { section.classList.add('hidden'); return; }
-        const { rows, total } = Amber.monthlyBreakdown(state.cachedChannelData, state.lastFetchedStartDate, state.lastFetchedEndDate, periodOpts());
+        const monthly = state.monthly;
+        if (!monthly) { section.classList.add('hidden'); return; }
+        section.classList.remove('hidden');
+        if (!monthly.months.length) {
+            $('monthlyTable').innerHTML = '<p class="text-sm text-gray-600">No whole calendar months of meter data yet. Compare a period that covers a full month (for example Last month) and it will show here.</p>';
+            return;
+        }
+        const opts = periodOpts();
+        const key = JSON.stringify(opts);
+        if (monthly.key !== key) {
+            monthly.breakdown = Amber.monthlyBreakdown(monthly.channelData, monthly.months, opts);
+            monthly.key = key;
+        }
+        const { rows, total } = monthly.breakdown;
         const gst = gstInclusive();
         const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
         const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
@@ -1204,11 +1247,9 @@
             const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
             return { amberTotal, otherTotal, diff: otherTotal - amberTotal };
         };
-        const label = (r) => {
-            if (r.month === 'Total') return 'Total';
-            const name = new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-            return r.partial ? `${name} <span class="text-xs text-gray-500">(part)</span>` : name;
-        };
+        const label = (r) => (r.month === 'Total'
+            ? 'Total'
+            : new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }));
         const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
         const th = (t, right) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${t}</th>`;
         let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
@@ -1229,7 +1270,6 @@
         html += '</tbody></table>';
         html += `<p class="text-xs text-gray-500 mt-2">Usage includes any Ausgrid export charge, as on the bill. Fixed = daily connection + Amber subscription. ${gst ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}.</p>`;
         $('monthlyTable').innerHTML = html;
-        section.classList.remove('hidden');
     }
 
     // ---------- Bill check ----------
@@ -1488,6 +1528,7 @@
                 return;
             }
 
+            state.monthly = null;
             showMessage(`Site found: ${site.nmi || site.id}. Preparing to fetch usage data...`);
             await Amber.sleep(0);
             const db = await Amber.openDb();
@@ -1599,9 +1640,19 @@
             }
 
             await displayResults(channelTotalsSelectedPeriod, startDateValue, clampedEnd, numDays, demandTariffInfo, otherDemandInfo, false);
+
+            // Monthly Breakdown covers every whole month cached, so it loads after the main results.
+            try {
+                await Amber.sleep(0);
+                state.monthly = await loadMonthlyData(db, site.id, channels, selectedUsageData);
+                renderMonthly();
+            } catch (err) {
+                console.error(err);
+            }
         } catch (error) {
             console.error(error);
             state.cachedChannelData = null;
+            state.monthly = null;
             state.dailySummaries = {};
             showMessage(`Error: ${error.message}`, true);
         } finally {
@@ -1750,10 +1801,12 @@
                 await Amber.deleteDatabase();
                 state.cachedChannelData = null;
                 state.cachedAllChannelData = null;
+                state.monthly = null;
                 state.dailySummaries = {};
                 state.lastFetchedStartDate = null;
                 state.lastFetchedEndDate = null;
                 $('calendar-container').innerHTML = '';
+                $('monthlySection').classList.add('hidden');
                 msg.textContent = 'Cache cleared successfully!';
                 msg.className = 'text-sm mt-2 font-medium text-green-600';
             } catch (err) {
@@ -1877,6 +1930,7 @@
         $('fetchData').addEventListener('click', fetchAndCompare);
         $('siteSelector').addEventListener('change', () => {
             state.cachedChannelData = null;
+            state.monthly = null;
             state.lastFetchTimestamp = null;
             updatePlanSelector(currentStateCode());
             saveAllSettings();
