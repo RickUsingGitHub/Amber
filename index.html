@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.32</title>
+    <title>Amber Compare &amp; Export v1.33</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.32">
+    <link rel="stylesheet" href="css/app.css?v=1.33">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.32
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.33
                     </h1>
                     <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
                 </div>
@@ -129,6 +129,24 @@
 
                             <div id="touRateSection" class="hidden">
                                 <h3 class="text-md font-medium text-gray-800 pt-2 mb-2">Consumption Rates &amp; Times</h3>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200" data-tou-period="free">
+                                        <label for="tou_free_rate" class="block text-sm font-medium text-emerald-700">Free Window Rate (c/kWh, inc GST)</label>
+                                        <input type="number" id="tou_free_rate" value="0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <label for="tou_free_cap" class="block text-xs font-medium text-gray-600 mt-2">Daily cap (kWh, blank = no cap)</label>
+                                        <input type="number" id="tou_free_cap" value="" step="0.1" min="0" class="w-full mt-1 px-3 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <p class="text-xs text-gray-500 mt-1">Overrides every other period. Usage over the daily cap is charged at the rate that would otherwise apply. No windows = no free window.</p>
+                                        <div id="tou_free_windows_container" class="mt-2 space-y-2"></div>
+                                        <button type="button" data-add-tou-window="free" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
+                                    </div>
+                                    <div class="bg-sky-50 p-3 rounded-lg border border-sky-200" data-tou-period="superOffpeak">
+                                        <label for="tou_superOffpeak_rate" class="block text-sm font-medium text-sky-700">Super Off-Peak / EV Rate (c/kWh, inc GST)</label>
+                                        <input type="number" id="tou_superOffpeak_rate" value="0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <p class="text-xs text-gray-500 mt-1">Optional cheap window, e.g. an overnight EV rate. Overrides peak, shoulder and off-peak. No windows = unused.</p>
+                                        <div id="tou_superOffpeak_windows_container" class="mt-2 space-y-2"></div>
+                                        <button type="button" data-add-tou-window="superOffpeak" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
+                                    </div>
+                                </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                                     <div class="bg-red-50 p-3 rounded-lg border border-red-200" data-tou-period="peak">
                                         <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh, inc GST)</label>
@@ -316,6 +334,32 @@
                     <div id="monthlyTable"></div>
                 </div>
 
+                <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Free-window plans with your battery re-scheduled</h3>
+                    <p class="text-sm text-gray-500 mb-2">The tables above price your meter data exactly as it happened on Amber. On a free-window plan you would charge the battery and cars in the free window and export in the plan's best feed-in window instead. This re-times your real intervals, day by day, to estimate that.</p>
+                    <p class="text-sm text-gray-500 mb-4"><span class="font-medium text-gray-700">Shift budget</span> is the extra kWh a day your batteries and EV charging could move into the free window, beyond what they already did on Amber. Battery exports outside the plan's best feed-in window are moved into it (or used at home when that is worth more). Midday solar exports stay put.</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
+                        <div>
+                            <label for="shiftBudgets" class="block text-xs font-medium text-gray-600">Shift budgets (kWh/day)</label>
+                            <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600">Max import in free window (kW)</label>
+                            <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="shiftExportKw" class="block text-xs font-medium text-gray-600">Max export (kW)</label>
+                            <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div>
+                            <label for="shiftRte" class="block text-xs font-medium text-gray-600">Battery round trip (%)</label>
+                            <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                    <div id="batteryShiftTable"></div>
+                    <div id="batteryShiftMonthly" class="mt-6"></div>
+                </div>
+
                 <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
@@ -364,18 +408,19 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.32"></script>
-    <script src="js/time.js?v=1.32"></script>
-    <script src="js/templates.js?v=1.32"></script>
-    <script src="js/storage.js?v=1.32"></script>
-    <script src="js/costs.js?v=1.32"></script>
-    <script src="js/api.js?v=1.32"></script>
-    <script src="js/bill.js?v=1.32"></script>
-    <script src="js/csv.js?v=1.32"></script>
-    <script src="js/charts.js?v=1.32"></script>
-    <script src="js/calendar.js?v=1.32"></script>
-    <script src="js/stats.js?v=1.32"></script>
-    <script src="js/monthly.js?v=1.32"></script>
-    <script src="js/app.js?v=1.32"></script>
+    <script src="js/constants.js?v=1.33"></script>
+    <script src="js/time.js?v=1.33"></script>
+    <script src="js/templates.js?v=1.33"></script>
+    <script src="js/storage.js?v=1.33"></script>
+    <script src="js/costs.js?v=1.33"></script>
+    <script src="js/api.js?v=1.33"></script>
+    <script src="js/bill.js?v=1.33"></script>
+    <script src="js/csv.js?v=1.33"></script>
+    <script src="js/charts.js?v=1.33"></script>
+    <script src="js/calendar.js?v=1.33"></script>
+    <script src="js/stats.js?v=1.33"></script>
+    <script src="js/monthly.js?v=1.33"></script>
+    <script src="js/redispatch.js?v=1.33"></script>
+    <script src="js/app.js?v=1.33"></script>
 </body>
 </html>

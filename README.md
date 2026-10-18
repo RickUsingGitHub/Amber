@@ -16,7 +16,9 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 
 - Compare Amber vs a flat or time-of-use retailer plan, including controlled load and optional demand tariffs
 - Pre-built templates for each state, including 2026-27 Victorian Default Offer rates for all five networks
-- Time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak)
+- Time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak), with optional daily kWh caps
+- Free-window plans: a free (or cheap) window with an optional daily kWh cap, a super off-peak / EV window, and seasonal peak windows. Templates for CovaU SolarMax, GloBird Four4Free, OVO The Free 4 Plan and the Solar Sharer Offer (Ausgrid)
+- Battery re-scheduling estimate: re-times your real interval data into each free-window plan's free window and best feed-in window, at the daily shift budgets you choose, over every whole month cached
 - 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
 - Daily calendar; click a day to open it on the graph
 - IndexedDB cache, CSV export, GST toggle
@@ -47,5 +49,6 @@ npm run serve
 - Retailer templates are estimates from published tariffs. Check Energy Made Easy or the retailer's current fact sheet before switching.
 - Public holidays are not treated as off-peak.
 - Comparison accuracy depends on the Amber fixed charges you enter (they vary by network).
+- The battery re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.

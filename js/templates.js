@@ -164,6 +164,54 @@
                     offpeak: { rate: 19.44 }
                 },
                 demand: { e: false }, asAt: MARKET
+            },
+            // Free-window plans. Usage over a free window's daily cap is charged at the rate
+            // that would otherwise apply. Check each retailer's Basic Plan Information Document.
+            // CovaU SolarMax (Ausgrid card, July 2026): free 11am–2pm to 50 kWh/day, 16.5c 12am–6am,
+            // 15c FIT 6–9pm for the first 30 kWh/day then 5c. No controlled-load version.
+            'CovaU SolarMax (Ausgrid, TOU)': {
+                rateType: 'tou', daily: 152.00, feedIn: 5.0, cl: 28.02, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 50, windows: [{ start: '11:00', end: '14:00', days: ALL_DAYS }] },
+                    superOffpeak: { rate: 16.50, windows: [{ start: '00:00', end: '06:00', days: ALL_DAYS }] },
+                    peak: { rate: 61.39, windows: [{ start: '15:00', end: '21:00', days: ALL_DAYS }] },
+                    offpeak: { rate: 28.02 }
+                },
+                feedInWindows: [{ rate: 15.0, start: '18:00', end: '21:00', days: ALL_DAYS, capKwh: 30, overRate: 5.0 }],
+                demand: { e: false }, asAt: '2026-07-07'
+            },
+            // GloBird Four4Free (EA025, WATTever 15 Oct 2026): free 11am–3pm to 50 kWh/day,
+            // 8c FIT 4–11pm only. Peak assumed 3–9pm (Ausgrid EA025 peak).
+            'GloBird Four4Free (Ausgrid, TOU)': {
+                rateType: 'tou', daily: 181.39, feedIn: 0, cl: 23.47, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 50, windows: [{ start: '11:00', end: '15:00', days: ALL_DAYS }] },
+                    peak: { rate: 49.08, windows: [{ start: '15:00', end: '21:00', days: ALL_DAYS }] },
+                    offpeak: { rate: 24.54 }
+                },
+                feedInWindows: [{ rate: 8.0, start: '16:00', end: '23:00', days: ALL_DAYS }],
+                demand: { e: false }, asAt: '2026-10-15'
+            },
+            // OVO The Free 4 Plan: free 11am–3pm with no cap, 1c FIT.
+            'OVO The Free 4 Plan (Ausgrid, TOU)': {
+                rateType: 'tou', daily: 193.95, feedIn: 1.0, cl: 19.31, clock: 'local',
+                tou: {
+                    free: { rate: 0, windows: [{ start: '11:00', end: '15:00', days: ALL_DAYS }] },
+                    peak: { rate: 63.21, windows: [{ start: '15:00', end: '21:00', days: ALL_DAYS }] },
+                    offpeak: { rate: 25.23 }
+                },
+                demand: { e: false }, asAt: '2026-10-15'
+            },
+            // Solar Sharer Offer, AER 2026-27 maximum (Ausgrid): free 11am–2pm to 24 kWh/day,
+            // peak 3–9pm in Nov–Mar and Jun–Aug only, no feed-in tariff.
+            'Solar Sharer Offer (Ausgrid, TOU)': {
+                rateType: 'tou', daily: 176.41, feedIn: 0, cl: 19.31, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 24, windows: [{ start: '11:00', end: '14:00', days: ALL_DAYS }] },
+                    peak: { rate: 63.72, windows: [{ start: '15:00', end: '21:00', days: ALL_DAYS, months: [11, 12, 1, 2, 3, 6, 7, 8] }] },
+                    offpeak: { rate: 27.56 }
+                },
+                demand: { e: false }, asAt: AS_AT
             }
         },
         NT: {
