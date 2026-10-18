@@ -20,6 +20,9 @@
         sitesApiKey: null,
         lastResultDataPayload: null,
         amberCostBaseline: null,
+        batteryShift: null,
+        shiftPlan: null,
+        shiftBudget: null,
         fetching: false
     };
 
@@ -116,6 +119,11 @@
         return $('stateSelector').value;
     }
 
+    // TOU periods in the plan form. 'free' and 'superOffpeak' start with no windows (unused).
+    const TOU_PERIODS = ['free', 'superOffpeak', 'peak', 'shoulder', 'offpeak'];
+    const OPTIONAL_TOU_PERIODS = ['free', 'superOffpeak'];
+    const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
     function collectWindows(container, includeRate) {
         if (!container) return [];
         return Array.from(container.querySelectorAll('.tou-window')).map((win) => {
@@ -124,8 +132,17 @@
                 end: win.querySelector('.tou-end').value,
                 days: Array.from(win.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => parseInt(cb.value, 10))
             };
+            if (win.dataset.months) {
+                row.months = win.dataset.months.split(',').map((m) => parseInt(m, 10)).filter((m) => m >= 1 && m <= 12);
+            }
             if (includeRate) {
                 row.rate = parseFloat(win.querySelector('.tou-rate').value) || 0;
+                const cap = parseFloat(win.querySelector('.tou-cap') && win.querySelector('.tou-cap').value);
+                if (cap > 0) {
+                    row.capKwh = cap;
+                    const over = parseFloat(win.querySelector('.tou-over-rate').value);
+                    if (Number.isFinite(over)) row.overRate = over;
+                }
             }
             return row;
         });
@@ -139,8 +156,19 @@
         const endVal = windowData && windowData.end ? windowData.end : '00:00';
         const daysArr = windowData && windowData.days ? windowData.days : [1, 2, 3, 4, 5, 6, 0];
         const rateVal = windowData && windowData.rate != null ? windowData.rate : '';
+        const capVal = windowData && windowData.capKwh != null ? windowData.capKwh : '';
+        const overVal = windowData && windowData.overRate != null ? windowData.overRate : '';
         const rateField = includeRate
-            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Rate (c/kWh, published)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>`
+            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Rate (c/kWh, published)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>
+               <div class="grid grid-cols-2 gap-2 mt-1">
+                   <div><label class="text-xs font-medium text-gray-600">Daily cap (kWh)</label><input type="number" step="0.1" min="0" placeholder="none" class="tou-cap w-full text-xs p-1 border border-gray-300 rounded" value="${capVal}"></div>
+                   <div><label class="text-xs font-medium text-gray-600">Over cap (c/kWh)</label><input type="number" step="0.0001" placeholder="default FIT" class="tou-over-rate w-full text-xs p-1 border border-gray-300 rounded" value="${overVal}"></div>
+               </div>`
+            : '';
+        const months = (windowData && windowData.months) || [];
+        if (months.length) windowDiv.dataset.months = months.join(',');
+        const monthsNote = months.length
+            ? `<div class="mt-1 text-[10px] text-gray-600">Months: ${months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).filter(Boolean).join(', ')}</div>`
             : '';
         windowDiv.innerHTML = `
             <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove" data-remove-window="1" aria-label="Remove window">×</button>
@@ -149,6 +177,7 @@
                 <div><label class="text-xs font-medium text-gray-600">End</label><input type="time" class="tou-end w-full text-xs p-1 border border-gray-300 rounded" value="${endVal}"></div>
             </div>
             ${rateField}
+            ${monthsNote}
             <div class="mt-1 text-[10px] font-medium text-gray-600">Days:</div>
             <div class="grid grid-cols-7 gap-1 mt-1 text-[10px]">
                 <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="1" ${daysArr.includes(1) ? 'checked' : ''}><span class="mt-0.5">M</span></label>
@@ -271,9 +300,14 @@
         const getPeriodSettings = (period) => {
             const container = document.querySelector(`[data-tou-period="${period}"]`);
             if (!container) return {};
-            const rate = parseFloat($(`tou_${period}_rate`).value);
+            const rate = parseFloat($(`tou_${period}_rate`).value) || 0;
             if (period === 'offpeak') return { rate };
-            return { rate, windows: collectWindows(container, false) };
+            const settings = { rate, windows: collectWindows(container, false) };
+            if (period === 'free') {
+                const cap = parseFloat($('tou_free_cap').value);
+                if (cap > 0) settings.capKwh = cap;
+            }
+            return settings;
         };
 
         if (rateType === 'flat') {
@@ -295,11 +329,13 @@
             feedIn: parseFloat($('otherSupplierFeedInRateTou').value),
             cl: parseFloat($('tou_controlled_load_rate').value),
             feedInWindows,
-            tou: {
-                peak: getPeriodSettings('peak'),
-                shoulder: getPeriodSettings('shoulder'),
-                offpeak: getPeriodSettings('offpeak')
-            },
+            tou: TOU_PERIODS.reduce((tou, period) => {
+                const settings = getPeriodSettings(period);
+                if (OPTIONAL_TOU_PERIODS.indexOf(period) === -1 || (settings.windows && settings.windows.length)) {
+                    tou[period] = settings;
+                }
+                return tou;
+            }, {}),
             demand: demandConfig,
             clock,
             timeZone
@@ -334,11 +370,14 @@
             $('touRateSection').classList.remove('hidden');
             $('otherSupplierFeedInRateTou').value = template.feedIn || 0;
             $('tou_controlled_load_rate').value = template.cl || 0;
-            ['peak', 'shoulder', 'offpeak'].forEach((period) => {
+            TOU_PERIODS.forEach((period) => {
                 const periodConfig = template.tou && template.tou[period];
                 if (period !== 'offpeak') {
                     const windowsContainer = $(`tou_${period}_windows_container`);
                     if (windowsContainer) windowsContainer.innerHTML = '';
+                }
+                if (period === 'free') {
+                    $('tou_free_cap').value = periodConfig && periodConfig.capKwh ? periodConfig.capKwh : '';
                 }
                 if (!periodConfig) {
                     $(`tou_${period}_rate`).value = 0;
@@ -390,16 +429,18 @@
         $('otherSupplierFeedInRateFlat').value = '';
         $('otherSupplierControlledLoadFlat').value = '';
         $('dailyConnectionRate').value = '';
-        ['peak', 'shoulder', 'offpeak'].forEach((period) => {
-            $(`tou_${period}_rate`).value = '';
+        TOU_PERIODS.forEach((period) => {
+            const optional = OPTIONAL_TOU_PERIODS.indexOf(period) !== -1;
+            $(`tou_${period}_rate`).value = optional ? 0 : '';
             if (period !== 'offpeak') {
                 const windowsContainer = $(`tou_${period}_windows_container`);
                 if (windowsContainer) {
                     windowsContainer.innerHTML = '';
-                    addTouWindow(period);
+                    if (!optional) addTouWindow(period);
                 }
             }
         });
+        $('tou_free_cap').value = '';
         $('tou_controlled_load_rate').value = '';
         $('otherSupplierFeedInRateTou').value = '';
         applyFeedInWindows([]);
@@ -428,15 +469,15 @@
             if (!container) return {};
             const rate = $(`tou_${period}_rate`).value;
             if (period === 'offpeak') return { rate };
-            return { rate, windows: collectWindows(container, false) };
+            const settings = { rate, windows: collectWindows(container, false) };
+            if (period === 'free') settings.capKwh = $('tou_free_cap').value;
+            return settings;
         };
         const touConfig = {
-            peak: getPeriodSettings('peak'),
-            shoulder: getPeriodSettings('shoulder'),
-            offpeak: getPeriodSettings('offpeak'),
             controlledLoad: $('tou_controlled_load_rate').value,
             feedIn: $('otherSupplierFeedInRateTou').value
         };
+        TOU_PERIODS.forEach((period) => { touConfig[period] = getPeriodSettings(period); });
         localStorage.setItem('touConfig', JSON.stringify(touConfig));
         localStorage.setItem('feedInWindows', JSON.stringify(collectWindows($('feedInWindowsContainer'), true)));
         localStorage.setItem('enableFeedInTou', $('enableFeedInTou').checked ? 'true' : 'false');
@@ -487,6 +528,7 @@
             const setPeriodSettings = (period, settings) => {
                 if (!settings) return;
                 $(`tou_${period}_rate`).value = settings.rate || 0;
+                if (period === 'free') $('tou_free_cap').value = settings.capKwh || '';
                 if (period !== 'offpeak') {
                     const windowsContainer = $(`tou_${period}_windows_container`);
                     if (windowsContainer) windowsContainer.innerHTML = '';
@@ -494,14 +536,12 @@
                         settings.windows.forEach((win) => addTouWindow(period, win));
                     } else if (settings.start) {
                         addTouWindow(period, { start: settings.start, end: settings.end, days: settings.days });
-                    } else {
+                    } else if (OPTIONAL_TOU_PERIODS.indexOf(period) === -1) {
                         addTouWindow(period);
                     }
                 }
             };
-            setPeriodSettings('peak', config.peak);
-            setPeriodSettings('shoulder', config.shoulder);
-            setPeriodSettings('offpeak', config.offpeak);
+            TOU_PERIODS.forEach((period) => setPeriodSettings(period, config[period]));
         }
 
         const savedDaily = localStorage.getItem('dailyConnectionRate');
@@ -1225,10 +1265,11 @@
     function renderMonthly() {
         const section = $('monthlySection');
         const monthly = state.monthly;
-        if (!monthly) { section.classList.add('hidden'); return; }
+        if (!monthly) { section.classList.add('hidden'); renderBatteryShift(); return; }
         section.classList.remove('hidden');
         if (!monthly.months.length) {
             $('monthlyTable').innerHTML = '<p class="text-sm text-gray-600">No whole calendar months of meter data yet. Compare a period that covers a full month (for example Last month) and it will show here.</p>';
+            renderBatteryShift();
             return;
         }
         const opts = periodOpts();
@@ -1270,6 +1311,187 @@
         html += '</tbody></table>';
         html += `<p class="text-xs text-gray-500 mt-2">Usage includes any Ausgrid export charge, as on the bill. Fixed = daily connection + Amber subscription. ${gst ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}.</p>`;
         $('monthlyTable').innerHTML = html;
+        renderBatteryShift();
+    }
+
+    // ---------- Battery re-scheduling estimate ----------
+
+    const SHIFT_SETTINGS_KEY = 'batteryShiftSettings';
+
+    function readShiftParams() {
+        const budgets = String($('shiftBudgets').value || '')
+            .split(/[,\s]+/).map((v) => parseFloat(v)).filter((v) => Number.isFinite(v) && v >= 0);
+        const unique = Array.from(new Set(budgets)).sort((a, b) => a - b).slice(0, 4);
+        return {
+            budgets: unique.length ? unique : Amber.REDISPATCH_DEFAULTS.budgets.slice(),
+            windowKw: parseFloat($('shiftWindowKw').value) || Amber.REDISPATCH_DEFAULTS.windowKw,
+            exportKw: parseFloat($('shiftExportKw').value) >= 0 ? parseFloat($('shiftExportKw').value) : Amber.REDISPATCH_DEFAULTS.exportKw,
+            rte: parseFloat($('shiftRte').value) || Amber.REDISPATCH_DEFAULTS.rte
+        };
+    }
+
+    function loadShiftSettings() {
+        try {
+            const s = JSON.parse(localStorage.getItem(SHIFT_SETTINGS_KEY) || 'null');
+            if (!s) return;
+            if (Array.isArray(s.budgets) && s.budgets.length) $('shiftBudgets').value = s.budgets.join(', ');
+            if (s.windowKw) $('shiftWindowKw').value = s.windowKw;
+            if (s.exportKw != null) $('shiftExportKw').value = s.exportKw;
+            if (s.rte) $('shiftRte').value = s.rte;
+            if (s.plan) state.shiftPlan = s.plan;
+            if (s.budget != null) state.shiftBudget = s.budget;
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    function saveShiftSettings() {
+        const p = readShiftParams();
+        localStorage.setItem(SHIFT_SETTINGS_KEY, JSON.stringify(Object.assign({}, p, {
+            plan: state.shiftPlan || null, budget: state.shiftBudget != null ? state.shiftBudget : null
+        })));
+    }
+
+    /** Free-window plans for this state and network (the selected plan uses the form's rates). */
+    function freeWindowPlans() {
+        const stateCode = currentStateCode();
+        const plans = state.templates[stateCode] || {};
+        const selectedName = $('planSelector').value;
+        const out = [];
+        Object.keys(plans).forEach((name) => {
+            if (!Amber.planMatchesNetwork(name, plans[name], currentSiteNetwork())) return;
+            const config = name === selectedName ? createPlanObjectFromForm() : plans[name];
+            if (Amber.planHasFreeWindow(config)) out.push({ name, config });
+        });
+        if (!selectedName) {
+            const custom = createPlanObjectFromForm();
+            if (Amber.planHasFreeWindow(custom)) out.push({ name: $('planName').value.trim() || 'Custom plan', config: custom });
+        }
+        return out;
+    }
+
+    let shiftRun = 0;
+
+    async function renderBatteryShift() {
+        const section = $('batteryShiftSection');
+        const monthly = state.monthly;
+        const plans = freeWindowPlans();
+        if (!monthly || !monthly.months.length || !plans.length) {
+            section.classList.add('hidden');
+            return;
+        }
+        section.classList.remove('hidden');
+        const params = readShiftParams();
+        const opts = {
+            site: selectedSite(), state: currentStateCode(), gstInclusive: gstInclusive(), amberRates: readAmberRates(),
+            budgets: params.budgets, params: { windowKw: params.windowKw, exportKw: params.exportKw, rte: params.rte }
+        };
+        const key = JSON.stringify([monthly.months, plans, opts]);
+        const run = ++shiftRun;
+        if (!state.batteryShift || state.batteryShift.key !== key || state.batteryShift.data !== monthly.channelData) {
+            $('batteryShiftTable').innerHTML = '<p class="text-sm text-gray-500">Re-timing your meter data…</p>';
+            $('batteryShiftMonthly').innerHTML = '';
+            await Amber.sleep(0);
+            if (run !== shiftRun) return;
+            let table;
+            try {
+                table = await Amber.batteryShiftTableAsync(monthly.channelData, monthly.months, plans, opts, () => run !== shiftRun);
+            } catch (err) {
+                console.error(err);
+                if (run === shiftRun) $('batteryShiftTable').innerHTML = '<p class="text-sm text-red-700">Could not work out the re-scheduling estimate.</p>';
+                return;
+            }
+            if (!table || run !== shiftRun) return;
+            state.batteryShift = { key, data: monthly.channelData, table };
+        }
+        drawBatteryShift(state.batteryShift.table);
+    }
+
+    function drawBatteryShift(table) {
+        const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
+        const monthLabel = (m) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+        const th = (t, right) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${t}</th>`;
+        const vsAmber = (v, amber) => {
+            const diff = amber - v;
+            if (Math.abs(diff) < 0.005) return '<div class="text-xs text-gray-500">≈ Amber</div>';
+            return diff > 0
+                ? `<div class="text-xs text-green-700">${money(diff)} less than Amber</div>`
+                : `<div class="text-xs text-red-700">${money(-diff)} more than Amber</div>`;
+        };
+        const n = table.months.length;
+        const span = n === 1 ? monthLabel(table.months[0]) : `${monthLabel(table.months[0])} – ${monthLabel(table.months[n - 1])}`;
+        const amber = table.amber;
+        let html = `<p class="text-sm text-gray-700 mb-2">${n} whole month${n === 1 ? '' : 's'} (${span}). Amber over the same months: <span class="font-semibold">${money(amber.total)}</span>, including ${money(amber.demand)} of demand charges.${n < 12 ? ' Under 12 months, so seasons are not evenly weighted.' : ''}</p>`;
+        html += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
+            ${th('Plan')}${th('As metered', 1)}${table.budgets.map((b) => th(`Shift ${b} kWh/day`, 1)).join('')}
+        </tr></thead><tbody class="divide-y divide-gray-200">`;
+        table.plans.slice().sort((a, b) => a.shifted[a.shifted.length - 1] - b.shifted[b.shifted.length - 1]).forEach((row) => {
+            html += `<tr>
+                <td class="px-3 py-2">${Amber.escapeHTML(Amber.planListLabel(row.name, currentSiteNetwork()))}</td>
+                <td class="px-3 py-2 text-right whitespace-nowrap">${money(row.metered)}${vsAmber(row.metered, amber.total)}</td>
+                ${row.shifted.map((v) => `<td class="px-3 py-2 text-right whitespace-nowrap font-medium">${money(v)}${vsAmber(v, amber.total)}</td>`).join('')}
+            </tr>`;
+        });
+        html += '</tbody></table>';
+        html += `<p class="text-xs text-gray-500 mt-2">An estimate from meter data alone (no battery telemetry). It assumes each day's shift budget is available, ignores what the battery held overnight, and re-timed exports are capped by the plan's daily feed-in cap and the max export. Retail plans here have no demand charge. ${gstInclusive() ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}. Check each plan's Basic Plan Information Document before switching.</p>`;
+        $('batteryShiftTable').innerHTML = html;
+
+        // Month by month for one plan and budget.
+        const names = table.plans.map((p) => p.name);
+        if (!state.shiftPlan || names.indexOf(state.shiftPlan) === -1) {
+            const best = table.plans.slice().sort((a, b) => a.shifted[0] - b.shifted[0])[0];
+            state.shiftPlan = best.name;
+        }
+        if (state.shiftBudget == null || table.budgets.indexOf(state.shiftBudget) === -1) {
+            state.shiftBudget = table.budgets[Math.min(1, table.budgets.length - 1)];
+        }
+        const plan = table.plans.find((p) => p.name === state.shiftPlan);
+        const bi = table.budgets.indexOf(state.shiftBudget);
+        let m = `<div class="flex flex-wrap items-end gap-3 mb-2 text-sm">
+            <h4 class="font-semibold text-gray-800 mr-2">By month</h4>
+            <label class="text-xs text-gray-600">Plan <select id="shiftPlanSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
+                ${names.map((nm) => `<option value="${Amber.escapeHTML(nm)}"${nm === state.shiftPlan ? ' selected' : ''}>${Amber.escapeHTML(Amber.planListLabel(nm, currentSiteNetwork()))}</option>`).join('')}
+            </select></label>
+            <label class="text-xs text-gray-600">Shift <select id="shiftBudgetSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
+                ${table.budgets.map((b) => `<option value="${b}"${b === state.shiftBudget ? ' selected' : ''}>${b} kWh/day</option>`).join('')}
+            </select></label>
+        </div>`;
+        m += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
+            ${th('Month')}${th('Amber', 1)}${th('of which demand', 1)}${th('Plan as metered', 1)}${th('Plan re-scheduled', 1)}${th('Difference', 1)}
+        </tr></thead><tbody class="divide-y divide-gray-200">`;
+        let tot = { amber: 0, demand: 0, metered: 0, shifted: 0 };
+        table.months.forEach((month) => {
+            const a = amber.byMonth[month];
+            const p = plan.byMonth[month];
+            const shifted = p.shifted[bi];
+            tot = { amber: tot.amber + a.total, demand: tot.demand + a.demand, metered: tot.metered + p.metered, shifted: tot.shifted + shifted };
+            m += monthRow(monthLabel(month), a.total, a.demand, p.metered, shifted, money, false);
+        });
+        m += monthRow('Total', tot.amber, tot.demand, tot.metered, tot.shifted, money, true);
+        m += '</tbody></table>';
+        $('batteryShiftMonthly').innerHTML = m;
+
+        $('shiftPlanSelect').addEventListener('change', (e) => {
+            state.shiftPlan = e.target.value;
+            saveShiftSettings();
+            drawBatteryShift(table);
+        });
+        $('shiftBudgetSelect').addEventListener('change', (e) => {
+            state.shiftBudget = parseFloat(e.target.value);
+            saveShiftSettings();
+            drawBatteryShift(table);
+        });
+    }
+
+    function monthRow(label, amber, demand, metered, shifted, money, isTotal) {
+        const diff = amber - shifted;
+        const cls = Math.abs(diff) < 0.005 ? 'text-gray-600' : (diff > 0 ? 'text-green-700' : 'text-red-700');
+        const text = Math.abs(diff) < 0.005 ? '—' : (diff > 0 ? `Plan ${money(diff)} cheaper` : `Amber ${money(-diff)} cheaper`);
+        const td = (c, extra) => `<td class="px-3 py-2 whitespace-nowrap text-right ${extra || ''}">${c}</td>`;
+        return `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
+            <td class="px-3 py-2 whitespace-nowrap">${label}</td>
+            ${td(money(amber))}${td(money(demand))}${td(money(metered))}${td(money(shifted), 'font-medium')}${td(text, cls)}
+        </tr>`;
     }
 
     // ---------- Bill check ----------
@@ -1464,6 +1686,7 @@
         $('averageGraphContainer').classList.add('hidden');
         $('dailyGraphSection').classList.add('hidden');
         $('allPlansSection').classList.add('hidden');
+        $('batteryShiftSection').classList.add('hidden');
         $('moreStatsSection').classList.add('hidden');
         downloadCsvButton.disabled = true;
         $('results-table-container').innerHTML = '';
@@ -1807,6 +2030,8 @@
                 state.lastFetchedEndDate = null;
                 $('calendar-container').innerHTML = '';
                 $('monthlySection').classList.add('hidden');
+                $('batteryShiftSection').classList.add('hidden');
+                state.batteryShift = null;
                 msg.textContent = 'Cache cleared successfully!';
                 msg.className = 'text-sm mt-2 font-medium text-green-600';
             } catch (err) {
@@ -1867,6 +2092,7 @@
             $('stateSelector').appendChild(option);
         });
         loadAllSettings();
+        loadShiftSettings();
         clearRetiredStatsStorage();
         setupBillCheck();
         if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
@@ -1907,6 +2133,12 @@
         $('addFeedInWindowBtn').addEventListener('click', () => {
             addWindowRow($('feedInWindowsContainer'), { start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5, 6, 0], rate: 10 }, true);
             saveAllSettings();
+        });
+        ['shiftBudgets', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
+            $(id).addEventListener('change', () => {
+                saveShiftSettings();
+                renderBatteryShift();
+            });
         });
         document.querySelectorAll('[data-add-tou-window]').forEach((btn) => {
             btn.addEventListener('click', () => addTouWindow(btn.getAttribute('data-add-tou-window')));

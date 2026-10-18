@@ -205,10 +205,19 @@
         return { clock, timeZone };
     };
 
+    // "HH:MM" -> HHMM number, cached: window checks run for every interval of every plan.
+    const hhmmCache = Object.create(null);
+    function hhmmValue(value) {
+        const key = String(value);
+        let n = hhmmCache[key];
+        if (n === undefined) n = hhmmCache[key] = parseInt(key.replace(':', ''), 10);
+        return n;
+    }
+
     Amber.timeInWindow = function (parts, startHHMM, endHHMM) {
         if (!startHHMM || !endHHMM) return false;
-        const startTime = parseInt(String(startHHMM).replace(':', ''), 10);
-        const endTime = parseInt(String(endHHMM).replace(':', ''), 10);
+        const startTime = hhmmValue(startHHMM);
+        const endTime = hhmmValue(endHHMM);
         const time = parts.timeValue;
         if (startTime > endTime) return time >= startTime || time < endTime;
         return time >= startTime && time < endTime;
@@ -218,6 +227,9 @@
         if (!window || !window.start || !window.end) return false;
         const days = window.days || [];
         if (days.length && !days.includes(parts.weekday)) return false;
+        // Optional seasonal windows, e.g. Ausgrid peak Nov–Mar and Jun–Aug only.
+        const months = window.months || [];
+        if (months.length && !months.includes(parts.month)) return false;
         return Amber.timeInWindow(parts, window.start, window.end);
     };
 
