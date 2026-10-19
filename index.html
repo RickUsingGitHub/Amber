@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.33</title>
+    <title>Amber Compare &amp; Export v1.34</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.33">
+    <link rel="stylesheet" href="css/app.css?v=1.34">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,9 +16,9 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.33
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.34
                     </h1>
-                    <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
+                    <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
                 <div class="relative">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -30,55 +30,149 @@
         </header>
 
         <main>
-            <div id="configSection" class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <div class="flex justify-between items-center cursor-pointer" id="configHeader">
-                    <div id="configHeaderLeftGroup" class="flex items-center gap-4 flex-wrap">
-                        <h2 class="text-lg font-bold text-gray-900">Configuration</h2>
-                    </div>
-                    <button id="toggleConfigBtn" type="button" class="flex items-center text-indigo-600 hover:underline focus:outline-none font-medium">
-                        <span class="mr-1">Hide</span>
-                        <svg id="configChevron" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
+            <div id="configSection" class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
+                <div id="configCompareBar" class="flex flex-wrap items-center gap-2">
+                    <label for="startDate" class="text-sm font-medium text-gray-700">Start</label>
+                    <input type="date" id="startDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <label for="endDate" class="text-sm font-medium text-gray-700 ml-2">End</label>
+                    <input type="date" id="endDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    <button id="fetchData" type="button" title="Compare Amber to your chosen competitor." class="ml-auto bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                        Compare Costs
                     </button>
                 </div>
+                <div class="mt-2 flex flex-wrap gap-2" id="datePresets">
+                    <button type="button" data-preset="7d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 7 days</button>
+                    <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">This month</button>
+                    <button type="button" data-preset="lastMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last month</button>
+                    <button type="button" data-preset="3m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 3 months</button>
+                    <button type="button" data-preset="90d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 90 days</button>
+                </div>
+                <div id="messageContainer" class="hidden text-center mt-4 p-4 border rounded-lg bg-gray-50">
+                    <p id="message" class="text-lg"></p>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                        <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
+                    </div>
+                </div>
+            </div>
 
-                <div id="configContent" class="mt-3">
-                    <div id="configDetails" class="border-t pt-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="md:col-span-2">
-                            <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Amber API Key</label>
-                            <input type="password" id="apiKey" autocomplete="off" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="psk_...">
-                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                <label class="inline-flex items-center text-sm text-gray-700">
-                                    <input type="checkbox" id="rememberApiKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
-                                    <span class="ml-2">Remember key on this device</span>
-                                </label>
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-wrap gap-1 bg-white rounded-lg shadow-md p-1">
+                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab">Daily &amp; bills</button>
+                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare plans</button>
+                    <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Setup</button>
+                </div>
+                <div class="ml-auto flex items-center">
+                    <div class="flex items-center space-x-2 mr-4">
+                        <span class="text-sm font-medium text-gray-700" id="gstLabel" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">inc GST</span>
+                        <label class="gst-switch" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">
+                            <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
+                            <span class="gst-switch-track" aria-hidden="true"></span>
+                        </label>
+                    </div>
+                    <div class="relative">
+                        <button id="downloadCsvButton" type="button" title="Export data options" disabled aria-label="Export" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                            Export
+                        </button>
+                        <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-max bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                            <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Full Data</a>
+                            <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Daily Summaries</a>
+                            <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Results Table</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <section id="panel-check" role="tabpanel" aria-labelledby="tab-check" data-panel="check" class="hidden">
+                <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
+                    <button type="button" data-jump="dailyGraphSection" class="jump-link">Day graph</button>
+                    <button type="button" data-jump="calendarSection" class="jump-link">Calendar</button>
+                    <button type="button" data-jump="billCheckSection" class="jump-link">Bill Check</button>
+                    <button type="button" data-jump="averageGraphContainer" class="jump-link">24-hour average</button>
+                    <button type="button" data-jump="moreStatsSection" class="jump-link">More stats</button>
+                </nav>
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600">Choose dates and press <span class="font-medium">Compare Costs</span> to see the daily calendar, graphs and stats. Bill Check works on its own.</div>
+                <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
+                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Usage &amp; Price Graph</h3>
+                        <div class="flex items-center space-x-2 sm:space-x-4">
+                            <button id="prevDayBtn" type="button" aria-label="Previous day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
+                            <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                            <button id="nextDayBtn" type="button" aria-label="Next day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
+                            <button id="resetDailyZoomBtn" type="button" aria-label="Reset daily graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
+                        </div>
+                    </div>
+                    <div class="h-[50vh] md:h-[70vh] relative">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-3">Click a day to open it on the daily graph. Days marked est still have estimated meter data.</p>
+                    <div id="calendar-container" class="space-y-6"></div>
+                    <div class="mt-4 pt-4 border-t text-center">
+                        <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
+                    </div>
+                </div>
+
+                <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
+                            <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                            <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
+                            <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
+                    <div id="billCheckBody"></div>
+                </div>
+
+                <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
+                        <button id="resetAverageZoomBtn" type="button" aria-label="Reset average graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-2">Drag horizontally to zoom. Hover a bar to see the competitor c/kWh at that time.</p>
+                    <div class="h-[38vh] md:h-[58vh] relative">
+                        <canvas id="usagePriceChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="moreStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">More Stats</h3>
+                    <p class="text-sm text-gray-500 mb-4">From Amber meter data for the selected period. Amber prices are wholesale-linked and include GST.</p>
+                    <div id="moreStatsTable"></div>
+                </div>
+            </section>
+
+            <section id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" data-panel="compare" class="hidden">
+                <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
+                    <button type="button" data-jump="results-output" class="jump-link">Results</button>
+                    <button type="button" data-jump="allPlansSection" class="jump-link">All plans</button>
+                    <button type="button" data-jump="monthlySection" class="jump-link">Monthly</button>
+                    <button type="button" data-jump="batteryShiftSection" class="jump-link">Free-window plans</button>
+                    <button type="button" data-jump="planChooser" class="jump-link">Plan &amp; rates</button>
+                </nav>
+                <div id="planChooser" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <div>
+                        <h3 id="otherSupplierHeading" class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1">State</label>
+                                <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
                             </div>
-                            <p class="text-xs text-gray-500 mt-1">Stored only in this browser (not encrypted). Find your key at <a href="https://app.amber.com.au/developers" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
-                        </div>
-
-                        <div id="siteSelectorRow" class="md:col-span-2 hidden">
-                            <label for="siteSelector" class="block text-sm font-medium text-gray-700 mb-1">Site</label>
-                            <select id="siteSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                            <p class="text-xs text-gray-500 mt-1">Choose which NMI to analyse if your account has more than one site.</p>
-                        </div>
-
-                        <div class="md:col-span-2 border-t pt-4">
-                            <h3 id="otherSupplierHeading" class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1">State</label>
-                                    <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                                </div>
-                                <div id="planSelectorContainer">
-                                    <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan</label>
-                                    <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <option value="">-- Custom --</option>
-                                    </select>
-                                </div>
+                            <div id="planSelectorContainer">
+                                <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan</label>
+                                <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                    <option value="">-- Custom --</option>
+                                </select>
                             </div>
                         </div>
                     </div>
-
                     <div class="mt-4 border-t pt-4">
                         <button type="button" id="ratesDetailsToggle" class="flex items-center text-sm font-medium text-indigo-600 hover:underline focus:outline-none">
                             <span id="ratesDetailsToggleLabel">Show comparison plan rates</span>
@@ -225,202 +319,124 @@
                                 <p class="text-xs text-gray-500 mt-1">Charge on your highest 30-min usage during the daily window, billed for each applicable day in the period.</p>
                             </div>
 
-                            <div class="pt-4 border-t">
-                                <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
-                                <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
-                                <div class="flex flex-wrap items-center gap-2 mb-3">
-                                    <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill rates + Bill Check)</label>
-                                    <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
-                                    <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
-                                </div>
-                                <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div>
-                                        <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
-                                        <input type="number" id="amberConnectionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                    <div>
-                                        <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700">Subscription (c/day, inc GST)</label>
-                                        <input type="number" id="amberSubscriptionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                    <div>
-                                        <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
-                                        <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600">Choose dates and press <span class="font-medium">Compare Costs</span> to compare Amber with the plan above and every other plan for your network.</div>
+                <div id="resultsSection" class="hidden">
+                    <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
+                        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                            <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
+                        </div>
+                        <div id="qualityBanner" class="hidden mb-3 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
+                        <div id="results-table-container"></div>
+                        <p id="resultsDisclaimer" class="text-xs text-gray-500 mt-4"></p>
+                    </div>
+
+                    <div id="allPlansSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">All plans in this state</h3>
+                        <p class="text-sm text-gray-500 mb-4">Same usage, ranked against Amber. Click a plan to use it for Comparison Results.</p>
+                        <div id="allPlansTable"></div>
+                    </div>
+
+                    <div id="monthlySection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Monthly Breakdown</h3>
+                        <p class="text-sm text-gray-500 mb-4">Every whole calendar month of meter data cached in this browser, not just the selected period. Costed the same way as Comparison Results; demand uses each month's own peak.</p>
+                        <div id="monthlyTable"></div>
+                    </div>
+
+                    <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Free-window plans with your battery re-scheduled</h3>
+                        <p class="text-sm text-gray-500 mb-2">The tables above price your meter data exactly as it happened on Amber. On a free-window plan you would charge the battery and cars in the free window and export in the plan's best feed-in window instead. This re-times your real intervals, day by day, to estimate that.</p>
+                        <p class="text-sm text-gray-500 mb-4"><span class="font-medium text-gray-700">Shift budget</span> is the extra kWh a day your batteries and EV charging could move into the free window, beyond what they already did on Amber. Battery exports outside the plan's best feed-in window are moved into it (or used at home when that is worth more). Midday solar exports stay put.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
+                            <div>
+                                <label for="shiftBudgets" class="block text-xs font-medium text-gray-600">Shift budgets (kWh/day)</label>
+                                <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600">Max import in free window (kW)</label>
+                                <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="shiftExportKw" class="block text-xs font-medium text-gray-600">Max export (kW)</label>
+                                <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div>
+                                <label for="shiftRte" class="block text-xs font-medium text-gray-600">Battery round trip (%)</label>
+                                <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                        </div>
+                        <div id="batteryShiftTable"></div>
+                        <div id="batteryShiftMonthly" class="mt-6"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="panel-setup" role="tabpanel" aria-labelledby="tab-setup" data-panel="setup" class="hidden">
+                <div id="setupSection" class="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">
+                    <h2 class="text-lg font-bold text-gray-900">Amber account</h2>
+                    <div>
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Amber API Key</label>
+                        <input type="password" id="apiKey" autocomplete="off" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="psk_...">
+                        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <label class="inline-flex items-center text-sm text-gray-700">
+                                <input type="checkbox" id="rememberApiKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+                                <span class="ml-2">Remember key on this device</span>
+                            </label>
+                        </div>
+                        <p class="text-xs text-gray-500 mt-1">Stored only in this browser (not encrypted). Find your key at <a href="https://app.amber.com.au/developers" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
+                    </div>
+                    <div id="siteSelectorRow" class="hidden">
+                        <label for="siteSelector" class="block text-sm font-medium text-gray-700 mb-1">Site</label>
+                        <select id="siteSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                        <p class="text-xs text-gray-500 mt-1">Choose which NMI to analyse if your account has more than one site.</p>
+                    </div>
+                    <div class="pt-6 border-t">
+                        <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
+                        <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
+                        <div class="flex flex-wrap items-center gap-2 mb-3">
+                            <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill rates + Bill Check)</label>
+                            <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                            <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
+                        </div>
+                        <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
+                                <input type="number" id="amberConnectionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700">Subscription (c/day, inc GST)</label>
+                                <input type="number" id="amberSubscriptionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
+                                <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                         </div>
                     </div>
-                    </div>
-
-                    <div id="configCompareBar" class="flex flex-wrap items-center gap-2 mt-3">
-                        <label for="startDate" class="text-sm font-medium text-gray-700">Start</label>
-                        <input type="date" id="startDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        <label for="endDate" class="text-sm font-medium text-gray-700 ml-2">End</label>
-                        <input type="date" id="endDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        <button id="fetchData" type="button" title="Compare Amber to your chosen competitor." class="ml-auto bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            Compare Costs
-                        </button>
-                    </div>
-                    <div class="mt-2 flex flex-wrap gap-2" id="datePresets">
-                        <button type="button" data-preset="7d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 7 days</button>
-                        <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">This month</button>
-                        <button type="button" data-preset="lastMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last month</button>
-                        <button type="button" data-preset="3m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 3 months</button>
-                        <button type="button" data-preset="90d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 90 days</button>
-                    </div>
                 </div>
-
-                <div id="messageContainer" class="hidden text-center mt-6 mb-4 p-4 border rounded-lg bg-gray-50">
-                    <p id="message" class="text-lg"></p>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                        <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
-                        <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
-                        <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
-                        <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
-                    </div>
-                </div>
-                <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
-                <div id="billCheckBody"></div>
-            </div>
-
-            <div id="resultsSection" class="hidden">
-                <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
-                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                        <div class="flex items-center">
-                            <div class="flex items-center space-x-2 mr-4">
-                                <span class="text-sm font-medium text-gray-700" id="gstLabel" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">inc GST</span>
-                                <label class="gst-switch" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">
-                                    <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
-                                    <span class="gst-switch-track" aria-hidden="true"></span>
-                                </label>
-                            </div>
-                            <div class="relative">
-                                <button id="downloadCsvButton" type="button" title="Export data options" disabled aria-label="Export" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
-                                    Export
-                                </button>
-                                <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-max bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-                                    <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Full Data</a>
-                                    <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Daily Summaries</a>
-                                    <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Results Table</a>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="qualityBanner" class="hidden mb-3 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
-                    <div id="results-table-container"></div>
-                    <p id="resultsDisclaimer" class="text-xs text-gray-500 mt-4"></p>
-                </div>
-
-                <div id="allPlansSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">All plans in this state</h3>
-                    <p class="text-sm text-gray-500 mb-4">Same usage, ranked against Amber. Click a plan to use it for Comparison Results.</p>
-                    <div id="allPlansTable"></div>
-                </div>
-
-                <div id="monthlySection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Monthly Breakdown</h3>
-                    <p class="text-sm text-gray-500 mb-4">Every whole calendar month of meter data cached in this browser, not just the selected period. Costed the same way as Comparison Results; demand uses each month's own peak.</p>
-                    <div id="monthlyTable"></div>
-                </div>
-
-                <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Free-window plans with your battery re-scheduled</h3>
-                    <p class="text-sm text-gray-500 mb-2">The tables above price your meter data exactly as it happened on Amber. On a free-window plan you would charge the battery and cars in the free window and export in the plan's best feed-in window instead. This re-times your real intervals, day by day, to estimate that.</p>
-                    <p class="text-sm text-gray-500 mb-4"><span class="font-medium text-gray-700">Shift budget</span> is the extra kWh a day your batteries and EV charging could move into the free window, beyond what they already did on Amber. Battery exports outside the plan's best feed-in window are moved into it (or used at home when that is worth more). Midday solar exports stay put.</p>
-                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
-                        <div>
-                            <label for="shiftBudgets" class="block text-xs font-medium text-gray-600">Shift budgets (kWh/day)</label>
-                            <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600">Max import in free window (kW)</label>
-                            <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="shiftExportKw" class="block text-xs font-medium text-gray-600">Max export (kW)</label>
-                            <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                        </div>
-                        <div>
-                            <label for="shiftRte" class="block text-xs font-medium text-gray-600">Battery round trip (%)</label>
-                            <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                        </div>
-                    </div>
-                    <div id="batteryShiftTable"></div>
-                    <div id="batteryShiftMonthly" class="mt-6"></div>
-                </div>
-
-                <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
-                        <button id="resetAverageZoomBtn" type="button" aria-label="Reset average graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
-                    </div>
-                    <p class="text-xs text-gray-500 mb-2">Drag horizontally to zoom. Hover a bar to see the competitor c/kWh at that time.</p>
-                    <div class="h-[38vh] md:h-[58vh] relative">
-                        <canvas id="usagePriceChart"></canvas>
-                    </div>
-                </div>
-
-                <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
-                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Usage &amp; Price Graph</h3>
-                        <div class="flex items-center space-x-2 sm:space-x-4">
-                            <button id="prevDayBtn" type="button" aria-label="Previous day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
-                            <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                            <button id="nextDayBtn" type="button" aria-label="Next day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
-                            <button id="resetDailyZoomBtn" type="button" aria-label="Reset daily graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
-                        </div>
-                    </div>
-                    <div class="h-[50vh] md:h-[70vh] relative">
-                        <canvas id="dailyChart"></canvas>
-                    </div>
-                </div>
-
-                <div id="moreStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">More Stats</h3>
-                    <p class="text-sm text-gray-500 mb-4">From Amber meter data for the selected period. Amber prices are wholesale-linked and include GST.</p>
-                    <div id="moreStatsTable"></div>
-                </div>
-            </div>
-
-            <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
-                </div>
-                <p class="text-sm text-gray-500 mb-3">Click a day to open it on the daily graph. Days marked est still have estimated meter data.</p>
-                <div id="calendar-container" class="space-y-6"></div>
-                <div class="mt-4 pt-4 border-t text-center">
-                    <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
-                </div>
-            </div>
+            </section>
         </main>
     </div>
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.33"></script>
-    <script src="js/time.js?v=1.33"></script>
-    <script src="js/templates.js?v=1.33"></script>
-    <script src="js/storage.js?v=1.33"></script>
-    <script src="js/costs.js?v=1.33"></script>
-    <script src="js/api.js?v=1.33"></script>
-    <script src="js/bill.js?v=1.33"></script>
-    <script src="js/csv.js?v=1.33"></script>
-    <script src="js/charts.js?v=1.33"></script>
-    <script src="js/calendar.js?v=1.33"></script>
-    <script src="js/stats.js?v=1.33"></script>
-    <script src="js/monthly.js?v=1.33"></script>
-    <script src="js/redispatch.js?v=1.33"></script>
-    <script src="js/app.js?v=1.33"></script>
+    <script src="js/constants.js?v=1.34"></script>
+    <script src="js/time.js?v=1.34"></script>
+    <script src="js/templates.js?v=1.34"></script>
+    <script src="js/storage.js?v=1.34"></script>
+    <script src="js/costs.js?v=1.34"></script>
+    <script src="js/api.js?v=1.34"></script>
+    <script src="js/bill.js?v=1.34"></script>
+    <script src="js/csv.js?v=1.34"></script>
+    <script src="js/charts.js?v=1.34"></script>
+    <script src="js/calendar.js?v=1.34"></script>
+    <script src="js/stats.js?v=1.34"></script>
+    <script src="js/monthly.js?v=1.34"></script>
+    <script src="js/redispatch.js?v=1.34"></script>
+    <script src="js/app.js?v=1.34"></script>
 </body>
 </html>

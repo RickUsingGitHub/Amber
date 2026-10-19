@@ -18,6 +18,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Pre-built templates for each state, including 2026-27 Victorian Default Offer rates for all five networks
 - Time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak), with optional daily kWh caps
 - Free-window plans: a free (or cheap) window with an optional daily kWh cap, a super off-peak / EV window, and seasonal peak windows. Templates for CovaU SolarMax, GloBird Four4Free, OVO The Free 4 Plan and the Solar Sharer Offer (Ausgrid)
+- Three tabs: Daily & bills (day graph, calendar, Bill Check, 24-hour average, stats), Compare plans (plan choice and rates, results, all plans, monthly, free-window plans) and Setup (API key, site, Amber charges). Dates and Compare stay above the tabs
 - Battery re-scheduling estimate: re-times your real interval data into each free-window plan's free window and best feed-in window, at the daily shift budgets you choose, over every whole month cached
 - 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
 - Daily calendar; click a day to open it on the graph

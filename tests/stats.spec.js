@@ -54,6 +54,7 @@ test.describe('More Stats', () => {
         await page.fill('#startDate', '2025-07-01');
         await page.fill('#endDate', '2025-07-07');
         await page.click('#fetchData');
+        await page.click('#tab-check');
         await page.waitForSelector('#moreStatsSection:not(.hidden)');
         await expect(page.locator('#moreStatsTable')).toContainText('Average import price');
         await expect(page.locator('#moreStatsTable')).toContainText('Imported during price spikes');

@@ -48,6 +48,7 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await page.goto('/');
 
     // Visible before any bill, with its own upload button
+    await page.click('#tab-check');
     await expect(page.locator('#billCheckSection')).toBeVisible();
     await expect(page.locator('#billCheckBody')).toContainText('Upload an Amber bill');
 
@@ -67,7 +68,11 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#billCheckLoad')).toBeHidden();
     await page.locator('#billCheckSection').screenshot({ path: 'test-results/bill-check.png' });
 
+    // Loading the bill period stays on Daily & bills
+    await expect(page.locator('#tab-check')).toHaveAttribute('aria-selected', 'true');
+
     // Monthly table total matches the Results table
+    await page.click('#tab-compare');
     await expect(page.locator('#monthlySection')).toBeVisible();
     const monthlyTotal = await page.locator('#monthlyTable tbody tr:last-child td:nth-child(9)').textContent();
     const resultsTotal = await page.locator('#results-table-container tr:has-text("Total") td:nth-child(2)').last().textContent();
@@ -89,6 +94,7 @@ test('bill check and monthly breakdown', async ({ page }) => {
 
     // Survives a reload
     await page.reload();
+    await page.click('#tab-check');
     await expect(page.locator('#billCheckSection')).toBeVisible();
     await expect(page.locator('#billCheckLoad')).toBeVisible();
     expect(errors).toEqual([]);
