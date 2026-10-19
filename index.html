@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.38</title>
+    <title>Amber Compare &amp; Export v1.39</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.38">
+    <link rel="stylesheet" href="css/app.css?v=1.39">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.38
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.39
                     </h1>
                     <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
@@ -46,6 +46,7 @@
                     <button type="button" data-preset="lastMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last month</button>
                     <button type="button" data-preset="3m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 3 months</button>
                     <button type="button" data-preset="90d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 90 days</button>
+                    <button type="button" data-preset="12m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 12 months</button>
                 </div>
                 <div id="messageContainer" class="hidden text-center mt-4 p-4 border rounded-lg bg-gray-50">
                     <p id="message" class="text-lg"></p>
@@ -418,6 +419,19 @@
                             </div>
                         </div>
                     </div>
+                    <div id="usageImportSection" class="pt-6 border-t">
+                        <h3 class="text-sm font-medium text-gray-800 mb-2">Import Amber usage data (CSV)</h3>
+                        <p class="text-xs text-gray-500 mb-3">Amber's API only goes back about 3 months. To compare a longer period, import the usage export from Amber: the app's Usage tab exports 3 months, and info@amber.com.au can send up to 12. It is read in this browser and saved in the same cache as Compare, so every tab can use it.</p>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <label for="usageCsvFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Import usage CSV</label>
+                            <input type="file" id="usageCsvFile" class="sr-only" accept=".csv,text/csv">
+                            <span id="usageCacheSummary" class="text-xs text-gray-500"></span>
+                        </div>
+                        <div id="usageImportProgress" class="hidden w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div id="usageImportBar" class="bg-indigo-600 h-2 rounded-full w-0"></div>
+                        </div>
+                        <p id="usageImportStatus" class="hidden text-xs mt-2"></p>
+                    </div>
                 </div>
             </section>
         </main>
@@ -425,19 +439,20 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.38"></script>
-    <script src="js/time.js?v=1.38"></script>
-    <script src="js/templates.js?v=1.38"></script>
-    <script src="js/storage.js?v=1.38"></script>
-    <script src="js/costs.js?v=1.38"></script>
-    <script src="js/api.js?v=1.38"></script>
-    <script src="js/bill.js?v=1.38"></script>
-    <script src="js/csv.js?v=1.38"></script>
-    <script src="js/charts.js?v=1.38"></script>
-    <script src="js/calendar.js?v=1.38"></script>
-    <script src="js/stats.js?v=1.38"></script>
-    <script src="js/monthly.js?v=1.38"></script>
-    <script src="js/redispatch.js?v=1.38"></script>
-    <script src="js/app.js?v=1.38"></script>
+    <script src="js/constants.js?v=1.39"></script>
+    <script src="js/time.js?v=1.39"></script>
+    <script src="js/templates.js?v=1.39"></script>
+    <script src="js/storage.js?v=1.39"></script>
+    <script src="js/costs.js?v=1.39"></script>
+    <script src="js/api.js?v=1.39"></script>
+    <script src="js/bill.js?v=1.39"></script>
+    <script src="js/csv.js?v=1.39"></script>
+    <script src="js/charts.js?v=1.39"></script>
+    <script src="js/calendar.js?v=1.39"></script>
+    <script src="js/stats.js?v=1.39"></script>
+    <script src="js/monthly.js?v=1.39"></script>
+    <script src="js/redispatch.js?v=1.39"></script>
+    <script src="js/import.js?v=1.39"></script>
+    <script src="js/app.js?v=1.39"></script>
 </body>
 </html>

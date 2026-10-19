@@ -694,6 +694,11 @@
             endStr = Amber.formatForInput(last);
         } else if (name === '90d') {
             startStr = Amber.addDays(yStr, -89);
+        } else if (name === '12m') {
+            const first = new Date(yesterday.getFullYear(), yesterday.getMonth() - 12, 1);
+            const last = new Date(yesterday.getFullYear(), yesterday.getMonth(), 0);
+            startStr = Amber.formatForInput(first);
+            endStr = Amber.formatForInput(last);
         } else {
             return;
         }
@@ -1565,6 +1570,111 @@
         </tr>`;
     }
 
+    // ---------- Usage CSV import ----------
+
+    function setUsageImportStatus(message, isError) {
+        const el = $('usageImportStatus');
+        el.classList.toggle('hidden', !message);
+        el.classList.toggle('text-red-700', !!isError);
+        el.classList.toggle('text-green-700', !!message && !isError);
+        el.textContent = message || '';
+    }
+
+    function setUsageImportProgress(fraction) {
+        const wrap = $('usageImportProgress');
+        wrap.classList.toggle('hidden', fraction == null);
+        $('usageImportBar').style.width = `${Math.round((fraction || 0) * 100)}%`;
+    }
+
+    async function siteForImport() {
+        const key = $('apiKey').value.trim();
+        if (!key) throw new Error('Add your Amber API key first, so the data can be matched to your site.');
+        if (!state.sites.length || state.sitesApiKey !== key) {
+            const sites = await Amber.fetchSites(key);
+            populateSites(sites);
+            state.sitesApiKey = key;
+        }
+        const site = selectedSite();
+        if (!site) throw new Error('No sites found for this API key.');
+        return site;
+    }
+
+    async function updateCacheSummary() {
+        const el = $('usageCacheSummary');
+        const site = selectedSite();
+        if (!el || !site || !root.indexedDB) return;
+        try {
+            const db = await Amber.openDb();
+            const cache = await Amber.loadAllSiteCache(db, site.id);
+            const days = cache.dates.filter((d) => cache.byDate[d] && cache.byDate[d].length).sort();
+            const imported = days.filter((d) => cache.byDate[d].some((i) => i.source === 'csv')).length;
+            el.textContent = days.length
+                ? `Cached for this site: ${days.length} day${days.length === 1 ? '' : 's'} (${fmtDate(days[0])} – ${fmtDate(days[days.length - 1])})${imported ? `, ${imported} from imports` : ''}.`
+                : '';
+        } catch (err) {
+            console.error(err);
+        }
+    }
+
+    async function handleUsageCsvFile(file) {
+        if (!file) return;
+        if (state.fetching) {
+            setUsageImportStatus('Wait for the Compare in progress to finish, then import again.', true);
+            return;
+        }
+        setUsageImportStatus('Reading the file…', false);
+        setUsageImportProgress(0);
+        try {
+            const site = await siteForImport();
+            const text = await file.text();
+            await Amber.sleep(0);
+            const parsed = Amber.parseAmberUsageCsv(text);
+            if (!parsed.ok) throw new Error(parsed.error);
+            setUsageImportStatus(`Read ${parsed.rows.toLocaleString('en-AU')} intervals over ${parsed.days.length} days. Saving…`, false);
+            await Amber.sleep(0);
+            const db = await Amber.openDb();
+            const cached = await Amber.loadSiteCacheDates(db, site.id, parsed.days);
+            // The last week is left to the API, which may still revise it.
+            const recentCutoff = Amber.addDays(Amber.formatForInput(Amber.localYesterday()), -6);
+            const plan = Amber.planUsageImport(parsed, site, cached.byDate, { recentCutoff });
+            await Amber.writeUsageImport(db, plan.write, (f) => setUsageImportProgress(f));
+            setUsageImportProgress(null);
+
+            const written = plan.write.map((e) => e.date);
+            const notes = [];
+            if (written.length) notes.push(`Imported ${written.length} day${written.length === 1 ? '' : 's'} of ${parsed.intervalMinutes}-minute data (${fmtDate(written[0])} – ${fmtDate(written[written.length - 1])}).`);
+            else notes.push('No new days to import.');
+            if (plan.kept) notes.push(plan.kept === 1 ? '1 day already cached from Amber\'s API was kept.' : `${plan.kept} days already cached from Amber's API were kept.`);
+            if (plan.recent) notes.push(plan.recent === 1 ? 'The last day is left for Amber\'s API.' : `The last ${plan.recent} days are left for Amber's API.`);
+            if (plan.partial) notes.push(plan.partial === 1 ? '1 part day was skipped.' : `${plan.partial} part days were skipped.`);
+            if (plan.demandRule) notes.push(`Demand window flagged for ${plan.demandRule.tariff}: ${plan.demandRule.start}–${plan.demandRule.end} local time in ${plan.demandRule.months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).join(', ')}.`);
+            else notes.push('No demand window is known for this site\'s tariff, so imported days carry no demand charge.');
+            notes.push(...plan.notes);
+            setUsageImportStatus(notes.join(' '), false);
+            updateCacheSummary();
+
+            // Compare the whole months now available.
+            const span = Amber.wholeMonthSpan(written.concat(parsed.days.filter((d) => cached.byDate[d] && !written.includes(d) && d < recentCutoff)).sort());
+            state.cachedChannelData = null;
+            state.lastFetchTimestamp = null;
+            state.monthly = null;
+            state.batteryShift = null;
+            if (span) {
+                $('startDate').value = span.start;
+                $('endDate').value = span.end;
+                selectTab('compare');
+                fetchAndCompare();
+            }
+        } catch (err) {
+            console.error(err);
+            setUsageImportProgress(null);
+            setUsageImportStatus(err && err.message ? err.message : 'Could not import that file.', true);
+        } finally {
+            const input = $('usageCsvFile');
+            if (input) input.value = '';
+        }
+    }
+
     // ---------- Bill check ----------
 
     const BILL_CHECK_KEY = 'amberBillCheck';
@@ -2199,6 +2309,7 @@
         loadAllSettings();
         loadShiftSettings();
         clearRetiredStatsStorage();
+        $('usageCsvFile').addEventListener('change', (e) => handleUsageCsvFile(e.target.files[0]));
         setupBillCheck();
         if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
         if (!$('tou_shoulder_windows_container').children.length) addTouWindow('shoulder');
@@ -2341,6 +2452,7 @@
                 const sites = await Amber.fetchSites(key);
                 populateSites(sites);
                 state.sitesApiKey = key;
+                updateCacheSummary();
             } catch (err) {
                 /* ignore until Compare */
             }
