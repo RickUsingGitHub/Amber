@@ -59,14 +59,16 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#billCheckBody')).toContainText('billing period dates');
     await expect(page.locator('#billCheckBody details pre')).toContainText('Total due $12.00');
 
+    // Uploading a bill loads its period's meter data straight away (no button)
     await page.setInputFiles('#billCheckFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
     await expect(page.locator('#billCheckPeriod')).toContainText(/1 July? 2025 to 31 July? 2025 \(31 days\)/);
-    await page.click('#billCheckLoad');
     await page.waitForSelector('#billCheckBody table');
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+    await expect(page.locator('#endDate')).toHaveValue('2025-07-31');
     const rows = page.locator('#billCheckBody tbody tr');
     await expect(rows).toHaveCount(8);
     await expect(page.locator('#billCheckBody [aria-label="matches"]')).toHaveCount(8);
-    await expect(page.locator('#billCheckLoad')).toBeHidden();
+    await expect(page.locator('#billCheckSection button', { hasText: /Load bill period/ })).toHaveCount(0);
     await page.locator('#billCheckSection').screenshot({ path: 'test-results/bill-check.png' });
 
     // Loading the bill period stays on Bill Check
@@ -93,10 +95,102 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, /Aug(ust)? 2025/, 'Total']);
 
-    // Survives a reload
+    // Coming back to Bill Check loads the bill period again
+    await page.click('#tab-bill');
+    await page.waitForSelector('#billCheckBody table');
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+
+    // Other dates chosen on Bill Check: say so, with a link back to the bill period
+    await page.fill('#startDate', '2025-08-01');
+    await page.fill('#endDate', '2025-08-05');
+    await page.click('#fetchData');
+    await expect(page.locator('#billCheckBody')).toContainText("don't cover this bill");
+    await page.click('#billCheckBody [data-bill-reload]');
+    await page.waitForSelector('#billCheckBody table');
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+
+    // Survives a reload, and opening the tab loads the bill period again
+    await page.fill('#startDate', '2025-08-01');
+    await page.fill('#endDate', '2025-08-05');
+    await page.click('#fetchData');
+    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await page.click('#tab-compare');
     await page.reload();
     await page.click('#tab-bill');
     await expect(page.locator('#billCheckSection')).toBeVisible();
-    await expect(page.locator('#billCheckLoad')).toBeVisible();
+    await page.waitForSelector('#billCheckBody table');
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
     expect(errors).toEqual([]);
+});
+
+test('bill uploaded from Setup during the opening Compare, then opens on the bill', async ({ page }) => {
+    await page.addInitScript(() => {
+        const key = 'amber-compare-export-secure-key';
+        const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        localStorage.setItem('amberApiKey', ob('fake'));
+    });
+    await page.route('**/sites', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 's', nmi: '1', network: 'Ausgrid', channels: [{ identifier: 'E1', type: 'general' }] }]) }));
+    await page.route('**/usage*', async (r) => {
+        const u = new URL(r.request().url());
+        // Slow enough that the bill arrives while the opening This month Compare is still running.
+        await new Promise((resolve) => setTimeout(resolve, 300));
+        let out = [];
+        for (let d = u.searchParams.get('startDate'); d <= u.searchParams.get('endDate'); d = addDays(d, 1)) out = out.concat(amberDay(d));
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) });
+    });
+    await page.goto('/');
+    await expect(page.locator('#fetchData')).toHaveText('Comparing…');
+    await page.click('#tab-setup');
+    await page.setInputFiles('#amberBillFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
+    await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#billCheckBody')).toContainText(/Fetching your meter data|Line/);
+    await page.waitForSelector('#billCheckBody table', { timeout: 20000 });
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+
+    // Reopening on Bill Check loads the bill period instead of This month.
+    await page.reload();
+    await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+    await page.waitForSelector('#billCheckBody table', { timeout: 20000 });
+    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+    await expect(page.locator('#endDate')).toHaveValue('2025-07-31');
+});
+
+test('a bill period that fails to load is not retried by opening the tab', async ({ page }) => {
+    await page.addInitScript(() => {
+        const key = 'amber-compare-export-secure-key';
+        const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false, RETRY_DELAYS_MS: [10, 10, 10] });
+        localStorage.setItem('amberApiKey', ob('fake'));
+    });
+    await page.route('**/sites', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 's', nmi: '1', network: 'Ausgrid', channels: [{ identifier: 'E1', type: 'general' }] }]) }));
+    let julyCalls = 0;
+    let failJuly = true;
+    await page.route('**/usage*', (r) => {
+        const u = new URL(r.request().url());
+        const start = u.searchParams.get('startDate');
+        if (start.startsWith('2025-07')) {
+            julyCalls += 1;
+            if (failJuly) return r.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"boom"}' });
+        }
+        let out = [];
+        for (let d = start; d <= u.searchParams.get('endDate'); d = addDays(d, 1)) out = out.concat(amberDay(d));
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) });
+    });
+    await page.goto('/');
+    await page.click('#tab-bill');
+    await page.setInputFiles('#billCheckFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
+    await expect(page.locator('#billCheckBody')).toContainText("Couldn't load meter data for the bill period", { timeout: 20000 });
+    const calls = julyCalls;
+    expect(calls).toBeGreaterThan(0);
+
+    await page.click('#tab-check');
+    await page.click('#tab-bill');
+    await page.waitForTimeout(300);
+    expect(julyCalls).toBe(calls);
+    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+
+    failJuly = false;
+    await page.click('#billCheckBody [data-bill-reload]');
+    await page.waitForSelector('#billCheckBody table', { timeout: 20000 });
 });
