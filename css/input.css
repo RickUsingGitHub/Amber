@@ -14,12 +14,17 @@
 
 @layer components {
     .main-tab {
-        padding: 0.5rem 1rem;
+        padding: 0.5rem 0.75rem;
         border-radius: 0.375rem;
         font-size: 0.875rem;
         font-weight: 600;
         color: #4b5563;
         transition: background-color 0.15s ease, color 0.15s ease;
+    }
+    @media (min-width: 640px) {
+        .main-tab {
+            padding: 0.5rem 1rem;
+        }
     }
     .main-tab:hover {
         background-color: #f3f4f6;

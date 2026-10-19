@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.34</title>
+    <title>Amber Compare &amp; Export v1.35</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.34">
+    <link rel="stylesheet" href="css/app.css?v=1.35">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.34
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.35
                     </h1>
                     <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
@@ -57,8 +57,9 @@
 
             <div class="flex flex-wrap items-center gap-3 mb-4">
                 <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-wrap gap-1 bg-white rounded-lg shadow-md p-1">
-                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab">Daily &amp; bills</button>
-                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare plans</button>
+                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab">Daily</button>
+                    <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab">Bill Check</button>
+                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Compare</span><span class="hidden sm:inline">Compare plans</span></button>
                     <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Setup</button>
                 </div>
                 <div class="ml-auto flex items-center">
@@ -86,11 +87,10 @@
                 <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
                     <button type="button" data-jump="dailyGraphSection" class="jump-link">Day graph</button>
                     <button type="button" data-jump="calendarSection" class="jump-link">Calendar</button>
-                    <button type="button" data-jump="billCheckSection" class="jump-link">Bill Check</button>
                     <button type="button" data-jump="averageGraphContainer" class="jump-link">24-hour average</button>
                     <button type="button" data-jump="moreStatsSection" class="jump-link">More stats</button>
                 </nav>
-                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600">Choose dates and press <span class="font-medium">Compare Costs</span> to see the daily calendar, graphs and stats. Bill Check works on its own.</div>
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600">Choose dates and press <span class="font-medium">Compare Costs</span> to see the day graph, calendar and stats.</div>
                 <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
                     <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                         <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Usage &amp; Price Graph</h3>
@@ -117,20 +117,6 @@
                     </div>
                 </div>
 
-                <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
-                        <div class="flex items-center gap-3 flex-wrap">
-                            <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
-                            <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
-                            <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
-                            <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
-                        </div>
-                    </div>
-                    <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
-                    <div id="billCheckBody"></div>
-                </div>
-
                 <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
@@ -146,6 +132,22 @@
                     <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">More Stats</h3>
                     <p class="text-sm text-gray-500 mb-4">From Amber meter data for the selected period. Amber prices are wholesale-linked and include GST.</p>
                     <div id="moreStatsTable"></div>
+                </div>
+            </section>
+
+            <section id="panel-bill" role="tabpanel" aria-labelledby="tab-bill" data-panel="bill" class="hidden">
+                <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
+                            <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                            <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
+                            <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
+                    <div id="billCheckBody"></div>
                 </div>
             </section>
 
@@ -397,7 +399,7 @@
                         <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
                         <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
                         <div class="flex flex-wrap items-center gap-2 mb-3">
-                            <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill rates + Bill Check)</label>
+                            <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill these charges and Bill Check)</label>
                             <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
                             <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
                         </div>
@@ -424,19 +426,19 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.34"></script>
-    <script src="js/time.js?v=1.34"></script>
-    <script src="js/templates.js?v=1.34"></script>
-    <script src="js/storage.js?v=1.34"></script>
-    <script src="js/costs.js?v=1.34"></script>
-    <script src="js/api.js?v=1.34"></script>
-    <script src="js/bill.js?v=1.34"></script>
-    <script src="js/csv.js?v=1.34"></script>
-    <script src="js/charts.js?v=1.34"></script>
-    <script src="js/calendar.js?v=1.34"></script>
-    <script src="js/stats.js?v=1.34"></script>
-    <script src="js/monthly.js?v=1.34"></script>
-    <script src="js/redispatch.js?v=1.34"></script>
-    <script src="js/app.js?v=1.34"></script>
+    <script src="js/constants.js?v=1.35"></script>
+    <script src="js/time.js?v=1.35"></script>
+    <script src="js/templates.js?v=1.35"></script>
+    <script src="js/storage.js?v=1.35"></script>
+    <script src="js/costs.js?v=1.35"></script>
+    <script src="js/api.js?v=1.35"></script>
+    <script src="js/bill.js?v=1.35"></script>
+    <script src="js/csv.js?v=1.35"></script>
+    <script src="js/charts.js?v=1.35"></script>
+    <script src="js/calendar.js?v=1.35"></script>
+    <script src="js/stats.js?v=1.35"></script>
+    <script src="js/monthly.js?v=1.35"></script>
+    <script src="js/redispatch.js?v=1.35"></script>
+    <script src="js/app.js?v=1.35"></script>
 </body>
 </html>
