@@ -23,10 +23,10 @@
         batteryShift: null,
         shiftPlan: null,
         shiftBudget: null,
-        fetching: false
+        fetching: false,
+        activeTab: null,
+        resultsTab: 'compare'
     };
-
-    const configElements = {};
 
     function $(id) {
         return document.getElementById(id);
@@ -211,22 +211,78 @@
         if (persist !== false) localStorage.setItem('ratesDetailsOpen', open ? 'true' : 'false');
     }
 
-    function updateConfigVisibility(isHidden, animate) {
-        const { configContent, configDetails, toggleConfigBtn, configChevron } = configElements;
-        const collapsible = configDetails || configContent;
-        if (!collapsible) return;
-        if (animate) collapsible.classList.add('transition-all', 'duration-300', 'ease-in-out');
-        else collapsible.classList.remove('transition-all', 'duration-300', 'ease-in-out');
+    // ---------- Tabs ----------
 
-        if (isHidden) {
-            collapsible.classList.add('hidden');
-            toggleConfigBtn.querySelector('span').textContent = 'Show';
-            configChevron.style.transform = 'rotate(180deg)';
-        } else {
-            collapsible.classList.remove('hidden');
-            toggleConfigBtn.querySelector('span').textContent = 'Hide';
-            configChevron.style.transform = 'rotate(0deg)';
+    const TABS = ['check', 'compare', 'setup'];
+    const ACTIVE_TAB_KEY = 'activeTab';
+
+    function selectTab(name, opts) {
+        const tab = TABS.indexOf(name) === -1 ? 'compare' : name;
+        TABS.forEach((t) => {
+            const on = t === tab;
+            const button = $(`tab-${t}`);
+            button.setAttribute('aria-selected', on ? 'true' : 'false');
+            button.tabIndex = on ? 0 : -1;
+            $(`panel-${t}`).classList.toggle('hidden', !on);
+        });
+        state.activeTab = tab;
+        if (tab !== 'setup') state.resultsTab = tab;
+        try { localStorage.setItem(ACTIVE_TAB_KEY, tab); } catch (e) { /* ignore */ }
+        if (opts && opts.focus) $(`tab-${tab}`).focus();
+        // Charts drawn while their tab was hidden have no size until resized.
+        [state.usageChart, state.dailyUsageChart].forEach((chart) => {
+            if (chart) chart.resize();
+        });
+    }
+
+    function initialTab() {
+        if (!$('apiKey').value.trim()) return 'setup';
+        let saved = null;
+        try { saved = localStorage.getItem(ACTIVE_TAB_KEY); } catch (e) { /* ignore */ }
+        return TABS.indexOf(saved) !== -1 ? saved : 'compare';
+    }
+
+    function syncResultPlaceholders() {
+        const hasResults = !$('resultsSection').classList.contains('hidden');
+        document.querySelectorAll('[data-results-placeholder]').forEach((el) => el.classList.toggle('hidden', hasResults));
+        document.querySelectorAll('[data-jump-nav]').forEach((nav) => nav.classList.toggle('hidden', !hasResults));
+        document.querySelectorAll('[data-jump]').forEach((link) => {
+            const target = $(link.getAttribute('data-jump'));
+            link.classList.toggle('hidden', !target || target.classList.contains('hidden'));
+        });
+    }
+
+    function setupTabs() {
+        const list = $('mainTabs');
+        TABS.forEach((t) => {
+            $(`tab-${t}`).addEventListener('click', () => selectTab(t));
+        });
+        list.addEventListener('keydown', (e) => {
+            const i = TABS.indexOf(state.activeTab);
+            let next = null;
+            if (e.key === 'ArrowRight') next = TABS[(i + 1) % TABS.length];
+            else if (e.key === 'ArrowLeft') next = TABS[(i + TABS.length - 1) % TABS.length];
+            else if (e.key === 'Home') next = TABS[0];
+            else if (e.key === 'End') next = TABS[TABS.length - 1];
+            if (!next) return;
+            e.preventDefault();
+            selectTab(next, { focus: true });
+        });
+        document.querySelectorAll('[data-jump]').forEach((link) => {
+            link.addEventListener('click', () => {
+                const target = $(link.getAttribute('data-jump'));
+                if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        });
+        if (typeof MutationObserver === 'function') {
+            const observer = new MutationObserver(syncResultPlaceholders);
+            const watched = ['resultsSection'].concat(Array.from(document.querySelectorAll('[data-jump]')).map((l) => l.getAttribute('data-jump')));
+            watched.forEach((id) => {
+                if ($(id)) observer.observe($(id), { attributes: true, attributeFilter: ['class'] });
+            });
         }
+        syncResultPlaceholders();
+        selectTab(initialTab());
     }
 
     function updateOtherSupplierHeading() {
@@ -1700,6 +1756,8 @@
         localStorage.setItem('endDate', endDateValue);
 
         if (!apiKey) {
+            selectTab('setup');
+            $('apiKey').focus();
             showMessage('Please enter your Amber API key.', true);
             return;
         }
@@ -1711,6 +1769,7 @@
             showMessage('End date cannot be before the start date.', true);
             return;
         }
+        if (state.activeTab === 'setup') selectTab(state.resultsTab || 'compare');
 
         const yesterday = Amber.formatForInput(Amber.localYesterday());
         const clampedEnd = endDateValue > yesterday ? yesterday : endDateValue;
@@ -2053,23 +2112,11 @@
         const versionLabel = `Amber Compare & Export v${Amber.APP_VERSION}`;
         document.title = versionLabel;
 
-        configElements.configHeader = $('configHeader');
-        configElements.toggleConfigBtn = $('toggleConfigBtn');
-        configElements.configContent = $('configContent');
-        configElements.configDetails = $('configDetails');
-        configElements.configChevron = $('configChevron');
-
-        updateConfigVisibility(localStorage.getItem('configHidden') === 'true', false);
-        configElements.configHeader.addEventListener('click', () => {
-            const collapsible = configElements.configDetails || configElements.configContent;
-            const hidden = !collapsible.classList.contains('hidden');
-            updateConfigVisibility(hidden);
-            localStorage.setItem('configHidden', hidden);
-        });
-
         const storedKey = Amber.getApiKey();
         $('apiKey').value = storedKey.key;
         $('rememberApiKey').checked = storedKey.remember;
+        try { localStorage.removeItem('configHidden'); } catch (e) { /* retired */ }
+        setupTabs();
 
         const yesterday = Amber.formatForInput(Amber.localYesterday());
         $('startDate').setAttribute('max', yesterday);

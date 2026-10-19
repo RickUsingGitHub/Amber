@@ -71,7 +71,7 @@ test.describe('Amber fetch and UI', () => {
 
         await seedKey(page);
         await page.goto('/');
-        await page.locator('#apiKey').waitFor();
+        await page.locator('#apiKey').waitFor({ state: 'attached' });
     });
 
     test('should fetch a 15-day range as 7-day chunks', async ({ page }) => {
@@ -158,6 +158,7 @@ test.describe('Amber fetch and UI', () => {
     });
 
     test('Compare reuses prefetched sites instead of calling /sites again', async ({ page }) => {
+        await page.click('#tab-setup');
         await expect(page.locator('#siteSelectorRow')).toBeVisible({ timeout: 5000 });
         let sitesCalls = 0;
         page.on('request', (request) => {
@@ -177,7 +178,7 @@ test.describe('Amber fetch and UI', () => {
             await new Promise(() => {});
         });
         await page.reload();
-        await page.locator('#apiKey').waitFor();
+        await page.locator('#apiKey').waitFor({ state: 'attached' });
         await page.fill('#startDate', '2025-01-10');
         await page.fill('#endDate', '2025-01-10');
         await page.click('#fetchData');
@@ -188,11 +189,13 @@ test.describe('Amber fetch and UI', () => {
     test('exposes export, date presets, remember-key and site selector', async ({ page }) => {
         await expect(page.locator('#downloadCsvButton')).toHaveText(/Export/);
         await expect(page.locator('[data-preset="7d"]')).toBeVisible();
+        await page.click('#tab-setup');
         await expect(page.locator('#rememberApiKey')).toBeVisible();
         await page.click('#fetchData');
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
-        await expect(page.locator('#siteSelectorRow')).toBeVisible();
         await expect(page.locator('#allPlansSection')).toBeVisible();
+        await page.click('#tab-setup');
+        await expect(page.locator('#siteSelectorRow')).toBeVisible();
         await expect(page.locator('#resultsDisclaimer')).not.toHaveText('');
     });
 

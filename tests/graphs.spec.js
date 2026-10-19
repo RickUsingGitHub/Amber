@@ -28,6 +28,7 @@ test('graphs use local time and the real interval length', async ({ page }) => {
     await page.fill('#startDate', '2026-01-15');
     await page.fill('#endDate', '2026-01-15');
     await page.click('#fetchData');
+    await page.click('#tab-check');
     await page.waitForSelector('#dailyGraphSection:not(.hidden)');
     const r = await page.evaluate(() => {
         const pick = (chart) => chart.data.datasets.find((x) => /^Usage/.test(x.label) || /Average Usage/.test(x.label));
