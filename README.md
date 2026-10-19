@@ -21,6 +21,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Four tabs: Daily (day graph, 24-hour average, calendar, stats), Bill Check, Compare plans (plan choice and rates, results, all plans, monthly, free-window plans) and Setup (API key, site, Amber charges). Dates and Compare stay above the tabs
 - Opens on This month and compares straight away when an API key is saved
 - Bill Check loads the bill period's meter data as soon as a bill is uploaded (and when you come back to the tab), then checks every line
+- Import Amber's usage export (CSV) on Setup to go beyond the API's ~3 months: it fills the same cache as Compare (keeping days already fetched from the API and leaving the last week to the API), flags the network demand window (Ausgrid EA111/EA116), then compares the whole months imported. Last 12 months date preset
 - Battery re-scheduling estimate: re-times your real interval data into each free-window plan's free window and best feed-in window, at the daily shift budgets you choose, over every whole month cached
 - 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
 - Daily calendar; click a day to open it on the graph
@@ -52,6 +53,7 @@ npm run serve
 - Retailer templates are estimates from published tariffs. Check Energy Made Easy or the retailer's current fact sheet before switching.
 - Public holidays are not treated as off-peak.
 - Comparison accuracy depends on the Amber fixed charges you enter (they vary by network).
+- Imported usage has no renewables or price-spike details, and demand windows are only known for Ausgrid EA111/EA116.
 - The battery re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.
