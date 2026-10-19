@@ -18,6 +18,7 @@ test('graphs use local time and the real interval length', async ({ page }) => {
     await page.addInitScript(() => {
         const key = 'amber-compare-export-secure-key';
         const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
         localStorage.setItem('amberApiKey', ob('fake'));
     });
     await page.route('**/sites', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 's', nmi: '1', network: 'Ausgrid', channels: [{ identifier: 'E1', type: 'general' }] }]) }));

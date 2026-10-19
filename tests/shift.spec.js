@@ -23,6 +23,7 @@ test.describe('Battery re-scheduling estimate', () => {
         await page.addInitScript(() => {
             const key = 'amber-compare-export-secure-key';
             const ob = (str) => btoa(str.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+            window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
             localStorage.setItem('amberApiKey', ob('fake-api-key'));
         });
         await page.route('**/sites', (route) => route.fulfill({

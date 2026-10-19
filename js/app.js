@@ -2308,6 +2308,8 @@
             siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
         });
         if (storedKey.key) tryLoadSites(storedKey.key);
+        // With a saved key, open on this month's figures.
+        if (storedKey.key && Amber.AUTO_COMPARE) applyDatePreset('thisMonth');
     }
 
     if (document.readyState === 'loading') {
