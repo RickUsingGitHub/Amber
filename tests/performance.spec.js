@@ -11,6 +11,7 @@ async function seedKey(page) {
                 String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(i % key.length))
             ).join(''));
         }
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
         localStorage.setItem('amberApiKey', obfuscate('fake-api-key'));
         localStorage.setItem('rememberApiKey', 'true');
     });

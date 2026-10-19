@@ -9,6 +9,7 @@ test.describe('Amber UI flows', () => {
                     String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(i % key.length))
                 ).join(''));
             }
+            window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
             localStorage.setItem('amberApiKey', obfuscate('fake-api-key'));
         });
         await page.route('**/sites', async (route) => {
