@@ -90,7 +90,8 @@
         if (parsed.demandCents != null) $('amberDemandRate').value = parsed.demandCents.toFixed(3);
         saveAllSettings();
         const gstNote = parsed.exGst ? ' Bill unit prices were ex GST; 10% GST was added.' : '';
-        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${gstNote} Edit the fields if a line looks wrong.`, false);
+        const billNote = parsed.check && parsed.check.ok ? ' The bill is also loaded in the Bill Check tab.' : '';
+        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${gstNote} Edit the fields if a line looks wrong.${billNote}`, false);
         if (state.cachedChannelData && state.lastFetchedStartDate) recalculateAndShow(true);
     }
 
@@ -213,7 +214,7 @@
 
     // ---------- Tabs ----------
 
-    const TABS = ['check', 'compare', 'setup'];
+    const TABS = ['check', 'bill', 'compare', 'setup'];
     const ACTIVE_TAB_KEY = 'activeTab';
 
     function selectTab(name, opts) {
@@ -1580,7 +1581,7 @@
         if (!bill || !bill.ok) {
             $('billCheckLoad').classList.add('hidden');
             $('billCheckPeriod').textContent = '';
-            body.innerHTML = '<p class="text-sm text-gray-600">Upload an Amber bill (the PDF Amber emails you) to check each line against your meter data. It also fills in the Amber charges from the bill.</p>';
+            body.innerHTML = '<p class="text-sm text-gray-600">Upload an Amber bill (the PDF Amber emails you) to check each line against your meter data for the bill period. It also fills in the Amber charges on the Setup tab.</p>';
             return;
         }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);

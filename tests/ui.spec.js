@@ -137,9 +137,13 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#amberConnectionRate')).toBeVisible();
         await expect(page.locator('#planSelector')).toBeHidden();
 
-        await page.click('#tab-check');
+        await page.click('#tab-bill');
         await expect(page.locator('#billCheckSection')).toBeVisible();
+        await expect(page.locator('#calendarSection')).toBeHidden();
         await expect(page.locator('#apiKey')).toBeHidden();
+
+        await page.click('#tab-check');
+        await expect(page.locator('#billCheckSection')).toBeHidden();
         for (const id of ['#startDate', '#endDate', '#fetchData', '[data-preset="7d"]', '#gstToggle']) {
             await expect(page.locator(id)).toBeAttached();
         }
@@ -150,8 +154,10 @@ test.describe('Amber UI flows', () => {
         // Arrow keys move between tabs.
         await page.focus('#tab-check');
         await page.keyboard.press('ArrowRight');
+        await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#tab-bill')).toBeFocused();
+        await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
-        await expect(page.locator('#tab-compare')).toBeFocused();
         await page.keyboard.press('End');
         await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
 
