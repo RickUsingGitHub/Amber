@@ -25,7 +25,11 @@
         shiftBudget: null,
         fetching: false,
         activeTab: null,
-        resultsTab: 'compare'
+        resultsTab: 'compare',
+        ready: false,
+        pendingBillLoad: false,
+        billLoading: null,
+        billLoadFailed: null
     };
 
     function $(id) {
@@ -76,13 +80,21 @@
     }
 
     function applyAmberBillRates(parsed) {
-        if (parsed && parsed.check && parsed.check.ok) {
+        const billOk = !!(parsed && parsed.check && parsed.check.ok);
+        if (billOk) {
             state.billCheck = parsed.check;
             try { localStorage.setItem(BILL_CHECK_KEY, JSON.stringify(parsed.check)); } catch (e) { /* ignore */ }
             renderBillCheck();
         }
+        // Show the check and fetch the bill period's meter data straight away.
+        const showBill = () => {
+            if (!billOk) return;
+            if (state.activeTab !== 'bill') selectTab('bill');
+            else ensureBillLoaded();
+        };
         if (!parsed || !parsed.ok) {
             setAmberBillStatus('Could not find daily connection, subscription or demand rates in that file. You can type them from the charges page.', true);
+            showBill();
             return;
         }
         if (parsed.connectionCents != null) $('amberConnectionRate').value = parsed.connectionCents.toFixed(3);
@@ -90,9 +102,10 @@
         if (parsed.demandCents != null) $('amberDemandRate').value = parsed.demandCents.toFixed(3);
         saveAllSettings();
         const gstNote = parsed.exGst ? ' Bill unit prices were ex GST; 10% GST was added.' : '';
-        const billNote = parsed.check && parsed.check.ok ? ' The bill is also loaded in the Bill Check tab.' : '';
+        const billNote = billOk ? ' The bill is checked on the Bill Check tab.' : '';
         setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${gstNote} Edit the fields if a line looks wrong.${billNote}`, false);
-        if (state.cachedChannelData && state.lastFetchedStartDate) recalculateAndShow(true);
+        if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
+        showBill();
     }
 
     async function handleAmberBillFile(file) {
@@ -234,6 +247,7 @@
         [state.usageChart, state.dailyUsageChart].forEach((chart) => {
             if (chart) chart.resize();
         });
+        if (tab === 'bill' && state.ready) ensureBillLoaded({ fromTab: true });
     }
 
     function initialTab() {
@@ -1559,13 +1573,46 @@
         return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
     }
 
+    function billPeriodFinished(bill) {
+        return !!(bill && bill.ok && bill.end <= Amber.formatForInput(Amber.localYesterday()));
+    }
+
+    function billPeriodLoaded(bill) {
+        return !!(bill && state.cachedChannelData && state.lastFetchedStartDate
+            && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end);
+    }
+
+    const billKey = (bill) => (bill ? `${bill.start}|${bill.end}` : '');
+
+    /**
+     * Fetch the saved bill's period (once a Compare in progress finishes) unless it is already
+     * loaded. Opening the tab doesn't retry a bill period that already failed to load.
+     */
+    function ensureBillLoaded(opts) {
+        const bill = state.billCheck;
+        if (!billPeriodFinished(bill) || billPeriodLoaded(bill)) return;
+        if (!$('apiKey').value.trim()) { renderBillCheck(); return; }
+        const fromTab = !!(opts && opts.fromTab);
+        if (fromTab && state.billLoadFailed === billKey(bill)) { renderBillCheck(); return; }
+        if (!fromTab) state.billLoadFailed = null;
+        if (state.fetching) {
+            state.pendingBillLoad = true;
+            renderBillCheck();
+            return;
+        }
+        $('startDate').value = bill.start;
+        $('endDate').value = bill.end;
+        state.billLoading = billKey(bill);
+        fetchAndCompare();
+        renderBillCheck();
+    }
+
     function renderBillCheck() {
         const bill = state.billCheck;
         const body = $('billCheckBody');
         $('billCheckClear').classList.toggle('hidden', !bill && !state.billCheckError);
         if (state.billCheckError) {
             const e = state.billCheckError;
-            $('billCheckLoad').classList.add('hidden');
             $('billCheckPeriod').textContent = '';
             const found = (e.check && e.check.found) || [];
             const missing = e.check && !e.check.start ? 'the billing period dates' : 'enough bill lines';
@@ -1579,21 +1626,28 @@
             return;
         }
         if (!bill || !bill.ok) {
-            $('billCheckLoad').classList.add('hidden');
             $('billCheckPeriod').textContent = '';
             body.innerHTML = '<p class="text-sm text-gray-600">Upload an Amber bill (the PDF Amber emails you) to check each line against your meter data for the bill period. It also fills in the Amber charges on the Setup tab.</p>';
             return;
         }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);
         $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are ex GST; meter figures are shown the same way.`;
-        const loaded = state.cachedChannelData && state.lastFetchedStartDate
-            && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end;
-        $('billCheckLoad').classList.toggle('hidden', !!loaded);
-        if (!loaded) {
-            const yesterday = Amber.formatForInput(Amber.localYesterday());
-            body.innerHTML = bill.end > yesterday
-                ? '<p class="text-sm text-gray-600">The bill period hasn\'t finished yet, so there is no complete meter data to check against.</p>'
-                : '<p class="text-sm text-gray-600">Click <span class="font-medium">Load bill period</span> to fetch your meter data for these dates and compare it line by line.</p>';
+        if (!billPeriodLoaded(bill)) {
+            let msg;
+            if (!billPeriodFinished(bill)) {
+                msg = 'The bill period hasn\'t finished yet, so there is no complete meter data to check against.';
+            } else if (!$('apiKey').value.trim()) {
+                msg = 'Add your Amber API key on the Setup tab to check this bill against your meter data.';
+            } else if (state.fetching || state.pendingBillLoad) {
+                msg = 'Fetching your meter data for the bill period…';
+            } else if (state.billLoadFailed === billKey(bill)) {
+                msg = 'Couldn\'t load meter data for the bill period (see the message above). <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Try again</button>';
+            } else {
+                msg = 'The selected dates don\'t cover this bill. <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Check the bill period</button>';
+            }
+            body.innerHTML = `<p class="text-sm text-gray-600">${msg}</p>`;
+            const reload = body.querySelector('[data-bill-reload]');
+            if (reload) reload.addEventListener('click', () => ensureBillLoaded());
             return;
         }
         const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, periodOpts());
@@ -1648,13 +1702,6 @@
             const saved = JSON.parse(localStorage.getItem(BILL_CHECK_KEY) || 'null');
             if (saved && saved.ok) state.billCheck = saved;
         } catch (e) { /* ignore */ }
-        $('billCheckLoad').addEventListener('click', () => {
-            const bill = state.billCheck;
-            if (!bill) return;
-            $('startDate').value = bill.start;
-            $('endDate').value = bill.end;
-            fetchAndCompare();
-        });
         $('billCheckFile').addEventListener('change', (e) => handleAmberBillFile(e.target.files[0]));
         $('billCheckClear').addEventListener('click', () => {
             state.billCheck = null;
@@ -1940,6 +1987,16 @@
             showMessage(`Error: ${error.message}`, true);
         } finally {
             setFetching(false);
+            if (state.billLoading) {
+                if (!billPeriodLoaded(state.billCheck) && billKey(state.billCheck) === state.billLoading) state.billLoadFailed = state.billLoading;
+                state.billLoading = null;
+            }
+            if (state.pendingBillLoad) {
+                state.pendingBillLoad = false;
+                setTimeout(() => ensureBillLoaded(), 0);
+            } else {
+                renderBillCheck();
+            }
         }
     }
 
@@ -2308,8 +2365,12 @@
             siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
         });
         if (storedKey.key) tryLoadSites(storedKey.key);
-        // With a saved key, open on this month's figures.
-        if (storedKey.key && Amber.AUTO_COMPARE) applyDatePreset('thisMonth');
+        state.ready = true;
+        // With a saved key, open on this month's figures (or the saved bill's period on Bill Check).
+        if (storedKey.key && Amber.AUTO_COMPARE) {
+            if (state.activeTab === 'bill' && billPeriodFinished(state.billCheck)) ensureBillLoaded();
+            else applyDatePreset('thisMonth');
+        }
     }
 
     if (document.readyState === 'loading') {
