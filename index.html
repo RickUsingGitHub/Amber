@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.35</title>
+    <title>Amber Compare &amp; Export v1.36</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.35">
+    <link rel="stylesheet" href="css/app.css?v=1.36">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.35
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.36
                     </h1>
                     <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
@@ -86,8 +86,8 @@
             <section id="panel-check" role="tabpanel" aria-labelledby="tab-check" data-panel="check" class="hidden">
                 <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
                     <button type="button" data-jump="dailyGraphSection" class="jump-link">Day graph</button>
-                    <button type="button" data-jump="calendarSection" class="jump-link">Calendar</button>
                     <button type="button" data-jump="averageGraphContainer" class="jump-link">24-hour average</button>
+                    <button type="button" data-jump="calendarSection" class="jump-link">Calendar</button>
                     <button type="button" data-jump="moreStatsSection" class="jump-link">More stats</button>
                 </nav>
                 <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600">Choose dates and press <span class="font-medium">Compare Costs</span> to see the day graph, calendar and stats.</div>
@@ -106,17 +106,6 @@
                     </div>
                 </div>
 
-                <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
-                    </div>
-                    <p class="text-sm text-gray-500 mb-3">Click a day to open it on the daily graph. Days marked est still have estimated meter data.</p>
-                    <div id="calendar-container" class="space-y-6"></div>
-                    <div class="mt-4 pt-4 border-t text-center">
-                        <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
-                    </div>
-                </div>
-
                 <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
                     <div class="flex justify-between items-center mb-4">
                         <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
@@ -125,6 +114,17 @@
                     <p class="text-xs text-gray-500 mb-2">Drag horizontally to zoom. Hover a bar to see the competitor c/kWh at that time.</p>
                     <div class="h-[38vh] md:h-[58vh] relative">
                         <canvas id="usagePriceChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-3">Click a day to open it on the daily graph. Days marked est still have estimated meter data.</p>
+                    <div id="calendar-container" class="space-y-6"></div>
+                    <div class="mt-4 pt-4 border-t text-center">
+                        <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
                     </div>
                 </div>
 
@@ -426,19 +426,19 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.35"></script>
-    <script src="js/time.js?v=1.35"></script>
-    <script src="js/templates.js?v=1.35"></script>
-    <script src="js/storage.js?v=1.35"></script>
-    <script src="js/costs.js?v=1.35"></script>
-    <script src="js/api.js?v=1.35"></script>
-    <script src="js/bill.js?v=1.35"></script>
-    <script src="js/csv.js?v=1.35"></script>
-    <script src="js/charts.js?v=1.35"></script>
-    <script src="js/calendar.js?v=1.35"></script>
-    <script src="js/stats.js?v=1.35"></script>
-    <script src="js/monthly.js?v=1.35"></script>
-    <script src="js/redispatch.js?v=1.35"></script>
-    <script src="js/app.js?v=1.35"></script>
+    <script src="js/constants.js?v=1.36"></script>
+    <script src="js/time.js?v=1.36"></script>
+    <script src="js/templates.js?v=1.36"></script>
+    <script src="js/storage.js?v=1.36"></script>
+    <script src="js/costs.js?v=1.36"></script>
+    <script src="js/api.js?v=1.36"></script>
+    <script src="js/bill.js?v=1.36"></script>
+    <script src="js/csv.js?v=1.36"></script>
+    <script src="js/charts.js?v=1.36"></script>
+    <script src="js/calendar.js?v=1.36"></script>
+    <script src="js/stats.js?v=1.36"></script>
+    <script src="js/monthly.js?v=1.36"></script>
+    <script src="js/redispatch.js?v=1.36"></script>
+    <script src="js/app.js?v=1.36"></script>
 </body>
 </html>
