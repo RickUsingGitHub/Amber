@@ -16,8 +16,13 @@
         return line.split(',').map((f) => f.replace(/^"(.*)"$/, '$1'));
     }
 
+    // NEM12 data rows: "200,<NMI>,..." details and "300,<YYYYMMDD>,<values>..." readings.
+    const ROW_200 = /(^|\n)\s*"?200"?\s*,\s*"?[A-Z0-9]{10}/i;
+    const ROW_300 = /(^|\n)\s*"?300"?\s*,\s*"?\d{8}"?\s*,/;
+
     /**
-     * Parse a NEM12 file. Returns { ok, error, nmis: { NMI: { nmi, channels: { suffix: { suffix,
+     * Parse a NEM12 file. Some portals export only the data rows (200/300/400, no 100 header or
+     * 900 end row), sometimes with spaces around fields; both are accepted. Returns { ok, error, nmis: { NMI: { nmi, channels: { suffix: { suffix,
      * uom, intervalLength, kind ('import' | 'export'), days: { 'YYYY-MM-DD': [kWh per interval] },
      * kwh } } } }, nmi (the NMI with most data), skipped }.
      * Interval dates and times are NEM time (AEST); a later 300 row for the same day replaces an earlier one.
@@ -25,7 +30,8 @@
     Amber.parseNem12 = function (text) {
         const out = { ok: false, error: null, nmis: {}, nmi: null, skipped: 0 };
         const src = String(text || '').replace(/^﻿/, '');
-        if (!/(^|\n)\s*"?100"?,\s*"?NEM12/i.test(src)) {
+        const hasHeader = /(^|\n)\s*"?100"?,\s*"?NEM12/i.test(src);
+        if (!hasHeader && !(ROW_200.test(src) && ROW_300.test(src))) {
             out.error = 'This doesn\'t look like a NEM12 file (it should start with a 100,NEM12 row). Ask the retailer or network for your interval data in NEM12 format.';
             return out;
         }
@@ -33,7 +39,7 @@
         src.split(/\r?\n/).forEach((raw) => {
             const line = raw.trim();
             if (!line) return;
-            const f = splitLine(line);
+            const f = splitLine(line).map((x) => x.trim());
             const rec = f[0];
             if (rec === '200') {
                 const nmi = (f[1] || '').trim().toUpperCase();
@@ -85,8 +91,10 @@
     };
 
     /**
-     * Guess each NEM12 channel's role: B* = feed-in; E* = general, except a second E channel used
-     * mostly overnight (10pm–7am), which is taken as controlled load.
+     * Guess each NEM12 channel's role: B* = feed-in; the E* channel that is almost never off (the
+     * biggest, if several are) = general; any other E*
+     * channel that is off most of the time (a hot-water or slab-heating circuit switched by the
+     * network) or used mostly overnight (10pm–7am) = controlled load; otherwise a second general meter.
      */
     Amber.guessNem12Roles = function (nmiData) {
         const roles = {};
@@ -94,22 +102,45 @@
         Object.values(nmiData.channels).forEach((c) => {
             if (c.kind === 'export') { roles[c.suffix] = c.kwh > 0 ? 'feedIn' : 'ignore'; return; }
             let night = 0;
+            let off = 0;
+            let count = 0;
             Object.values(c.days).forEach((values) => {
                 const per = values.length / 24;
                 values.forEach((v, i) => {
                     const hour = Math.floor(i / per);
                     if (hour >= 22 || hour < 7) night += v;
+                    if (v < 0.0005) off += 1;
+                    count += 1;
                 });
             });
-            imports.push({ suffix: c.suffix, kwh: c.kwh, nightShare: c.kwh > 0 ? night / c.kwh : 0 });
+            imports.push({ suffix: c.suffix, kwh: c.kwh, nightShare: c.kwh > 0 ? night / c.kwh : 0, offShare: count ? off / count : 1 });
         });
-        imports.sort((a, b) => a.nightShare - b.nightShare);
+        // The household circuit is the one that is (almost) never off; a switched circuit is off most of the time.
+        imports.sort((a, b) => (Math.abs(a.offShare - b.offShare) > 0.2 ? a.offShare - b.offShare : b.kwh - a.kwh));
         imports.forEach((c, i) => {
             if (c.kwh <= 0) roles[c.suffix] = 'ignore';
             else if (i === 0) roles[c.suffix] = 'general';
-            else roles[c.suffix] = c.nightShare > 0.6 ? 'controlledLoad' : 'general';
+            else roles[c.suffix] = c.offShare > 0.5 || c.nightShare > 0.6 ? 'controlledLoad' : 'general';
         });
         return roles;
+    };
+
+    /**
+     * Share of a channel's kWh used 10am–5pm (NEM time). A controlled load that runs in the day is
+     * on the network's longer-hours controlled load tariff (CL2), not the overnight one (CL1).
+     */
+    Amber.nem12DaytimeShare = function (channel) {
+        let day = 0;
+        let all = 0;
+        Object.values((channel && channel.days) || {}).forEach((values) => {
+            const per = values.length / 24;
+            values.forEach((v, i) => {
+                const hour = Math.floor(i / per);
+                if (hour >= 10 && hour < 17) day += v;
+                all += v;
+            });
+        });
+        return all > 0 ? day / all : 0;
     };
 
     // ---------- Wholesale prices ----------
