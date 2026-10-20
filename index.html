@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.40</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
+    <title>Amber Compare &amp; Export v1.41</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.40">
+    <link rel="stylesheet" href="css/app.css?v=1.41">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.40
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.41
                     </h1>
                     <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
@@ -331,6 +331,7 @@
                         <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
                             <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
                         </div>
+                        <div id="estimateBanner" class="hidden mb-3 p-3 rounded-md bg-sky-50 text-sky-900 text-sm"></div>
                         <div id="qualityBanner" class="hidden mb-3 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
                         <div id="results-table-container"></div>
                         <p id="resultsDisclaimer" class="text-xs text-gray-500 mt-4"></p>
@@ -402,6 +403,7 @@
                     </div>
                     <div class="pt-6 border-t">
                         <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
+                        <p id="amberChargesLocalNote" class="hidden text-xs text-sky-900 bg-sky-50 rounded-md p-2 mb-3"></p>
                         <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
                         <div class="flex flex-wrap items-center gap-2 mb-3">
                             <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill these charges and Bill Check)</label>
@@ -455,26 +457,65 @@
                         <p id="usageImportStatus" class="hidden text-xs mt-2"></p>
                     </div>
                 </div>
+                <div id="nem12Section" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold text-gray-900 mb-1">Someone not on Amber?</h2>
+                    <p class="text-sm text-gray-600 mb-3">Import a household's meter data (NEM12) to see what Amber would have charged for the same usage, then compare it with their current plan on the Compare tab. No Amber account or API key needed. Their retailer or electricity network can supply the NEM12 file (often under "download usage data" or "interval data"). It stays in this browser.</p>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <label for="nem12File" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Import NEM12 file</label>
+                        <input type="file" id="nem12File" class="sr-only" accept=".csv,.txt,.dat,.nem12,text/csv,text/plain">
+                    </div>
+                    <p id="nem12Status" class="hidden text-xs mt-2"></p>
+                    <div id="nem12Options" class="hidden mt-4 space-y-3 text-sm">
+                        <p id="nem12Summary" class="text-gray-700"></p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                                <label for="nem12Network" class="block text-xs font-medium text-gray-600">Electricity network</label>
+                                <select id="nem12Network" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div>
+                                <label for="nem12Tariff" class="block text-xs font-medium text-gray-600">Network tariff (on their bill, or the network's default)</label>
+                                <select id="nem12Tariff" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div id="nem12ExportRow">
+                                <label for="nem12Export" class="block text-xs font-medium text-gray-600">Export tariff</label>
+                                <select id="nem12Export" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div id="nem12ControlledRow">
+                                <label for="nem12Controlled" class="block text-xs font-medium text-gray-600">Controlled load tariff</label>
+                                <select id="nem12Controlled" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                        </div>
+                        <div id="nem12Channels" class="text-xs text-gray-600"></div>
+                        <label class="inline-flex items-center gap-2 text-xs text-gray-700"><input type="checkbox" id="nem12GreenPower" class="h-4 w-4 text-indigo-600 border-gray-300 rounded"> Include Amber's GreenPower offset (+0.73 c/kWh)</label>
+                        <div>
+                            <button type="button" id="nem12Build" class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Estimate Amber and compare</button>
+                        </div>
+                        <p class="text-xs text-gray-500">Amber's price for every interval is rebuilt from AEMO's 5-minute wholesale price for the region plus Amber's 2026-27 network, market and environmental charges for the tariff. It assumes the household uses power exactly as it did; with a battery, Amber's SmartShift would usually do better than that.</p>
+                    </div>
+                    <div id="localSitesList" class="mt-4 text-sm"></div>
+                </div>
             </section>
         </main>
     </div>
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.40"></script>
-    <script src="js/time.js?v=1.40"></script>
-    <script src="js/templates.js?v=1.40"></script>
-    <script src="js/storage.js?v=1.40"></script>
-    <script src="js/costs.js?v=1.40"></script>
-    <script src="js/api.js?v=1.40"></script>
-    <script src="js/bill.js?v=1.40"></script>
-    <script src="js/csv.js?v=1.40"></script>
-    <script src="js/charts.js?v=1.40"></script>
-    <script src="js/calendar.js?v=1.40"></script>
-    <script src="js/stats.js?v=1.40"></script>
-    <script src="js/monthly.js?v=1.40"></script>
-    <script src="js/redispatch.js?v=1.40"></script>
-    <script src="js/import.js?v=1.40"></script>
-    <script src="js/app.js?v=1.40"></script>
+    <script src="js/constants.js?v=1.41"></script>
+    <script src="js/time.js?v=1.41"></script>
+    <script src="js/templates.js?v=1.41"></script>
+    <script src="js/storage.js?v=1.41"></script>
+    <script src="js/costs.js?v=1.41"></script>
+    <script src="js/api.js?v=1.41"></script>
+    <script src="js/bill.js?v=1.41"></script>
+    <script src="js/csv.js?v=1.41"></script>
+    <script src="js/charts.js?v=1.41"></script>
+    <script src="js/calendar.js?v=1.41"></script>
+    <script src="js/stats.js?v=1.41"></script>
+    <script src="js/monthly.js?v=1.41"></script>
+    <script src="js/redispatch.js?v=1.41"></script>
+    <script src="js/import.js?v=1.41"></script>
+    <script src="js/networks.js?v=1.41"></script>
+    <script src="js/estimate.js?v=1.41"></script>
+    <script src="js/app.js?v=1.41"></script>
 </body>
 </html>

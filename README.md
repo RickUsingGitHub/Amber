@@ -10,7 +10,7 @@ Runs entirely in your browser. No installation required.
 
 Open `index.html` on GitHub Pages, via `npm run serve`, or as a local file. Scripts are classic (not ES modules), so `file://` works in most desktop browsers.
 
-You need an Amber API key from [app.amber.com.au/developers](https://app.amber.com.au/developers).
+You need an Amber API key from [app.amber.com.au/developers](https://app.amber.com.au/developers), except to check a household that isn't on Amber (see below).
 
 ## Features
 
@@ -23,6 +23,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Bill Check loads the bill period's meter data as soon as a bill is uploaded (and when you come back to the tab), then checks every line
 - Import Amber's usage export (CSV) on Setup to go beyond the API's ~3 months: it fills the same cache as Compare (keeping days already fetched from the API and leaving the last week to the API), flags the network demand window (Ausgrid, Endeavour, Energex, Essential and Evoenergy demand tariffs; for other tariffs it is learned from the days Amber's API flagged), then compares the whole months imported. Last 12 months date preset
 - Re-scheduling estimate for free-window plans: re-times your real interval data into each plan's free window and best feed-in window, at the daily shift budgets you choose, over every whole month cached. Battery size field (blank = auto from exports after dark, 0 = none): without a battery only load you move (EV, pool pump, hot water) shifts, and no battery exports are invented
+- Households not on Amber: import their meter data (NEM12, from their retailer or network) on Setup and the app rebuilds what Amber would have charged for every interval: AEMO's 5-minute wholesale price for the region × a loss factor, plus Amber's 2026-27 network, market, environmental and hedging charges for the chosen network tariff (all 11 networks Amber serves), plus GST; feed-in at the wholesale price plus the export tariff. Amber's daily, metering, subscription and demand charges come from the same tariff, and Amber's quarterly wholesale price cap is applied. No API key needed; the household appears as a site you can compare against any plan, including the free-window estimate. Checked against a year of real Amber prices on Ausgrid EA116/EA029: on average within 0.05 c/kWh per interval, and the year's usage and feed-in costs within 1% (the gap is last year's slightly lower network charges)
 - 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
 - Daily calendar; click a day to open it on the graph
 - IndexedDB cache, CSV export, GST toggle
@@ -33,7 +34,8 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 ## Privacy
 
 - The API key is stored only in this browser (localStorage or sessionStorage). It is obfuscated, not encrypted.
-- Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else.
+- Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else. Imported files (Amber CSV, NEM12, bills) are read in the browser and stay there.
+- Wholesale prices for the NEM12 estimate are files in this repo (`data/prices`), refreshed daily from AEMO by a GitHub Action (`scripts/update-prices.js`).
 - Uncheck **Remember key on this device** to keep the key in the session only.
 
 ## Local development
@@ -56,5 +58,6 @@ npm run serve
 - Imported usage has no renewables or price-spike details. Demand windows ignore public holidays, and Energex/Essential monthly demand charges are approximated as daily ones.
 - The re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 - Sites with several general meters (E1 + E2) have demand worked out on their combined use.
+- The NEM12 estimate assumes the household keeps using power exactly as it did. With a battery on Amber, SmartShift would usually do better. Loss factors other than Ausgrid's are typical values, not measured; seasonal and monthly demand charges are spread by month; Evoenergy's off-peak demand charge is not modelled.
 
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.

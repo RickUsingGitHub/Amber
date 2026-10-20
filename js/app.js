@@ -41,7 +41,42 @@
         return !toggle || toggle.checked;
     }
 
+    const AMBER_CHARGE_FIELDS = ['amberConnectionRate', 'amberSubscriptionRate', 'amberDemandRate', 'amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'];
+
+    /** Fill Setup's Amber charges from storage (the Amber account's own charges). */
+    function loadAmberChargeFields() {
+        let storedConn = localStorage.getItem('amberConnectionRate');
+        let storedSub = localStorage.getItem('amberSubscriptionRate');
+        let storedDemand = localStorage.getItem('amberDemandRate');
+        const storedPrev = ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].map((id) => localStorage.getItem(id));
+        // Before v1.40 there was one set of charges; the old defaults (and bills that matched them)
+        // were 2025-26 charges, so they move to last year and this year starts from the new defaults.
+        if (storedPrev.every((v) => v == null)) {
+            const was = (v, d) => v != null && Math.abs(parseFloat(v) - d) < 0.0005;
+            if (was(storedConn, Amber.PREVIOUS_AMBER_CONNECTION_CENTS) || was(storedDemand, Amber.PREVIOUS_AMBER_DEMAND_CENTS)) {
+                storedPrev[0] = storedConn;
+                storedPrev[1] = storedSub;
+                storedPrev[2] = storedDemand;
+                storedConn = null;
+                storedDemand = null;
+            }
+        }
+        $('amberConnectionRate').value = (!storedConn || storedConn === '109.894')
+            ? Amber.DEFAULT_AMBER_CONNECTION_CENTS
+            : storedConn;
+        $('amberSubscriptionRate').value = (!storedSub || storedSub === '82.203')
+            ? Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS
+            : storedSub;
+        $('amberDemandRate').value = storedDemand || Amber.DEFAULT_AMBER_DEMAND_CENTS;
+        $('amberConnectionRatePrev').value = storedPrev[0] != null && storedPrev[0] !== '' ? storedPrev[0] : Amber.PREVIOUS_AMBER_CONNECTION_CENTS;
+        $('amberSubscriptionRatePrev').value = storedPrev[1] != null && storedPrev[1] !== '' ? storedPrev[1] : Amber.PREVIOUS_AMBER_SUBSCRIPTION_CENTS;
+        $('amberDemandRatePrev').value = storedPrev[2] != null && storedPrev[2] !== '' ? storedPrev[2] : Amber.PREVIOUS_AMBER_DEMAND_CENTS;
+
+    }
+
     function readAmberRates() {
+        const site = selectedSite();
+        if (site && site.local && site.amberRates) return Object.assign({}, site.amberRates);
         const prev = (id) => {
             const v = parseFloat($(id).value);
             return Number.isFinite(v) && v > 0 ? v : null;
@@ -125,6 +160,12 @@
 
     async function handleAmberBillFile(file) {
         if (!file) return;
+        const current = selectedSite();
+        if (current && current.local) {
+            setAmberBillStatus('The selected site is a household imported from NEM12. Choose your Amber site above, then load the bill.', true);
+            ['amberBillFile', 'billCheckFile'].forEach((id) => { const input = $(id); if (input) input.value = ''; });
+            return;
+        }
         setAmberBillStatus('Reading bill…', false);
         state.billCheckError = null;
         try {
@@ -266,7 +307,9 @@
     }
 
     function initialTab() {
-        if (!$('apiKey').value.trim()) return 'setup';
+        let localSelected = false;
+        try { localSelected = loadLocalSites().some((x) => x.id === localStorage.getItem('selectedSiteId')); } catch (e) { /* ignore */ }
+        if (!$('apiKey').value.trim() && !localSelected) return 'setup';
         let saved = null;
         try { saved = localStorage.getItem(ACTIVE_TAB_KEY); } catch (e) { /* ignore */ }
         return TABS.indexOf(saved) !== -1 ? saved : 'compare';
@@ -546,10 +589,7 @@
         localStorage.setItem('flatFeedInRate', $('otherSupplierFeedInRateFlat').value);
         localStorage.setItem('flatControlledLoad', $('otherSupplierControlledLoadFlat').value);
         localStorage.setItem('dailyConnectionRate', $('dailyConnectionRate').value);
-        localStorage.setItem('amberConnectionRate', $('amberConnectionRate').value);
-        localStorage.setItem('amberSubscriptionRate', $('amberSubscriptionRate').value);
-        localStorage.setItem('amberDemandRate', $('amberDemandRate').value);
-        ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => localStorage.setItem(id, $(id).value));
+        if (!state.localChargesShown) AMBER_CHARGE_FIELDS.forEach((id) => localStorage.setItem(id, $(id).value));
 
         const getPeriodSettings = (period) => {
             const container = document.querySelector(`[data-tou-period="${period}"]`);
@@ -633,32 +673,7 @@
 
         const savedDaily = localStorage.getItem('dailyConnectionRate');
         if (savedDaily) $('dailyConnectionRate').value = savedDaily;
-        let storedConn = localStorage.getItem('amberConnectionRate');
-        let storedSub = localStorage.getItem('amberSubscriptionRate');
-        let storedDemand = localStorage.getItem('amberDemandRate');
-        const storedPrev = ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].map((id) => localStorage.getItem(id));
-        // Before v1.40 there was one set of charges; the old defaults (and bills that matched them)
-        // were 2025-26 charges, so they move to last year and this year starts from the new defaults.
-        if (storedPrev.every((v) => v == null)) {
-            const was = (v, d) => v != null && Math.abs(parseFloat(v) - d) < 0.0005;
-            if (was(storedConn, Amber.PREVIOUS_AMBER_CONNECTION_CENTS) || was(storedDemand, Amber.PREVIOUS_AMBER_DEMAND_CENTS)) {
-                storedPrev[0] = storedConn;
-                storedPrev[1] = storedSub;
-                storedPrev[2] = storedDemand;
-                storedConn = null;
-                storedDemand = null;
-            }
-        }
-        $('amberConnectionRate').value = (!storedConn || storedConn === '109.894')
-            ? Amber.DEFAULT_AMBER_CONNECTION_CENTS
-            : storedConn;
-        $('amberSubscriptionRate').value = (!storedSub || storedSub === '82.203')
-            ? Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS
-            : storedSub;
-        $('amberDemandRate').value = storedDemand || Amber.DEFAULT_AMBER_DEMAND_CENTS;
-        $('amberConnectionRatePrev').value = storedPrev[0] != null && storedPrev[0] !== '' ? storedPrev[0] : Amber.PREVIOUS_AMBER_CONNECTION_CENTS;
-        $('amberSubscriptionRatePrev').value = storedPrev[1] != null && storedPrev[1] !== '' ? storedPrev[1] : Amber.PREVIOUS_AMBER_SUBSCRIPTION_CENTS;
-        $('amberDemandRatePrev').value = storedPrev[2] != null && storedPrev[2] !== '' ? storedPrev[2] : Amber.PREVIOUS_AMBER_DEMAND_CENTS;
+        loadAmberChargeFields();
 
         const savedDemand = localStorage.getItem('demandSettings');
         if (savedDemand) {
@@ -748,13 +763,32 @@
         return { start: Amber.formatForInput(first), end: Amber.formatForInput(yesterday) };
     }
 
+    // ---------- Local (non-Amber) households ----------
+
+    const LOCAL_SITES_KEY = 'localSites';
+
+    function loadLocalSites() {
+        try {
+            const list = JSON.parse(localStorage.getItem(LOCAL_SITES_KEY) || '[]');
+            return Array.isArray(list) ? list.filter((s) => s && s.id && s.local) : [];
+        } catch (e) {
+            return [];
+        }
+    }
+
+    function saveLocalSites(list) {
+        try { localStorage.setItem(LOCAL_SITES_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
+    }
+
     function populateSites(sites) {
-        state.sites = sites || [];
+        state.sites = (sites || []).filter((s) => !s.local).concat(loadLocalSites());
         const select = $('siteSelector');
         const row = $('siteSelectorRow');
         select.innerHTML = '';
         if (!state.sites.length) {
             row.classList.add('hidden');
+            syncSiteMode();
+            renderLocalSites();
             return;
         }
         row.classList.remove('hidden');
@@ -764,14 +798,46 @@
             option.value = site.id;
             const nmi = site.nmi ? `NMI ${site.nmi}` : site.id;
             const network = site.network ? ` · ${site.network}` : '';
-            const status = site.status && site.status !== 'active' ? ` (${site.status})` : '';
+            const status = site.local ? ' (not on Amber: estimate)' : (site.status && site.status !== 'active' ? ` (${site.status})` : '');
             option.textContent = `${nmi}${network}${status}`;
             select.appendChild(option);
         });
         const match = state.sites.find((s) => s.id === saved) || state.sites.find((s) => s.status === 'active') || state.sites[0];
         select.value = match.id;
         state.currentSiteId = match.id;
+        syncSiteMode();
         updatePlanSelector(currentStateCode());
+        renderLocalSites();
+    }
+
+    /** Amber charges and state follow the selected site: an estimated household shows its own. */
+    function syncSiteMode() {
+        const site = selectedSite();
+        const local = !!(site && site.local);
+        const note = $('amberChargesLocalNote');
+        if (local) {
+            const r = site.amberRates || {};
+            state.localChargesShown = true;
+            $('amberConnectionRate').value = r.connectionCents;
+            $('amberSubscriptionRate').value = r.subscriptionCents;
+            $('amberDemandRate').value = r.demandCents || 0;
+            ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => { $(id).value = ''; });
+            AMBER_CHARGE_FIELDS.forEach((id) => { $(id).disabled = true; });
+            const e = site.estimate || {};
+            const seasonal = r.demandByMonth ? ' Demand varies by month (the figure shown is the yearly average).' : '';
+            note.textContent = `NMI ${site.nmi} isn't on Amber: these are Amber's estimated charges for ${site.network} tariff ${e.tariffCode} (network, metering and Amber's subscription), used for every day.${seasonal} Choose an Amber site to edit your own.`;
+            note.classList.remove('hidden');
+            if (e.state && $('stateSelector').value !== e.state) {
+                $('stateSelector').value = e.state;
+            }
+        } else {
+            if (state.localChargesShown) {
+                state.localChargesShown = false;
+                AMBER_CHARGE_FIELDS.forEach((id) => { $(id).disabled = false; });
+                loadAmberChargeFields();
+            }
+            note.classList.add('hidden');
+        }
     }
 
     function selectedSite() {
@@ -1269,6 +1335,15 @@
         }
 
         const asAt = Amber.latestAsAtForState(currentStateCode(), state.templates);
+        const estSite = selectedSite();
+        const banner = $('estimateBanner');
+        if (estSite && estSite.local) {
+            const e = estSite.estimate || {};
+            banner.textContent = `NMI ${estSite.nmi} isn't on Amber, so the Amber column is an estimate: each interval priced at AEMO's wholesale price for the region plus Amber's 2026-27 charges for ${estSite.network} tariff ${e.tariffCode}${e.exportCode ? ` and export tariff ${e.exportCode}` : ''}. It assumes they use power exactly as they did; on Amber with a battery, SmartShift would usually do better.`;
+            banner.classList.remove('hidden');
+        } else {
+            banner.classList.add('hidden');
+        }
         $('resultsDisclaimer').textContent = `All plan, custom and Amber rates are entered inc GST (GST-inclusive), as at ${asAt}. Turn inc GST off to show dollar totals excluding GST (feed-in credits are unchanged). Verify current rates with Energy Made Easy or the retailer before switching. Amber daily connection, subscription and demand rates are editable and may differ by network. Public holidays are not treated as off-peak.`;
 
         const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
@@ -1652,13 +1727,14 @@
     async function siteForImport() {
         const key = $('apiKey').value.trim();
         if (!key) throw new Error('Add your Amber API key first, so the data can be matched to your site.');
-        if (!state.sites.length || state.sitesApiKey !== key) {
+        if (!state.sites.some((s) => !s.local) || state.sitesApiKey !== key) {
             const sites = await Amber.fetchSites(key);
             populateSites(sites);
             state.sitesApiKey = key;
         }
         const site = selectedSite();
         if (!site) throw new Error('No sites found for this API key.');
+        if (site.local) throw new Error('The selected site is a household imported from NEM12. Choose your Amber site above, then import again.');
         return site;
     }
 
@@ -1740,6 +1816,205 @@
             const input = $('usageCsvFile');
             if (input) input.value = '';
         }
+    }
+
+    // ---------- NEM12 import: households that aren't on Amber ----------
+
+    const ROLE_LABELS = { general: 'General use', controlledLoad: 'Controlled load', feedIn: 'Feed-in (export)', ignore: 'Leave out' };
+
+    function setNem12Status(message, isError) {
+        const el = $('nem12Status');
+        el.classList.toggle('hidden', !message);
+        el.classList.toggle('text-red-700', !!isError);
+        el.classList.toggle('text-gray-700', !isError);
+        el.textContent = message || '';
+    }
+
+    function fillSelect(select, options, value) {
+        select.innerHTML = '';
+        options.forEach((o) => {
+            const opt = document.createElement('option');
+            opt.value = o.value;
+            opt.textContent = o.label;
+            select.appendChild(opt);
+        });
+        if (options.some((o) => o.value === value)) select.value = value;
+    }
+
+    function nem12Selection() {
+        const p = state.nem12;
+        const net = Amber.NETWORKS[$('nem12Network').value];
+        return {
+            networkKey: $('nem12Network').value,
+            tariffCode: $('nem12Tariff').value,
+            exportCode: $('nem12ExportRow').classList.contains('hidden') ? '' : $('nem12Export').value,
+            clCode: $('nem12Controlled').value,
+            greenPower: $('nem12GreenPower').checked,
+            roles: p ? p.roles : {},
+            net
+        };
+    }
+
+    function renderNem12Options(keepTariff) {
+        const p = state.nem12;
+        const box = $('nem12Options');
+        if (!p) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        const nmiData = p.parsed.nmis[p.parsed.nmi];
+        const lens = Array.from(new Set(Object.values(nmiData.channels).map((c) => c.intervalLength)));
+        const others = Object.keys(p.parsed.nmis).length - 1;
+        $('nem12Summary').textContent = `NMI ${nmiData.nmi}: ${nmiData.days.length} days (${fmtDate(nmiData.firstDay)} – ${fmtDate(nmiData.lastDay)}) of ${lens.join('/')}-minute data.${others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file left out.` : ''}`;
+        fillSelect($('nem12Network'), [{ value: '', label: 'Choose the network…' }].concat(
+            Object.keys(Amber.NETWORKS).map((k) => ({ value: k, label: `${Amber.NETWORKS[k].name} (${Amber.NETWORKS[k].state})` }))), p.networkKey || '');
+        const net = Amber.NETWORKS[$('nem12Network').value];
+        const tariffSel = $('nem12Tariff');
+        const prevTariff = keepTariff ? tariffSel.value : null;
+        fillSelect(tariffSel, net ? Object.keys(net.tariffs).map((code) => ({ value: code, label: `${code}: ${net.tariffs[code].name}${code === net.defaultTariff ? ' (default)' : ''}` })) : [], prevTariff || (net && net.defaultTariff));
+        tariffSel.disabled = !net;
+        const tariff = net && net.tariffs[tariffSel.value];
+        const hasFeedIn = Object.values(p.roles).includes('feedIn');
+        const hasCl = Object.values(p.roles).includes('controlledLoad');
+        const exportOptions = net ? [{ value: '', label: 'None (feed-in at the wholesale price)' }].concat(
+            Object.keys(net.exportTariffs || {}).map((code) => ({ value: code, label: `${code}: ${net.exportTariffs[code].name}` }))) : [];
+        fillSelect($('nem12Export'), exportOptions, net ? (net.defaultExport || '') : '');
+        $('nem12ExportRow').classList.toggle('hidden', !net || !hasFeedIn || !!(tariff && tariff.export) || exportOptions.length < 2);
+        fillSelect($('nem12Controlled'), net ? Object.keys(net.controlled || {}).map((code) => ({ value: code, label: `${code}: ${net.controlled[code].name}` })) : [], net && net.defaultControlled);
+        $('nem12ControlledRow').classList.toggle('hidden', !net || !hasCl || !!(tariff && tariff.controlled));
+        const rows = Object.values(nmiData.channels).map((c) => {
+            const opts = Object.keys(ROLE_LABELS).map((r) => `<option value="${r}"${p.roles[c.suffix] === r ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
+            return `<label class="inline-flex items-center gap-2 mr-4 mb-1">${Amber.escapeHTML(c.suffix)} (${Math.round(c.kwh).toLocaleString('en-AU')} kWh) <select data-nem12-role="${Amber.escapeHTML(c.suffix)}" class="border border-gray-300 rounded px-1 py-0.5 text-xs">${opts}</select></label>`;
+        });
+        $('nem12Channels').innerHTML = `<div class="mb-1 font-medium text-gray-700">Meter channels</div>${rows.join('')}`;
+        document.querySelectorAll('[data-nem12-role]').forEach((sel) => {
+            sel.addEventListener('change', () => {
+                p.roles[sel.getAttribute('data-nem12-role')] = sel.value;
+                renderNem12Options(true);
+            });
+        });
+        $('nem12Build').disabled = !net;
+    }
+
+    async function handleNem12File(file) {
+        if (!file) return;
+        setNem12Status('Reading the file…', false);
+        try {
+            const text = await file.text();
+            await Amber.sleep(0);
+            const parsed = Amber.parseNem12(text);
+            if (!parsed.ok) throw new Error(parsed.error);
+            const nmiData = parsed.nmis[parsed.nmi];
+            state.nem12 = { parsed, roles: Amber.guessNem12Roles(nmiData), networkKey: Amber.networkForNmi(nmiData.nmi) || '' };
+            renderNem12Options();
+            setNem12Status(state.nem12.networkKey
+                ? 'Check the network tariff (it is on their bill, or ask the network), then choose Estimate Amber and compare.'
+                : 'Choose the electricity network and tariff, then Estimate Amber and compare.', false);
+        } catch (err) {
+            console.error(err);
+            state.nem12 = null;
+            renderNem12Options();
+            setNem12Status(err && err.message ? err.message : 'Could not read that file.', true);
+        } finally {
+            $('nem12File').value = '';
+        }
+    }
+
+    async function buildNem12Estimate() {
+        const p = state.nem12;
+        if (!p) return;
+        if (state.fetching) {
+            setNem12Status('Wait for the Compare in progress to finish, then try again.', true);
+            return;
+        }
+        const sel = nem12Selection();
+        if (!sel.net) { setNem12Status('Choose the electricity network first.', true); return; }
+        const nmiData = p.parsed.nmis[p.parsed.nmi];
+        $('nem12Build').disabled = true;
+        try {
+            setNem12Status('Loading wholesale prices…', false);
+            const months = Amber.priceMonthsFor(nmiData.firstDay, Amber.addDays(nmiData.lastDay, 1));
+            let prices;
+            try {
+                prices = await Amber.loadRegionPrices(sel.net.region, months);
+            } catch (err) {
+                throw new Error('Could not load wholesale prices. Open the app from its web address rather than as a file.');
+            }
+            setNem12Status('Pricing every interval…', false);
+            await Amber.sleep(0);
+            const est = Amber.estimateAmberUsage(nmiData, Object.assign({}, sel, { prices }));
+            const dates = Object.keys(est.days).sort();
+            if (!Object.keys(prices).length) throw new Error('Could not load wholesale prices for these dates. If the app was opened as a file, open it from its web address instead.');
+            if (!dates.length) throw new Error('There are no wholesale prices for these dates yet, so nothing could be estimated.');
+            const site = Amber.estimateSite(nmiData, sel);
+            site.firstDay = dates[0];
+            site.lastDay = dates[dates.length - 1];
+            site.capCreditCents = est.summary.capCreditCents;
+
+            const db = await Amber.openDb();
+            await Amber.deleteSiteCache(db, site.id);
+            await Amber.writeUsageImport(db, dates.map((d) => ({ id: `${site.id}_${d}`, data: est.days[d], date: d })));
+            const list = loadLocalSites().filter((s) => s.id !== site.id);
+            list.push(site);
+            saveLocalSites(list);
+            localStorage.setItem('selectedSiteId', site.id);
+            populateSites(state.sites);
+            $('siteSelector').value = site.id;
+            syncSiteMode();
+            updatePlanSelector(currentStateCode());
+            state.cachedChannelData = null;
+            state.lastFetchTimestamp = null;
+            state.monthly = null;
+            state.batteryShift = null;
+            state.batteryDetect = null;
+
+            const notes = [`Estimated Amber's prices for ${dates.length} days (${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])}) on ${sel.net.name} ${sel.tariffCode}.`];
+            if (est.missingPrice.length) notes.push(`${est.missingPrice.length} day${est.missingPrice.length === 1 ? ' has' : 's have'} no wholesale prices yet and ${est.missingPrice.length === 1 ? 'was' : 'were'} left out.`);
+            if (est.summary.capCreditCents > 0) notes.push(`Amber's quarterly wholesale price cap took $${(est.summary.capCreditCents / 100).toFixed(2)} off.`);
+            notes.push('Choose their current plan on the Compare tab.');
+            setNem12Status(notes.join(' '), false);
+
+            const span = Amber.wholeMonthSpan(dates);
+            $('startDate').value = span ? span.start : dates[0];
+            $('endDate').value = span ? span.end : dates[dates.length - 1];
+            selectTab('compare');
+            fetchAndCompare();
+        } catch (err) {
+            console.error(err);
+            setNem12Status(err && err.message ? err.message : 'Could not estimate Amber for that file.', true);
+        } finally {
+            $('nem12Build').disabled = false;
+        }
+    }
+
+    function renderLocalSites() {
+        const box = $('localSitesList');
+        if (!box) return;
+        const list = loadLocalSites();
+        if (!list.length) { box.innerHTML = ''; return; }
+        const current = selectedSite();
+        box.innerHTML = `<div class="font-medium text-gray-800 mb-1">Households imported here</div><ul class="space-y-1">${list.map((s) => {
+            const e = s.estimate || {};
+            const active = current && current.id === s.id;
+            return `<li class="flex flex-wrap items-center gap-2"><span>NMI ${Amber.escapeHTML(s.nmi)} · ${Amber.escapeHTML(s.network)} ${Amber.escapeHTML(e.tariffCode || '')} · ${fmtDate(s.firstDay)} – ${fmtDate(s.lastDay)}</span>
+                ${active ? '<span class="text-xs text-green-700">(selected)</span>' : `<button type="button" data-local-use="${Amber.escapeHTML(s.id)}" class="text-xs text-indigo-600 hover:underline">Use</button>`}
+                <button type="button" data-local-remove="${Amber.escapeHTML(s.id)}" class="text-xs text-red-700 hover:underline">Remove</button></li>`;
+        }).join('')}</ul>`;
+        box.querySelectorAll('[data-local-use]').forEach((btn) => btn.addEventListener('click', () => {
+            $('siteSelector').value = btn.getAttribute('data-local-use');
+            $('siteSelector').dispatchEvent(new Event('change'));
+        }));
+        box.querySelectorAll('[data-local-remove]').forEach((btn) => btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-local-remove');
+            const wasSelected = $('siteSelector').value === id;
+            saveLocalSites(loadLocalSites().filter((s) => s.id !== id));
+            populateSites(state.sites);
+            if (wasSelected) {
+                state.cachedChannelData = null;
+                state.lastFetchTimestamp = null;
+                state.monthly = null;
+                state.batteryShift = null;
+            }
+            try { await Amber.deleteSiteCache(await Amber.openDb(), id); } catch (err) { console.error(err); }
+        }));
     }
 
     // ---------- Bill check ----------
@@ -1980,10 +2255,12 @@
         localStorage.setItem('startDate', startDateValue);
         localStorage.setItem('endDate', endDateValue);
 
-        if (!apiKey) {
+        const chosen = selectedSite();
+        const localMode = !!(chosen && chosen.local);
+        if (!apiKey && !localMode) {
             selectTab('setup');
             $('apiKey').focus();
-            showMessage('Please enter your Amber API key.', true);
+            showMessage('Please enter your Amber API key (or import a NEM12 file for a household that is not on Amber).', true);
             return;
         }
         if (!startDateValue || !endDateValue) {
@@ -2006,7 +2283,9 @@
 
         try {
             let sites = state.sites;
-            if (sites.length && state.sitesApiKey === apiKey) {
+            if (localMode) {
+                // An estimated household: everything comes from its imported days, never the API.
+            } else if (sites.some((s) => !s.local) && state.sitesApiKey === apiKey) {
                 populateSites(sites);
             } else {
                 showMessage('Fetching your site details...');
@@ -2050,8 +2329,19 @@
             const datesToFetch = [];
             let processedDays = 0;
             let cachedDays = 0;
+            let localMissing = 0;
             rangeDates.forEach((dateStr) => {
                 const cached = cache.byDate[dateStr];
+                if (localMode) {
+                    if (cached && cached.length) {
+                        selectedUsageData.push(...cached);
+                        cachedDays++;
+                    } else {
+                        localMissing++;
+                    }
+                    processedDays++;
+                    return;
+                }
                 if (Amber.cachedDayUsable(cached, dateStr, emptyCutoff)) {
                     selectedUsageData.push(...cached);
                     cachedDays++;
@@ -2109,6 +2399,7 @@
             }
 
             if (!selectedUsageData.length) {
+                if (localMode) throw new Error(`No imported meter data for NMI ${site.nmi} in these dates. Its data covers ${fmtDate(site.firstDay || '')} – ${fmtDate(site.lastDay || '')}.`);
                 const detail = chunkErrors.length ? chunkErrors.join(' ') : 'No usage returned.';
                 throw new Error(detail);
             }
@@ -2142,6 +2433,8 @@
 
             if (chunkErrors.length) {
                 showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
+            } else if (localMode && localMissing) {
+                showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so they are left out.`, true);
             } else {
                 hideMessage();
             }
@@ -2453,8 +2746,11 @@
             state.cachedChannelData = null;
             state.monthly = null;
             state.lastFetchTimestamp = null;
+            state.batteryShift = null;
+            syncSiteMode();
             updatePlanSelector(currentStateCode());
             saveAllSettings();
+            renderLocalSites();
         });
         $('rememberApiKey').addEventListener('change', () => {
             const key = $('apiKey').value.trim();
@@ -2533,9 +2829,8 @@
         function resetSitesIfKeyChanged(key) {
             if (state.sitesApiKey && key !== state.sitesApiKey) {
                 Amber.clearSitesCache();
-                state.sites = [];
                 state.sitesApiKey = null;
-                $('siteSelectorRow').classList.add('hidden');
+                populateSites([]);
             }
         }
         let siteFetchTimer = null;
@@ -2549,10 +2844,29 @@
             clearTimeout(siteFetchTimer);
             siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
         });
+        $('nem12File').addEventListener('change', (e) => handleNem12File(e.target.files && e.target.files[0]));
+        $('nem12Network').addEventListener('change', () => {
+            if (state.nem12) state.nem12.networkKey = $('nem12Network').value;
+            renderNem12Options();
+        });
+        $('nem12Tariff').addEventListener('change', () => renderNem12Options(true));
+        $('nem12Build').addEventListener('click', buildNem12Estimate);
+        populateSites([]);
         if (storedKey.key) tryLoadSites(storedKey.key);
         state.ready = true;
+        const localSelected = !!(selectedSite() && selectedSite().local);
         // With a saved key, open on this month's figures (or the saved bill's period on Bill Check).
-        if (storedKey.key && Amber.AUTO_COMPARE) {
+        if (localSelected && Amber.AUTO_COMPARE) {
+            const site = selectedSite();
+            const days = [];
+            for (let d = site.firstDay; d && d <= site.lastDay; d = Amber.addDays(d, 1)) days.push(d);
+            const span = Amber.wholeMonthSpan(days);
+            if (site.firstDay) {
+                $('startDate').value = span ? span.start : site.firstDay;
+                $('endDate').value = span ? span.end : site.lastDay;
+            }
+            fetchAndCompare();
+        } else if (storedKey.key && Amber.AUTO_COMPARE) {
             if (state.activeTab === 'bill' && billPeriodFinished(state.billCheck)) ensureBillLoaded();
             else applyDatePreset('thisMonth');
         }

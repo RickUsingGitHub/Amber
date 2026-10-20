@@ -536,6 +536,10 @@
     function demandCentsFor(ratesOrCents, monthKey) {
         if (ratesOrCents && typeof ratesOrCents === 'object') {
             const r = Amber.amberRatesOn(ratesOrCents, monthKey ? `${monthKey}-01` : null);
+            // Seasonal demand rates (e.g. Endeavour summer/winter) for the current year's charges.
+            const byMonth = r === ratesOrCents && r.demandByMonth;
+            const m = monthKey ? parseInt(monthKey.substring(5, 7), 10) : null;
+            if (byMonth && m && byMonth[m] != null) return byMonth[m];
             return r.demandCents;
         }
         return ratesOrCents;
