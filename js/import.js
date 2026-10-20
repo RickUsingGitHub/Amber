@@ -22,14 +22,37 @@
     };
 
     /**
-     * Network demand windows by tariff code, for flagging imported intervals the way the API's
-     * tariffInformation.demandWindow does. Local (wall clock) start time and months.
-     * Ausgrid residential demand: highest 30 min 3pm–9pm, Nov–Mar and Jun–Aug (from 1 July 2024).
+     * Network demand windows by tariff code (2026-27), for flagging imported intervals the way
+     * the API's tariffInformation.demandWindow does. Local (wall clock) times; optional
+     * weekdays (0 = Sunday) and months. Public holidays are not modelled.
+     * A site on a tariff not listed here gets its window learned from days cached from the API.
      */
+    const WEEKDAYS = [1, 2, 3, 4, 5];
+    const AUSGRID_DEMAND = { start: '15:00', end: '21:00', months: [11, 12, 1, 2, 3, 6, 7, 8] };
+    const ENDEAVOUR_DEMAND = { start: '16:00', end: '20:00', days: WEEKDAYS };
     Amber.DEMAND_WINDOWS = {
-        EA111: { start: '15:00', end: '21:00', months: [11, 12, 1, 2, 3, 6, 7, 8] },
-        EA116: { start: '15:00', end: '21:00', months: [11, 12, 1, 2, 3, 6, 7, 8] }
+        // Ausgrid residential demand: 3pm–9pm every day, Nov–Mar and Jun–Aug.
+        EA111: AUSGRID_DEMAND,
+        EA116: AUSGRID_DEMAND,
+        // Endeavour residential demand: 4pm–8pm working weekdays, all year.
+        N72: ENDEAVOUR_DEMAND,
+        N73: ENDEAVOUR_DEMAND,
+        // Energex residential demand: 4pm–9pm every day.
+        3900: { start: '16:00', end: '21:00' },
+        // Essential Energy residential demand: 5pm–8pm working weekdays.
+        BLND1AR: { start: '17:00', end: '20:00', days: WEEKDAYS },
+        // Evoenergy residential demand (peak window).
+        '023': { start: '17:00', end: '21:00' },
+        '024': { start: '17:00', end: '21:00' },
+        '025': { start: '17:00', end: '20:00' },
+        '026': { start: '17:00', end: '20:00' }
     };
+
+    function demandWindowFor(tariff) {
+        if (tariff == null) return null;
+        const t = String(tariff).trim().toUpperCase();
+        return Amber.DEMAND_WINDOWS[t] || Amber.DEMAND_WINDOWS[t.replace(/^T/, '')] || null;
+    }
 
     function splitCsvLine(line) {
         if (line.indexOf('"') === -1) return line.split(',');
@@ -107,10 +130,12 @@
             let duration = null;
             let localMonth = null;
             let localTime = null;
+            let localDay = null;
             if (iStart >= 0 && f[iStart]) {
                 const s = f[iStart];
                 localMonth = parseInt(s.substring(5, 7), 10);
                 localTime = parseInt(s.substring(11, 13), 10) * 100 + parseInt(s.substring(14, 16), 10);
+                localDay = new Date(Date.UTC(+s.substring(0, 4), localMonth - 1, +s.substring(8, 10))).getUTCDay();
                 if (iEnd >= 0 && f[iEnd]) {
                     // Start is 1 s after the previous end; DST changes make some local spans odd.
                     const d = Math.round(wallMinutes(f[iEnd]) - wallMinutes(s) + 1 / 60);
@@ -131,7 +156,8 @@
                 channelIdentifier: id,
                 channelType: type,
                 localMonth,
-                localTime
+                localTime,
+                localDay
             };
             (out.byDate[date] || (out.byDate[date] = [])).push(row);
             out.rows += 1;
@@ -182,18 +208,81 @@
     /** Demand-window rule for the site's general channel tariff, or null. */
     Amber.demandWindowForSite = function (site) {
         const channels = (site && site.channels) || [];
-        const general = channels.find((c) => c.type === 'general' && Amber.DEMAND_WINDOWS[c.tariff]);
-        return general ? Object.assign({ tariff: general.tariff }, Amber.DEMAND_WINDOWS[general.tariff]) : null;
+        const general = channels.find((c) => c.type === 'general' && demandWindowFor(c.tariff));
+        return general ? Object.assign({ tariff: general.tariff }, demandWindowFor(general.tariff)) : null;
+    };
+
+    const hhmm = (n) => `${String(Math.floor(n / 100)).padStart(2, '0')}:${String(n % 100).padStart(2, '0')}`;
+
+    /**
+     * Learn the demand window from days cached from the API (which flags it): local start/end
+     * (to the half hour), weekdays and months seen. Months with general data but no flagged
+     * interval are left out; months not cached are assumed in. Returns a rule or null.
+     */
+    Amber.learnDemandWindow = function (cachedByDate, timeZone) {
+        let first = Infinity;
+        let last = -Infinity;
+        const days = new Set();
+        const flaggedMonths = new Set();
+        const seenMonths = new Set();
+        Object.keys(cachedByDate || {}).forEach((date) => {
+            (cachedByDate[date] || []).forEach((item) => {
+                if (item.source === 'csv' || item.channelType !== 'general') return;
+                const parts = Amber.clockPartsForItem(item, { timeZone: timeZone || 'Australia/Sydney' }, null);
+                seenMonths.add(parts.month);
+                if (!(item.tariffInformation && item.tariffInformation.demandWindow === true)) return;
+                const mins = parts.hours * 60 + parts.minutes;
+                first = Math.min(first, mins);
+                last = Math.max(last, mins);
+                days.add(parts.weekday);
+                flaggedMonths.add(parts.month);
+            });
+        });
+        if (!flaggedMonths.size) return null;
+        const start = Math.floor(first / 30) * 30;
+        const end = Math.min(1440, Math.ceil((last + 1) / 30) * 30);
+        const rule = { start: hhmm(Math.floor(start / 60) * 100 + start % 60), end: hhmm(Math.floor(end / 60) * 100 + end % 60), learned: true };
+        if (days.size < 7) rule.days = Array.from(days).sort();
+        const excluded = Array.from(seenMonths).filter((m) => !flaggedMonths.has(m));
+        if (excluded.length) rule.months = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].filter((m) => excluded.indexOf(m) === -1);
+        return rule;
+    };
+
+    /** "3pm–9pm every day in Nov–Mar, Jun–Aug" style description of a rule. */
+    Amber.describeDemandWindow = function (rule) {
+        if (!rule) return '';
+        const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const days = !rule.days || rule.days.length === 7 ? 'every day'
+            : (rule.days.join() === '1,2,3,4,5' ? 'weekdays' : rule.days.map((d) => DAY[d]).join(', '));
+        const months = rule.months && rule.months.length < 12
+            ? ` in ${rule.months.slice().sort((a, b) => a - b).map((m) => MON[m - 1]).join(', ')}` : ', all year';
+        return `${rule.start}–${rule.end} local time, ${days}${months}`;
     };
 
     const DEMAND_FLAG = Object.freeze({ demandWindow: true });
 
+    /** Local month, HHMM and weekday of a row's interval (from Start Time, else from NEM time). */
+    function rowLocal(row, timeZone) {
+        if (row.localTime != null && row.localDay != null) return row;
+        if (!row._local) {
+            const parts = Amber.clockPartsForItem({ nemTime: row.nemTime, duration: row.duration }, { timeZone: timeZone || 'Australia/Sydney' }, null);
+            // NEM time is the interval end; parts are 1 s before it, so round down to the interval start.
+            const mins = parts.hours * 60 + parts.minutes;
+            const start = Math.floor(mins / (row.duration || 30)) * (row.duration || 30);
+            row._local = { localMonth: parts.month, localTime: Math.floor(start / 60) * 100 + start % 60, localDay: parts.weekday };
+        }
+        return row.localTime != null ? Object.assign({}, row._local, { localTime: row.localTime, localMonth: row.localMonth }) : row._local;
+    }
+
     function inDemandWindow(rule, row) {
-        if (!rule || row.channelType !== 'general' || row.localTime == null) return false;
-        if (rule.months && rule.months.indexOf(row.localMonth) === -1) return false;
+        if (!rule || row.channelType !== 'general') return false;
+        const local = rowLocal(row, rule.timeZone);
+        if (rule.months && rule.months.indexOf(local.localMonth) === -1) return false;
+        if (rule.days && rule.days.indexOf(local.localDay) === -1) return false;
         const s = parseInt(rule.start.replace(':', ''), 10);
         const e = parseInt(rule.end.replace(':', ''), 10);
-        return row.localTime >= s && row.localTime < e;
+        return local.localTime >= s && local.localTime < e;
     }
 
     /**
@@ -236,7 +325,13 @@
         const { map, notes } = Amber.mapImportChannels(parsed.channels, site.channels);
         // Leave out channels with no usage at all (e.g. an unused controlled load).
         Object.keys(parsed.channels).forEach((id) => { if (!(parsed.channels[id].kwh > 0)) map[id] = null; });
-        const demandRule = Amber.demandWindowForSite(site);
+        let demandRule = Amber.demandWindowForSite(site);
+        if (!demandRule && o.learnFrom) {
+            const learned = Amber.learnDemandWindow(o.learnFrom, o.timeZone);
+            const general = (site.channels || []).find((c) => c.type === 'general');
+            if (learned) demandRule = Object.assign({ tariff: (general && general.tariff) || 'this tariff' }, learned);
+        }
+        if (demandRule) demandRule = Object.assign({ timeZone: o.timeZone }, demandRule);
         const result = { write: [], kept: 0, recent: 0, partial: 0, notes, demandRule, channelMap: map };
         parsed.days.forEach((date) => {
             if (recentCutoff && date >= recentCutoff) { result.recent += 1; return; }

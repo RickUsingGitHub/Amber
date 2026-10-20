@@ -12,15 +12,22 @@
     // Compare "This month" when the page opens with a saved API key (a test can preset
     // window.Amber.AUTO_COMPARE = false to start idle).
     Amber.AUTO_COMPARE = Amber.AUTO_COMPARE !== false;
-    Amber.APP_VERSION = '1.39';
+    Amber.APP_VERSION = '1.40';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
     Amber.RATES_ARE_GST_INCLUSIVE = true;
 
-    Amber.DEFAULT_AMBER_CONNECTION_CENTS = 116.787;
+    // Amber's fixed charges for Ausgrid EA116 (inc GST), from Amber bills: 2026-27 from a July
+    // 2026 bill (network 71.03 + metering 42.94 c/day, demand 39.48 c/kW/day ex GST); 2025-26
+    // (days before AMBER_RATES_CHANGE_DATE) from a June 2026 bill.
+    Amber.AMBER_RATES_CHANGE_DATE = '2026-07-01';
+    Amber.DEFAULT_AMBER_CONNECTION_CENTS = 125.367;
     Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS = 82.181;
-    Amber.DEFAULT_AMBER_DEMAND_CENTS = 42.345;
+    Amber.DEFAULT_AMBER_DEMAND_CENTS = 43.431;
+    Amber.PREVIOUS_AMBER_CONNECTION_CENTS = 116.787;
+    Amber.PREVIOUS_AMBER_SUBSCRIPTION_CENTS = 82.181;
+    Amber.PREVIOUS_AMBER_DEMAND_CENTS = 42.345;
 
     Amber.STATE_TIMEZONES = {
         ACT: 'Australia/Sydney',

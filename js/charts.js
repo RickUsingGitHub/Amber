@@ -87,9 +87,9 @@
     }
 
     Amber.displayAverageGraph = function (ctx, channelData, options) {
-        const generalChannel = Object.values(channelData).find((c) => c.type === 'general');
-        const feedInChannel = Object.values(channelData).find((c) => c.type === 'feedIn');
-        const controlledLoadChannel = Object.values(channelData).find((c) => c.type === 'controlledLoad');
+        const generalChannel = Amber.mergedChannelOfType(channelData, 'general');
+        const feedInChannel = Amber.mergedChannelOfType(channelData, 'feedIn');
+        const controlledLoadChannel = Amber.mergedChannelOfType(channelData, 'controlledLoad');
         const timeZone = zoneFor(options.state);
         // Average over days that actually have data (failed or missing days would dilute it).
         const numDays = daysWithData(generalChannel || feedInChannel) || options.numDays || 1;
@@ -248,9 +248,9 @@
     };
 
     Amber.displayDailyGraph = function (ctx, channelData, selectedDateStr, options) {
-        const generalChannel = Object.values(channelData).find((c) => c.type === 'general');
-        const feedInChannel = Object.values(channelData).find((c) => c.type === 'feedIn');
-        const controlledLoadChannel = Object.values(channelData).find((c) => c.type === 'controlledLoad');
+        const generalChannel = Amber.mergedChannelOfType(channelData, 'general');
+        const feedInChannel = Amber.mergedChannelOfType(channelData, 'feedIn');
+        const controlledLoadChannel = Amber.mergedChannelOfType(channelData, 'controlledLoad');
 
         // Plot the local calendar day on a local-time axis (DST aware). Each reading is
         // spread over its own length, so 30-minute data isn't drawn as 6x 5-minute spikes.

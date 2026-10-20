@@ -72,7 +72,7 @@
         const monthDemandInfo = context.demandInfoForTooltip ? context.demandInfoForTooltip[monthKey] : null;
         const planName = context.planName;
         const otherDaily = (parseFloat(context.otherDailyCents) || 0) / 100;
-        const amberDaily = Amber.amberFixedDaily(context.amberRates);
+        const amberDaily = Amber.amberFixedDaily(context.amberRates, dateStr);
         const amberDemandCost = summary.amberDemandCost || 0;
         const otherDemandCost = summary.otherDemandCost || 0;
         const totalAmberCharges = summary.amberCost + amberDemandCost + amberDaily;
@@ -170,7 +170,7 @@
         const monthName = monthDate.toLocaleString('default', { month: 'long', year: 'numeric' });
         const planName = context.planName;
         const otherDaily = ((parseFloat(context.otherDailyCents) || 0) / 100) * monthlySummary.daysInMonth;
-        const amberDaily = Amber.amberFixedDaily(context.amberRates) * monthlySummary.daysInMonth;
+        const amberDaily = Amber.amberFixedDaily(context.amberRates, `${monthKey}-01`) * monthlySummary.daysInMonth;
         const monthDemandInfo = context.demandInfoForTooltip ? context.demandInfoForTooltip[monthKey] : null;
         const totalAmberCharges = monthlySummary.amberCost + monthlySummary.amberDemandCost + amberDaily;
         const totalOtherCharges = monthlySummary.otherCost + monthlySummary.otherDemandCost + otherDaily;
@@ -248,7 +248,7 @@
             if (!summary) return;
             const monthKey = dateStr.substring(0, 7);
             if (!allMonthlyTotals[monthKey]) allMonthlyTotals[monthKey] = { amber: 0, other: 0, inKwh: 0, outKwh: 0 };
-            const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + Amber.amberFixedDaily(context.amberRates);
+            const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + Amber.amberFixedDaily(context.amberRates, dateStr);
             const totalOtherCharges = summary.otherCost + (summary.otherDemandCost || 0) + ((parseFloat(context.otherDailyCents) || 0) / 100);
             allMonthlyTotals[monthKey].amber += totalAmberCost;
             allMonthlyTotals[monthKey].other += totalOtherCharges;
@@ -317,7 +317,7 @@
                 const borderClass = isSelected ? 'border-4 border-indigo-500' : 'border border-gray-200';
                 const estimatedClass = summary && summary.estimatedCount > 0 ? ' ring-1 ring-amber-400' : '';
                 if (summary && (summary.totalInKwh > 0 || summary.totalOutKwh > 0)) {
-                    const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + Amber.amberFixedDaily(context.amberRates);
+                    const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + Amber.amberFixedDaily(context.amberRates, dateStr);
                     const costColor = totalAmberCost > 0 ? 'text-red-600' : 'text-green-600';
                     dayHtml = `
                         <div class="calendar-day has-data ${borderClass}${estimatedClass} rounded-md p-2 flex flex-col hover:bg-indigo-50 shadow-sm" data-date="${dateStr}" role="button" tabindex="0" aria-label="Open ${dateStr} on the daily graph">

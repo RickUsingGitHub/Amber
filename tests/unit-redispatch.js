@@ -82,6 +82,15 @@ assert(freeRow && near(freeRow.kwh, 24) && overRow && near(overRow.kwh, 24) && o
 const fitRows = Amber.channelPeriodBreakdown(capCt.B1, solarMax, 'NSW');
 assert(fitRows.some((r) => r.period === 'feedInOverCap' && near(r.kwh, 10)), 'breakdown shows feed-in over cap');
 
+const endeavourSso = nsw['Solar Sharer Offer (Endeavour, TOU)'];
+Amber.calculateOtherSupplierCosts(capCt, endeavourSso, 'NSW');
+assert(near(capCt.E1.totalOtherCost, 24 * 14.19 / 100), 'Endeavour Solar Sharer: over the cap at the solar soak rate');
+assert(Amber.otherRateForItem(at('17:00'), 'general', endeavourSso, 'NSW') === 48.75 && Amber.otherRateForItem(at('10:30'), 'general', endeavourSso, 'NSW') === 14.19, 'Endeavour Solar Sharer bands');
+const essentialSso = nsw['Solar Sharer Offer (Essential Energy, TOU)'];
+Amber.calculateOtherSupplierCosts(capCt, essentialSso, 'NSW');
+assert(near(capCt.E1.totalOtherCost, 24 * 27.6 / 100), 'Essential Solar Sharer: over the cap at off-peak');
+['QLD', 'SA'].forEach((st) => assert(Object.keys(Amber.supplierTemplates[st]).some((n) => /^Solar Sharer Offer/.test(n) && Amber.planHasFreeWindow(Amber.supplierTemplates[st][n])), `${st} has a Solar Sharer template`));
+
 const daily = Amber.precalculateDailySummaries(capCt, sso, { demandCents: 0, connectionCents: 0, subscriptionCents: 0 }, 'NSW');
 const dayOther = Object.values(daily.summaries).reduce((s, d) => s + d.otherCost, 0);
 assert(near(dayOther, 24 * 27.56 / 100), 'calendar costs honour the cap too');
@@ -124,6 +133,28 @@ const capped = Amber.redispatchForPlan(channels(dayData('2026-10-14', big)), sso
 assert(near(capped.summary.addedWindowImportKwh, 24 - 0.6), `SSO window filled only to its 24 kWh cap (${capped.summary.addedWindowImportKwh})`);
 const limited = Amber.redispatchForPlan(channels(dayData('2026-10-14', big)), ovo, 'NSW', { budgetKwh: 200, rte: 100, windowKw: 5, exportKw: 5 });
 assert(near(limited.summary.addedWindowImportKwh, 5 * 4 - 0.6), 'OVO window limited by import power');
+
+// ---- Battery size ----
+// No battery: the 7pm use moves (load you can move, no losses), but the 10pm export is solar-like
+// data with nothing to re-time and no battery to export from.
+const noBatt = Amber.redispatchForPlan(base, solarMax, 'NSW', { budgetKwh: 20, rte: 90, windowKw: 13, exportKw: 5, batteryKwh: 0 });
+assert(near(noBatt.summary.shiftedKwh, 10) && near(noBatt.summary.loadShiftedKwh, 10), 'no battery: load still shifts');
+assert(near(noBatt.summary.retimedKwh, 0) && near(noBatt.summary.extraExportKwh, 0) && near(noBatt.summary.redirectedKwh, 0), 'no battery: no battery exports invented');
+assert(near(noBatt.channels.E1.totalKWh, 0.6 + 10), 'no battery: moved load has no round-trip loss');
+assert(near(noBatt.channels.B1.totalKWh, 5), 'no battery: exports unchanged');
+// A 6 kWh battery: 6 kWh of the shift goes through it (with losses), the rest is load.
+const small = Amber.redispatchForPlan(base, solarMax, 'NSW', { budgetKwh: 20, rte: 90, windowKw: 13, exportKw: 5, batteryKwh: 6 });
+assert(near(small.summary.loadShiftedKwh, 10) && near(small.summary.extraExportKwh, 6), `6 kWh battery: load first, battery for extra export (${JSON.stringify(small.summary)})`);
+const bigBatt = Amber.redispatchForPlan(base, solarMax, 'NSW', { budgetKwh: 20, rte: 90, windowKw: 13, exportKw: 5, batteryKwh: 27 });
+assert(JSON.stringify(bigBatt.summary) === JSON.stringify(Object.assign({}, re.summary)), 'battery bigger than the budget: same as no limit');
+
+// Battery detection: exports after dark.
+assert(Amber.detectBattery(base, 'NSW').darkDays === 1, '10pm export counts as after dark');
+const solarOnly = channels(dayData('2026-10-14', evening, { '12:00': 3, '18:30': 0.4 }));
+assert(Amber.detectBattery(solarOnly, 'NSW').darkDays === 0, 'October 6:30pm export is not after dark');
+// dayData assumes daylight saving, so '19:30' is 6:30pm in June.
+const winter = channels(dayData('2026-06-14', evening, { '19:30': 0.4 }));
+assert(Amber.detectBattery(winter, 'NSW').darkDays === 1, 'June 6:30pm export is after dark');
 
 assert(Amber.redispatchForPlan(base, nsw['2026-27 DMO (Ausgrid, TOU)'], 'NSW', { budgetKwh: 10 }) === null, 'plans without a free window are skipped');
 assert(Amber.windowHoursOn([{ start: '22:00', end: '02:00', days: [] }], 1, 1) === 4, 'overnight window hours wrap');

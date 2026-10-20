@@ -337,19 +337,37 @@
      * own peak × that month's demand days, summed across the range.
      */
     Amber.calculateDemandTariff = function (channelTotals, amberDemandCents) {
+        // amberDemandCents: c/kW/day, or the amberRates object (each month at its own rate).
         const months = Amber.splitChannelsByMonth(channelTotals);
         const keys = Object.keys(months).sort();
         if (keys.length > 1) {
             const combined = combineMonthly(keys.map((k) => ({
-                month: k, info: Amber.calculateMonthDemandTariff(months[k], amberDemandCents)
+                month: k, info: Amber.calculateMonthDemandTariff(months[k], demandCentsFor(amberDemandCents, k))
             })), 'demandDays');
             return combined || { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         }
-        return Amber.calculateMonthDemandTariff(channelTotals, amberDemandCents);
+        return Amber.calculateMonthDemandTariff(channelTotals, demandCentsFor(amberDemandCents, keys[0]));
+    };
+
+    /**
+     * All channels of one type as one channel (sites can have several general meters, e.g. E1
+     * and E2). Returns the channel itself when there is only one, or null when there are none.
+     */
+    Amber.mergedChannelOfType = function (channelTotals, type) {
+        const list = Object.values(channelTotals || {}).filter((c) => c && c.type === type);
+        if (list.length <= 1) return list[0] || null;
+        return {
+            identifier: list.map((c) => c.identifier).join('+'),
+            type,
+            merged: true,
+            usageData: [].concat(...list.map((c) => c.usageData || [])),
+            totalKWh: list.reduce((s, c) => s + (c.totalKWh || 0), 0),
+            totalAmberCost: list.reduce((s, c) => s + (c.totalAmberCost || 0), 0)
+        };
     };
 
     Amber.calculateMonthDemandTariff = function (channelTotals, amberDemandCents) {
-        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        const generalChannel = Amber.mergedChannelOfType(channelTotals, 'general');
         const empty = { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
             return empty;
@@ -417,7 +435,7 @@
         const demandDays = demand.days || [];
         if (!demandDays.length) return empty;
 
-        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        const generalChannel = Amber.mergedChannelOfType(channelTotals, 'general');
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
             return empty;
         }
@@ -478,9 +496,51 @@
         return copy;
     };
 
-    Amber.amberFixedDaily = function (amberRates) {
-        return ((amberRates.connectionCents || 0) + (amberRates.subscriptionCents || 0)) / 100;
+    /**
+     * Amber's fixed rates on a date. Network charges change each 1 July, so rates.earlier
+     * ({ until, connectionCents, subscriptionCents, demandCents }) applies to dates before
+     * rates.earlier.until; any of its rates left blank fall back to the current ones.
+     */
+    Amber.amberRatesOn = function (rates, dateStr) {
+        const r = rates || {};
+        const e = r.earlier;
+        if (!e || !e.until || !dateStr || dateStr >= e.until) return r;
+        const pick = (k) => (e[k] != null && Number.isFinite(e[k]) ? e[k] : r[k]);
+        return { connectionCents: pick('connectionCents'), subscriptionCents: pick('subscriptionCents'), demandCents: pick('demandCents') };
     };
+
+    Amber.amberFixedDaily = function (amberRates, dateStr) {
+        const r = Amber.amberRatesOn(amberRates, dateStr);
+        return ((r.connectionCents || 0) + (r.subscriptionCents || 0)) / 100;
+    };
+
+    /** Connection and subscription ($) for every day from..to (inclusive), each day at its own rates. */
+    Amber.amberFixedForPeriod = function (amberRates, from, to) {
+        const r = amberRates || {};
+        const days = Amber.inclusiveDayCount(from, to);
+        const e = r.earlier;
+        let before = 0;
+        if (e && e.until && from && from < e.until) {
+            before = to < e.until ? days : Amber.inclusiveDayCount(from, Amber.addDays(e.until, -1));
+        }
+        const old = Amber.amberRatesOn(r, from);
+        const after = days - before;
+        return {
+            days,
+            connection: ((old.connectionCents || 0) * before + (r.connectionCents || 0) * after) / 100,
+            subscription: ((old.subscriptionCents || 0) * before + (r.subscriptionCents || 0) * after) / 100
+        };
+    };
+
+    // Demand rate (c/kW/day) for a month: a number, or an amberRates object (dated rates).
+    function demandCentsFor(ratesOrCents, monthKey) {
+        if (ratesOrCents && typeof ratesOrCents === 'object') {
+            const r = Amber.amberRatesOn(ratesOrCents, monthKey ? `${monthKey}-01` : null);
+            return r.demandCents;
+        }
+        return ratesOrCents;
+    }
+    Amber.demandCentsFor = demandCentsFor;
 
     Amber.computePlanTotals = function (channelTotals, planConfig, options) {
         const opts = options || {};
@@ -614,7 +674,7 @@
             const monthStartDateStr = Amber.formatForInput(monthStartDate);
             const monthEndDateStr = Amber.formatForInput(monthEndDate);
 
-            const amberDemandInfoMonth = Amber.calculateDemandTariff(monthChannelData, amberRates.demandCents);
+            const amberDemandInfoMonth = Amber.calculateDemandTariff(monthChannelData, amberRates);
             const otherDemandInfoMonth = Amber.calculateOtherDemandTariff(
                 monthChannelData, monthStartDateStr, monthEndDateStr, planConfig, state
             );
@@ -626,7 +686,7 @@
             const otherDailyDemandCharge = otherDemandInfoMonth ? otherDemandInfoMonth.dailyCharge : 0;
 
             const amberDemandDaysInMonth = new Set();
-            const generalChannelForMonth = Object.values(monthChannelData).find((c) => c.type === 'general');
+            const generalChannelForMonth = Amber.mergedChannelOfType(monthChannelData, 'general');
             if (generalChannelForMonth) {
                 generalChannelForMonth.usageData.forEach((item) => {
                     if (item.tariffInformation && item.tariffInformation.demandWindow) {

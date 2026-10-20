@@ -101,8 +101,42 @@ assert(near(ct.E5.totalAmberCost, 288 * 0.1 * 20 / 100) && near(ct.B5.totalAmber
 const demand = Amber.calculateDemandTariff(ct, 40);
 assert(near(demand.maxDemandKwh * 2, 0.1 * 6 * 2) && demand.demandDays === 1, 'demand from flagged intervals (30-min blocks)');
 
+// Other networks: Endeavour N73 is 4pm–8pm on weekdays only (2026-01-15 is a Thursday, 01-17 a Saturday).
+const endeavour = { id: 's3', network: 'Endeavour Energy', channels: [
+    { identifier: 'E5', type: 'general', tariff: 'N73' }, { identifier: 'B5', type: 'feedIn', tariff: 'N87' }] };
+const weekCsv = [HEADER].concat(exportDay('2026-01-15', 1), exportDay('2026-01-17', 1)).join('\n');
+const weekPlan = Amber.planUsageImport(Amber.parseAmberUsageCsv(weekCsv), endeavour, {}, { timeZone: 'Australia/Sydney' });
+const flags = (e) => e.data.filter((i) => i.tariffInformation).length;
+assert(flags(weekPlan.write[0]) === 48 && flags(weekPlan.write[1]) === 0, 'Endeavour: 4 hours on a Thursday, none on Saturday');
+assert(Amber.describeDemandWindow(weekPlan.demandRule) === '16:00–20:00 local time, weekdays, all year', 'window described');
+
+// No Start Time column: local time comes from NEM time and the site's time zone.
+const nemOnly = ['NEM Time,NEM Day,Channel Type,Channel Identifier,Price,Usage']
+    .concat(exportDay('2026-01-15', 1).map((l) => l.split(',').slice(2, 8).join(','))).join('\n');
+const nemPlan = Amber.planUsageImport(Amber.parseAmberUsageCsv(nemOnly), siteSame, {}, { timeZone: 'Australia/Sydney' });
+const nemFlagged = nemPlan.write[0].data.filter((i) => i.tariffInformation);
+assert(nemFlagged.length === 72 && nemFlagged[0].nemTime === '2026-01-15T14:05:00+10:00', 'demand window from NEM time when Start Time is missing');
+
+// Unknown tariff: learn the window from days cached from the API.
+const apiItems = (date) => {
+    const out = [];
+    for (let i = 0; i < 48; i++) {
+        const ms = Date.parse(`${date}T00:00:00+11:00`) + (i + 1) * 1800000;
+        const localStartMin = i * 30;
+        out.push({ nemTime: Amber.msToNemIso(ms), date, kwh: 1, duration: 30, channelIdentifier: 'E1', channelType: 'general',
+            tariffInformation: localStartMin >= 17 * 60 && localStartMin < 20 * 60 ? { demandWindow: true } : undefined });
+    }
+    return out;
+};
+const learned = Amber.learnDemandWindow({ '2026-01-14': apiItems('2026-01-14'), '2026-01-17': apiItems('2026-01-17').map((i) => Object.assign({}, i, { tariffInformation: undefined })) }, 'Australia/Sydney');
+assert(learned && learned.start === '17:00' && learned.end === '20:00' && learned.days.join() === '3', `learned window (${JSON.stringify(learned)})`);
+const mystery = { id: 's4', network: 'Mystery', channels: [{ identifier: 'E5', type: 'general', tariff: 'X99' }] };
+const learnedPlan = Amber.planUsageImport(parsed, mystery, {}, { learnFrom: { '2026-01-14': apiItems('2026-01-14') }, timeZone: 'Australia/Sydney' });
+assert(learnedPlan.demandRule && learnedPlan.demandRule.learned && learnedPlan.demandRule.tariff === 'X99', 'learned rule used for an unknown tariff');
+assert(Amber.planUsageImport(parsed, mystery, {}, {}).demandRule === null, 'no rule without a table entry or API days');
+
 // Whole months
-const span = Amber.wholeMonthSpan(Array.from({ length: 31 }, (_, i) => `2025-10-${pad(i + 1)}`).concat(['2025-11-01']));
+const span =Amber.wholeMonthSpan(Array.from({ length: 31 }, (_, i) => `2025-10-${pad(i + 1)}`).concat(['2025-11-01']));
 assert(span && span.start === '2025-10-01' && span.end === '2025-10-31', 'whole month span');
 assert(Amber.wholeMonthSpan(['2025-10-02']) === null, 'no whole months');
 

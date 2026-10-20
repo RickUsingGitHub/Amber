@@ -5,6 +5,8 @@
     const WEEKDAYS = [1, 2, 3, 4, 5];
     const AS_AT = '2026-07-01';
     const MARKET = '2026-09-23';
+    // Solar Sharer Offer price caps for the other networks (AER 2026-27, checked against retailer fact sheets).
+    const SSO_AS_AT = '2026-10-20';
 
     // Consumption, daily, demand and controlled-load figures are GST-inclusive (inc GST).
     // Feed-in is the published c/kWh (household FIT is typically GST-free).
@@ -212,6 +214,38 @@
                     offpeak: { rate: 27.56 }
                 },
                 demand: { e: false }, asAt: AS_AT
+            },
+            // Above the 24 kWh allowance, 11am–2pm is charged at the 10am–2pm solar soak rate.
+            'Solar Sharer Offer (Endeavour, TOU)': {
+                rateType: 'tou', daily: 185.14, feedIn: 0, cl: 20.64, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 24, windows: [{ start: '11:00', end: '14:00', days: ALL_DAYS }] },
+                    peak: { rate: 48.75, windows: [{ start: '16:00', end: '20:00', days: ALL_DAYS }] },
+                    shoulder: {
+                        rate: 37.53,
+                        windows: [
+                            { start: '20:00', end: '10:00', days: ALL_DAYS },
+                            { start: '14:00', end: '16:00', days: ALL_DAYS }
+                        ]
+                    },
+                    offpeak: { rate: 14.19 }
+                },
+                demand: { e: false }, asAt: SSO_AS_AT
+            },
+            'Solar Sharer Offer (Essential Energy, TOU)': {
+                rateType: 'tou', daily: 272.22, feedIn: 0, cl: 20.64, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 24, windows: [{ start: '11:00', end: '14:00', days: ALL_DAYS }] },
+                    peak: {
+                        rate: 45.57,
+                        windows: [
+                            { start: '07:00', end: '10:00', days: ALL_DAYS },
+                            { start: '15:00', end: '22:00', days: ALL_DAYS }
+                        ]
+                    },
+                    offpeak: { rate: 27.60 }
+                },
+                demand: { e: false }, asAt: SSO_AS_AT
             }
         },
         NT: {
@@ -229,6 +263,17 @@
             }
         },
         QLD: {
+            // Above the 24 kWh allowance, 11am–2pm is charged at the 11am–4pm rate.
+            'Solar Sharer Offer (Energex, TOU)': {
+                rateType: 'tou', daily: 177.85, feedIn: 0, cl: 19.0, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 24, windows: [{ start: '11:00', end: '14:00', days: ALL_DAYS }] },
+                    peak: { rate: 48.90, windows: [{ start: '16:00', end: '21:00', days: ALL_DAYS }] },
+                    shoulder: { rate: 8.10, windows: [{ start: '11:00', end: '16:00', days: ALL_DAYS }] },
+                    offpeak: { rate: 26.41 }
+                },
+                demand: { e: false }, asAt: SSO_AS_AT
+            },
             '2026-27 DMO (Energex, Flat)': {
                 rateType: 'flat', daily: 192.00, flat: 27.97, feedIn: 5.0, cl: 19.0,
                 demand: { e: false }, asAt: AS_AT
@@ -280,6 +325,24 @@
             }
         },
         SA: {
+            // Free noon–3pm; above the 24 kWh allowance it is charged at the 10am–4pm solar soak rate.
+            // Off-peak is midnight–6am. (SAPN's bands can vary by season and workday; check the BPID.)
+            'Solar Sharer Offer (SA Power Networks, TOU)': {
+                rateType: 'tou', daily: 180.05, feedIn: 0, cl: 22.24, clock: 'local',
+                tou: {
+                    free: { rate: 0, capKwh: 24, windows: [{ start: '12:00', end: '15:00', days: ALL_DAYS }] },
+                    peak: {
+                        rate: 58.84,
+                        windows: [
+                            { start: '06:00', end: '10:00', days: ALL_DAYS },
+                            { start: '16:00', end: '24:00', days: ALL_DAYS }
+                        ]
+                    },
+                    shoulder: { rate: 19.66, windows: [{ start: '10:00', end: '16:00', days: ALL_DAYS }] },
+                    offpeak: { rate: 35.17 }
+                },
+                demand: { e: false }, asAt: SSO_AS_AT
+            },
             '2026-27 DMO (SA Power Networks, Flat)': {
                 rateType: 'flat', daily: 180.00, flat: 41.91, feedIn: 5.0, cl: 23.0,
                 demand: { e: false }, asAt: AS_AT
