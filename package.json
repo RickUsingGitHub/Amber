@@ -4,8 +4,8 @@
   "description": "Browser-based Amber Electric usage comparison and export tool",
   "scripts": {
     "build:css": "tailwindcss -i ./css/input.css -o ./css/app.css --minify",
-    "test": "node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && playwright test",
-    "test:unit": "node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js",
+    "test": "node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && playwright test",
+    "test:unit": "node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js",
     "serve": "node scripts/static-server.js"
   },
   "devDependencies": {

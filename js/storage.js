@@ -166,6 +166,18 @@
         });
     };
 
+    /** Delete every cached day for one site. */
+    Amber.deleteSiteCache = function (db, siteId) {
+        return new Promise((resolve, reject) => {
+            if (!siteId) { resolve(); return; }
+            const prefix = `${siteId}_`;
+            const transaction = db.transaction([STORE_NAME], 'readwrite');
+            transaction.objectStore(STORE_NAME).delete(IDBKeyRange.bound(prefix, `${prefix}￿`));
+            transaction.oncomplete = () => resolve();
+            transaction.onerror = (event) => reject(event.target.error);
+        });
+    };
+
     Amber.deleteDatabase = function () {
         return new Promise((resolve, reject) => {
             const request = indexedDB.deleteDatabase(DB_NAME);
