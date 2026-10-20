@@ -12,7 +12,7 @@
     // Compare "This month" when the page opens with a saved API key (a test can preset
     // window.Amber.AUTO_COMPARE = false to start idle).
     Amber.AUTO_COMPARE = Amber.AUTO_COMPARE !== false;
-    Amber.APP_VERSION = '1.41';
+    Amber.APP_VERSION = '1.42';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.

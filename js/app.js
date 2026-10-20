@@ -1878,7 +1878,12 @@
             Object.keys(net.exportTariffs || {}).map((code) => ({ value: code, label: `${code}: ${net.exportTariffs[code].name}` }))) : [];
         fillSelect($('nem12Export'), exportOptions, net ? (net.defaultExport || '') : '');
         $('nem12ExportRow').classList.toggle('hidden', !net || !hasFeedIn || !!(tariff && tariff.export) || exportOptions.length < 2);
-        fillSelect($('nem12Controlled'), net ? Object.keys(net.controlled || {}).map((code) => ({ value: code, label: `${code}: ${net.controlled[code].name}` })) : [], net && net.defaultControlled);
+        // A controlled load that also runs in the day is on the second (longer-hours) tariff.
+        const clCodes = net ? Object.keys(net.controlled || {}) : [];
+        const clChannel = Object.values(nmiData.channels).find((c) => p.roles[c.suffix] === 'controlledLoad');
+        const clGuess = clChannel && clCodes.length > 1 && Amber.nem12DaytimeShare(clChannel) > 0.1 ? clCodes[1] : (net && net.defaultControlled);
+        const prevCl = keepTariff ? $('nem12Controlled').value : null;
+        fillSelect($('nem12Controlled'), clCodes.map((code) => ({ value: code, label: `${code}: ${net.controlled[code].name}` })), prevCl && clCodes.includes(prevCl) ? prevCl : clGuess);
         $('nem12ControlledRow').classList.toggle('hidden', !net || !hasCl || !!(tariff && tariff.controlled));
         const rows = Object.values(nmiData.channels).map((c) => {
             const opts = Object.keys(ROLE_LABELS).map((r) => `<option value="${r}"${p.roles[c.suffix] === r ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');

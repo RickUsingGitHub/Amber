@@ -47,6 +47,27 @@ assert(near(n.channels.E2.kwh, 2 * 18 * 0.5), 'Wh converted to kWh');
 assert(n.days.join() === '2026-01-15,2026-01-16' && n.firstDay === '2026-01-15', 'days');
 assert(!Amber.parseNem12('Date,Time,kWh\n2026-01-01,00:30,1').ok, 'rejects files that are not NEM12');
 
+// Some portals export only the data rows (no 100/900), with spaces around fields, 5-minute data
+// and a hot-water circuit on its own meter that is off most of the day.
+const hotWater = Array.from({ length: 288 }, (_, i) => (i >= 252 && i < 264 ? 0.397 : 0));
+const house = Array.from({ length: 288 }, (_, i) => 0.02 + (i >= 204 && i < 240 ? 0.1 : 0));
+const bare = [
+    '200,4102382010,E1E3Q1,E1,E1,E1,M1,kWh,5, ',
+    `300,20250801,${house.map((v) => v.toFixed(7)).join(',')} , ,20250802045850,`,
+    '400,1,288,A, , ',
+    '200,4102382010,E1E3Q1,E3,E3,E3,M2,kWh,5, ',
+    `300,20250801,${hotWater.map((v) => v.toFixed(7)).join(',')} , ,20250802045850,`,
+    '200,4102382010,E1E3Q1,Q1,Q1,E1,M1,kVArh,5, ',
+    `300,20250801,${house.map(() => '0.0100000').join(',')} , ,20250802045850,`
+].join('\n');
+const bareParsed = Amber.parseNem12(bare);
+const bareNmi = bareParsed.nmis['4102382010'];
+assert(bareParsed.ok && Object.keys(bareNmi.channels).sort().join() === 'E1,E3' && bareNmi.channels.E1.intervalLength === 5, 'data rows without a 100 header are read; kVArh left out');
+assert(near(bareNmi.channels.E3.kwh, 12 * 0.397) && near(bareNmi.channels.E1.kwh, 288 * 0.02 + 36 * 0.1), 'values read despite spaces');
+const bareRoles = Amber.guessNem12Roles(bareNmi);
+assert(bareRoles.E1 === 'general' && bareRoles.E3 === 'controlledLoad', `a circuit that is off most of the day is controlled load (${JSON.stringify(bareRoles)})`);
+assert(Amber.nem12DaytimeShare(bareNmi.channels.E3) === 0 && Amber.nem12DaytimeShare({ days: { d: Array.from({ length: 48 }, (_, i) => (i === 26 ? 1 : 0)) } }) === 1, 'daytime share of a channel');
+
 const roles = Amber.guessNem12Roles(n);
 assert(roles.E1 === 'general' && roles.E2 === 'controlledLoad' && roles.B1 === 'feedIn', `roles guessed (${JSON.stringify(roles)})`);
 assert(Amber.networkForNmi('4102000001') === 'ausgrid' && Amber.networkForNmi('6203123456') === 'powercor' && Amber.networkForNmi('9999') === null, 'network from NMI');

@@ -106,3 +106,23 @@ test('switching between an Amber site and an imported household swaps the Amber 
     await expect(page.locator('#amberConnectionRate')).toHaveValue('130.5');
     await expect(page.locator('#amberChargesLocalNote')).toHaveClass(/hidden/);
 });
+
+test('header-less NEM12 (data rows only) with a daytime hot-water circuit', async ({ page }) => {
+    await page.goto('/');
+    const lines = [];
+    for (const [suffix, fn] of [['E1', (i) => 0.03], ['E3', (i) => (i >= 180 && i < 192) || (i >= 240 && i < 252) ? 0.4 : 0]]) {
+        lines.push(`200,4102382010,E1E3,${suffix},${suffix},${suffix},M1,kWh,5, `);
+        for (let d = '2026-05-01'; d <= '2026-05-31'; d = addDays(d, 1)) {
+            lines.push(`300,${d.replace(/-/g, '')},${Array.from({ length: 288 }, (_, i) => fn(i).toFixed(7)).join(',')} , ,20260602000000,`);
+        }
+    }
+    await page.setInputFiles('#nem12File', { name: 'GranmasElec.csv', mimeType: 'text/csv', buffer: Buffer.from(lines.join('\n')) });
+    await expect(page.locator('#nem12Summary')).toContainText('NMI 4102382010: 31 days');
+    await expect(page.locator('select[data-nem12-role="E3"]')).toHaveValue('controlledLoad');
+    await expect(page.locator('#nem12ControlledRow')).toBeVisible();
+    await expect(page.locator('#nem12Controlled')).toHaveValue('EA040');
+    await expect(page.locator('#nem12ExportRow')).toBeHidden();
+    await page.click('#nem12Build');
+    await page.waitForSelector('#resultsSection:not(.hidden)');
+    await expect(page.locator('#results-table-container')).toContainText('controlledLoad');
+});
