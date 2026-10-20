@@ -35,7 +35,7 @@
         const nem = Amber.localWallToNemIso(day, parseInt(hh, 10), parseInt(mm, 10), zoneFor(state));
         const dummy = { nemTime: nem, processedTime: true };
         const rate = Amber.otherRateForItem(dummy, channelType, planConfig, state);
-        return `Competitor: ${rate.toFixed(2)} c/kWh`;
+        return `Other plan: ${rate.toFixed(2)} c/kWh`;
     }
 
     function zoneFor(state) {
@@ -72,15 +72,15 @@
             label: function (context) {
                 if (context.parsed.y === null) return '';
                 if (context.dataset.yAxisID === 'yPrice') {
-                    return `Price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
+                    return `Amber price: ${parseFloat(context.parsed.y).toFixed(2)} c/kWh`;
                 }
-                return `Usage: ${parseFloat(context.parsed.y).toFixed(2)} kW`;
+                return `Power: ${parseFloat(context.parsed.y).toFixed(2)} kW`;
             },
             afterBody: function (items) {
                 if (!items.length || !planConfig) return [];
                 const label = items[0].label;
                 const extra = [competitorTooltip(label, 'general', planConfig, state, dateStr)];
-                extra.push(competitorTooltip(label, 'feedIn', planConfig, state, dateStr).replace('Competitor', 'Feed-in'));
+                extra.push(competitorTooltip(label, 'feedIn', planConfig, state, dateStr).replace('Other plan', 'Other plan, solar'));
                 return extra;
             }
         };
@@ -125,7 +125,7 @@
         const chartDatasets = [];
         if (controlledLoadChannel && (controlledLoadChannel.totalKWh || 0) > 0) {
             chartDatasets.push({
-                label: `Average Controlled Load (kW) - Total: ${avgDailyControlledLoadKwh.toFixed(1)} kWh @ ${controlledLoadAvgPrice} c/kWh`,
+                label: `Hot water (kW): ${avgDailyControlledLoadKwh.toFixed(1)} kWh a day at ${controlledLoadAvgPrice} c/kWh`,
                 data: avgControlledLoadData,
                 backgroundColor: 'rgba(13, 110, 253, 0.6)',
                 borderColor: 'rgba(13, 110, 253, 1)',
@@ -136,7 +136,7 @@
             });
         }
         chartDatasets.push({
-            label: `Usage (kW) - Total: ${avgDailyGeneralKwh.toFixed(1)} kWh @ ${generalAvgPrice} c/kWh`,
+            label: `Bought from grid (kW): ${avgDailyGeneralKwh.toFixed(1)} kWh a day at ${generalAvgPrice} c/kWh`,
             data: avgUsageData,
             backgroundColor: 'rgba(54, 162, 235, 0.6)',
             borderColor: 'rgba(54, 162, 235, 1)',
@@ -147,7 +147,7 @@
         });
         if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
             chartDatasets.push({
-                label: `Feed-in (kW) - Total: ${avgDailyFeedInKwh.toFixed(1)} kWh @ ${feedInAvgPrice} c/kWh`,
+                label: `Solar sent out (kW): ${avgDailyFeedInKwh.toFixed(1)} kWh a day at ${feedInAvgPrice} c/kWh`,
                 data: avgFeedInData,
                 backgroundColor: 'rgba(40, 167, 69, 0.6)',
                 borderColor: 'rgba(40, 167, 69, 1)',
@@ -158,7 +158,7 @@
             });
         }
         chartDatasets.push({
-            label: 'Usage (c/kWh)',
+            label: 'Amber price to buy (c/kWh)',
             data: avgPriceData,
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
@@ -169,7 +169,7 @@
         });
         if (feedInChannel && (feedInChannel.totalKWh || 0) > 0) {
             chartDatasets.push({
-                label: 'Feed-in (c/kWh)',
+                label: 'Amber price for solar (c/kWh)',
                 data: avgFeedInPriceData,
                 type: 'line',
                 borderColor: 'rgba(40, 167, 69, 1)',
@@ -213,21 +213,21 @@
                         type: 'linear',
                         display: true,
                         position: 'left',
-                        title: { display: true, text: 'Average Power (kW)' },
+                        title: { display: true, text: 'Average power (kW)' },
                         stacked: true
                     },
                     yPrice: {
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'Average Spot Price (c/kWh)' },
+                        title: { display: true, text: 'Average Amber price (c/kWh)' },
                         grid: { drawOnChartArea: false }
                     }
                 },
                 plugins: {
                     title: {
                         display: true,
-                        text: `Average 24-Hour Usage & Price, local time (${options.startDate} to ${options.endDate})`
+                        text: `Average day, ${options.startDate} to ${options.endDate}`
                     },
                     tooltip: {
                         position: 'cursor',
@@ -310,7 +310,7 @@
         const chartDatasets = [];
         if (controlledLoadChannel && dailyControlledLoadKwh > 0) {
             chartDatasets.push({
-                label: `Controlled Load (kW) - Total: ${dailyControlledLoadKwh.toFixed(1)} kWh @ ${dailyControlledLoadAvgPrice} c/kWh`,
+                label: `Hot water (kW): ${dailyControlledLoadKwh.toFixed(1)} kWh at ${dailyControlledLoadAvgPrice} c/kWh`,
                 data: controlledLoadData,
                 backgroundColor: 'rgba(13, 110, 253, 0.6)',
                 borderColor: 'rgba(13, 110, 253, 1)',
@@ -321,7 +321,7 @@
             });
         }
         chartDatasets.push({
-            label: `Usage (kW) - Total: ${dailyGeneralKwh.toFixed(1)} kWh @ ${dailyGeneralAvgPrice} c/kWh`,
+            label: `Bought from grid (kW): ${dailyGeneralKwh.toFixed(1)} kWh at ${dailyGeneralAvgPrice} c/kWh`,
             data: usageData,
             backgroundColor: 'rgba(54, 162, 235, 0.6)',
             borderColor: 'rgba(54, 162, 235, 1)',
@@ -332,7 +332,7 @@
         });
         if (feedInChannel) {
             chartDatasets.push({
-                label: `Feed-in (kW) - Total: ${dailyFeedInKwh.toFixed(1)} kWh @ ${dailyFeedInAvgPrice} c/kWh`,
+                label: `Solar sent out (kW): ${dailyFeedInKwh.toFixed(1)} kWh at ${dailyFeedInAvgPrice} c/kWh`,
                 data: feedInData,
                 backgroundColor: 'rgba(40, 167, 69, 0.6)',
                 borderColor: 'rgba(40, 167, 69, 1)',
@@ -343,7 +343,7 @@
             });
         }
         chartDatasets.push({
-            label: 'Usage (c/kWh)',
+            label: 'Amber price to buy (c/kWh)',
             data: priceData,
             type: 'line',
             borderColor: 'rgba(255, 99, 132, 1)',
@@ -357,7 +357,7 @@
         });
         if (feedInChannel && dailyFeedInKwh > 0) {
             chartDatasets.push({
-                label: 'Feed-in (c/kWh)',
+                label: 'Amber price for solar (c/kWh)',
                 data: feedInPriceData,
                 type: 'line',
                 borderColor: 'rgba(40, 167, 69, 1)',
@@ -413,12 +413,12 @@
                         type: 'linear',
                         display: true,
                         position: 'right',
-                        title: { display: true, text: 'Spot Price (c/kWh)' },
+                        title: { display: true, text: 'Amber price (c/kWh)' },
                         grid: { drawOnChartArea: false }
                     }
                 },
                 plugins: {
-                    title: { display: true, text: `Usage & Price for ${selectedDateStr} (local time)${qualityNote}${renewNote}` },
+                    title: { display: true, text: `${selectedDateStr}: power and Amber's price${qualityNote}${renewNote}` },
                     tooltip: {
                         position: 'cursor',
                         callbacks: makeTooltipCallbacks(options.planConfig, options.state, selectedDateStr)

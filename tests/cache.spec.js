@@ -60,7 +60,7 @@ test('cache reuses final days, remembers empty days and refetches estimates', as
         await page.fill('#startDate', start);
         await page.fill('#endDate', yesterday);
         await page.click('#fetchData');
-        await page.waitForFunction(() => document.querySelector('#fetchData').textContent.includes('Compare Costs')
+        await page.waitForFunction(() => document.querySelector('#fetchData').textContent.includes('Compare costs')
             && !document.querySelector('#resultsSection').classList.contains('hidden'), null, { timeout: 60000 });
         return requestedDays.slice().sort();
     }

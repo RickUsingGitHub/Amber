@@ -145,15 +145,16 @@
         }
         // A bill for a period before 1 July carries last financial year's charges.
         const earlier = !!(parsed.check && parsed.check.end && parsed.check.end < Amber.AMBER_RATES_CHANGE_DATE);
+        $('amberChargesDetails').open = true;
         const suffix = earlier ? 'Prev' : '';
         if (parsed.connectionCents != null) $('amberConnectionRate' + suffix).value = parsed.connectionCents.toFixed(3);
         if (parsed.subscriptionCents != null) $('amberSubscriptionRate' + suffix).value = parsed.subscriptionCents.toFixed(3);
         if (parsed.demandCents != null) $('amberDemandRate' + suffix).value = parsed.demandCents.toFixed(3);
         saveAllSettings();
-        const gstNote = parsed.exGst ? ' Bill unit prices were ex GST; 10% GST was added.' : '';
+        const gstNote = parsed.exGst ? ' The bill shows prices without GST, so 10% was added.' : '';
         const billNote = billOk ? ' The bill is checked on the Bill Check tab.' : '';
         const yearNote = earlier ? ' The bill is from before 1 July 2026, so these went into last year\'s charges.' : '';
-        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${yearNote}${gstNote} Edit the fields if a line looks wrong.${billNote}`, false);
+        setAmberBillStatus(`Prefilled from your bill (including GST): ${parsed.found.join(', ')}.${yearNote}${gstNote} Change any box that looks wrong.${billNote}`, false);
         if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
         showBill();
     }
@@ -229,26 +230,26 @@
         const capVal = windowData && windowData.capKwh != null ? windowData.capKwh : '';
         const overVal = windowData && windowData.overRate != null ? windowData.overRate : '';
         const rateField = includeRate
-            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Rate (c/kWh, published)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>
+            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Solar rate at these times (c/kWh)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>
                <div class="grid grid-cols-2 gap-2 mt-1">
-                   <div><label class="text-xs font-medium text-gray-600">Daily cap (kWh)</label><input type="number" step="0.1" min="0" placeholder="none" class="tou-cap w-full text-xs p-1 border border-gray-300 rounded" value="${capVal}"></div>
-                   <div><label class="text-xs font-medium text-gray-600">Over cap (c/kWh)</label><input type="number" step="0.0001" placeholder="default FIT" class="tou-over-rate w-full text-xs p-1 border border-gray-300 rounded" value="${overVal}"></div>
+                   <div><label class="text-xs font-medium text-gray-600" title="The most kWh a day paid at this rate. Blank = no limit.">Up to (kWh a day)</label><input type="number" step="0.1" min="0" placeholder="none" class="tou-cap w-full text-xs p-1 border border-gray-300 rounded" value="${capVal}"></div>
+                   <div><label class="text-xs font-medium text-gray-600" title="The rate for kWh over that daily limit. Blank = the plan's normal feed-in rate.">Then (c/kWh)</label><input type="number" step="0.0001" placeholder="normal rate" class="tou-over-rate w-full text-xs p-1 border border-gray-300 rounded" value="${overVal}"></div>
                </div>`
             : '';
         const months = (windowData && windowData.months) || [];
         if (months.length) windowDiv.dataset.months = months.join(',');
         const monthsNote = months.length
-            ? `<div class="mt-1 text-[10px] text-gray-600">Months: ${months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).filter(Boolean).join(', ')}</div>`
+            ? `<div class="mt-1 text-[10px] text-gray-600" title="This time only applies in these months.">Months: ${months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).filter(Boolean).join(', ')}</div>`
             : '';
         windowDiv.innerHTML = `
-            <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove" data-remove-window="1" aria-label="Remove window">×</button>
+            <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove these hours" data-remove-window="1" aria-label="Remove these hours">×</button>
             <div class="grid grid-cols-2 gap-2 pr-6">
-                <div><label class="text-xs font-medium text-gray-600">Start</label><input type="time" class="tou-start w-full text-xs p-1 border border-gray-300 rounded" value="${startVal}"></div>
-                <div><label class="text-xs font-medium text-gray-600">End</label><input type="time" class="tou-end w-full text-xs p-1 border border-gray-300 rounded" value="${endVal}"></div>
+                <div><label class="text-xs font-medium text-gray-600">From</label><input type="time" class="tou-start w-full text-xs p-1 border border-gray-300 rounded" value="${startVal}"></div>
+                <div><label class="text-xs font-medium text-gray-600">To</label><input type="time" class="tou-end w-full text-xs p-1 border border-gray-300 rounded" value="${endVal}"></div>
             </div>
             ${rateField}
             ${monthsNote}
-            <div class="mt-1 text-[10px] font-medium text-gray-600">Days:</div>
+            <div class="mt-1 text-[10px] font-medium text-gray-600">On these days:</div>
             <div class="grid grid-cols-7 gap-1 mt-1 text-[10px]">
                 <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="1" ${daysArr.includes(1) ? 'checked' : ''}><span class="mt-0.5">M</span></label>
                 <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="2" ${daysArr.includes(2) ? 'checked' : ''}><span class="mt-0.5">T</span></label>
@@ -277,13 +278,13 @@
         const details = $('ratesDetails');
         const label = $('ratesDetailsToggleLabel');
         details.classList.toggle('hidden', !open);
-        label.textContent = open ? 'Hide comparison plan rates' : 'Show comparison plan rates';
+        label.textContent = open ? 'Hide this plan\'s prices' : 'Show this plan\'s prices';
         if (persist !== false) localStorage.setItem('ratesDetailsOpen', open ? 'true' : 'false');
     }
 
     // ---------- Tabs ----------
 
-    const TABS = ['check', 'bill', 'compare', 'setup'];
+    const TABS = ['setup', 'compare', 'check', 'bill'];
     const ACTIVE_TAB_KEY = 'activeTab';
 
     function selectTab(name, opts) {
@@ -315,14 +316,57 @@
         return TABS.indexOf(saved) !== -1 ? saved : 'compare';
     }
 
+    // Connected = an Amber API key, or a household imported from meter readings.
+    function isConnected() {
+        return !!$('apiKey').value.trim() || loadLocalSites().length > 0;
+    }
+
+    /** Show the welcome until there's something to look at; then the dates bar and results tools. */
+    function syncConnectedUi() {
+        const connected = isConnected();
+        $('welcomeCard').classList.toggle('hidden', connected);
+        $('connectedCard').classList.toggle('hidden', !connected);
+        $('configSection').classList.toggle('hidden', !connected);
+        $('resultTools').classList.toggle('hidden', !connected);
+        syncResultPlaceholders();
+    }
+
     function syncResultPlaceholders() {
         const hasResults = !$('resultsSection').classList.contains('hidden');
-        document.querySelectorAll('[data-results-placeholder]').forEach((el) => el.classList.toggle('hidden', hasResults));
+        const connected = isConnected();
+        document.querySelectorAll('[data-results-placeholder]').forEach((el) => {
+            el.classList.toggle('hidden', hasResults);
+            if (hasResults) return;
+            el.innerHTML = connected
+                ? 'Pick the dates at the top (or a quick pick) and press <strong>Compare costs</strong>. Your results will show here.'
+                : 'Nothing to show yet. Start on the <button type="button" data-go-start class="text-indigo-600 font-medium hover:underline">Start</button> tab: connect your Amber account, or import meter readings if you\'re not with Amber yet.';
+        });
         document.querySelectorAll('[data-jump-nav]').forEach((nav) => nav.classList.toggle('hidden', !hasResults));
         document.querySelectorAll('[data-jump]').forEach((link) => {
             const target = $(link.getAttribute('data-jump'));
             link.classList.toggle('hidden', !target || target.classList.contains('hidden'));
         });
+    }
+
+    function setupStartTab() {
+        $('chooseAmber').addEventListener('click', () => {
+            const card = $('setupSection');
+            card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            setTimeout(() => $('apiKey').focus({ preventScroll: true }), 300);
+        });
+        $('chooseCurious').addEventListener('click', () => {
+            $('nem12Section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        $('goCompare').addEventListener('click', () => selectTab('compare'));
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest) return;
+            if (e.target.closest('[data-go-start]')) selectTab('setup');
+            // Links to a section inside generated text (the nav buttons have their own handlers).
+            const jump = e.target.closest('[data-jump]:not(.jump-link)');
+            if (jump && $(jump.getAttribute('data-jump'))) $(jump.getAttribute('data-jump')).scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+        const list = $('glossaryList');
+        list.innerHTML = (Amber.GLOSSARY || []).map(([term, key]) => `<div><dt class="font-semibold text-gray-900">${Amber.escapeHTML(term)}</dt><dd class="text-gray-600">${Amber.escapeHTML(Amber.helpText(key))}</dd></div>`).join('');
     }
 
     function setupTabs() {
@@ -360,7 +404,7 @@
 
     function updateOtherSupplierHeading() {
         const planName = $('planName').value.trim();
-        $('otherSupplierHeading').textContent = planName ? `${planName} Details` : 'Other Supplier Details';
+        $('otherSupplierHeading').textContent = planName ? `Compare Amber with ${planName}` : 'Compare Amber with…';
     }
 
     function currentSiteNetwork() {
@@ -379,7 +423,7 @@
     function updatePlanSelector(selectedState) {
         const planSelector = $('planSelector');
         const previous = planSelector.value;
-        planSelector.innerHTML = '<option value="">-- Custom --</option>';
+        planSelector.innerHTML = '<option value="">Enter my own rates</option>';
         const names = visiblePlanNames(selectedState);
         names.forEach((planName) => {
             const option = document.createElement('option');
@@ -789,6 +833,7 @@
             row.classList.add('hidden');
             syncSiteMode();
             renderLocalSites();
+            if (state.ready) syncConnectedUi();
             return;
         }
         row.classList.remove('hidden');
@@ -808,6 +853,7 @@
         syncSiteMode();
         updatePlanSelector(currentStateCode());
         renderLocalSites();
+        if (state.ready) syncConnectedUi();
     }
 
     /** Amber charges and state follow the selected site: an estimated household shows its own. */
@@ -855,7 +901,7 @@
         const btn = $('fetchData');
         btn.disabled = isFetching;
         btn.setAttribute('aria-busy', isFetching ? 'true' : 'false');
-        btn.textContent = isFetching ? 'Comparing…' : 'Compare Costs';
+        btn.textContent = isFetching ? 'Comparing…' : 'Compare costs';
     }
 
     function showMessage(text, isError) {
@@ -950,8 +996,8 @@
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Estimated total</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">vs Amber</th>
+                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
+                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
                 </tr>
             </thead><tbody class="bg-white divide-y divide-gray-200">`;
         rows.forEach((row) => {
@@ -963,7 +1009,7 @@
                 else { vs = `$${Math.abs(diff).toFixed(2)} more than Amber`; cls = 'text-green-700'; }
             }
             const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
-            html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Compare using this plan">
+            html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Show this plan in full above">
                 <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(Amber.planListLabel(row.name, currentSiteNetwork()))}</td>
                 <td class="px-4 py-2 text-sm text-right">$${row.total.toFixed(2)}</td>
                 <td class="px-4 py-2 text-sm text-right ${cls}">${vs}</td>
@@ -1013,7 +1059,7 @@
             for (const option of planSelector.options) {
                 option.textContent = option.value
                     ? Amber.planListLabel(option.value, currentSiteNetwork())
-                    : '-- Custom --';
+                    : 'Enter my own rates';
             }
             return;
         }
@@ -1029,7 +1075,7 @@
         const selectedName = planSelector.value;
         for (const option of planSelector.options) {
             if (!option.value) {
-                option.textContent = '-- Custom --';
+                option.textContent = 'Enter my own rates';
                 continue;
             }
             const planConfig = option.value === selectedName
@@ -1155,14 +1201,21 @@
     }
 
     /** "$12.34" / "−$6.45" (proper minus sign before the dollar sign). */
+    // Plain names for meter channels.
+    function channelName(c) {
+        if (c.type === 'feedIn') return 'Solar sent out';
+        if (c.type === 'controlledLoad') return 'Hot water (controlled load)';
+        return 'Power bought';
+    }
+
     function money(v) {
         const n = Number(v) || 0;
         return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
     }
 
     async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
-        const planName = $('planName').value.trim() || 'Other Supplier';
-        const period = `(${startDateStr} to ${endDateStr})`;
+        const planName = $('planName').value.trim() || 'your plan';
+        const period = `(${fmtDate(startDateStr)} to ${fmtDate(endDateStr)})`;
         const rates = readAmberRates();
         state.lastResultDataPayload = {
             channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo
@@ -1173,15 +1226,15 @@
         let projectedMonthlyCostData = null;
         const comparePlan = createPlanObjectFromForm();
         let tableHTML = `
-            <p class="text-sm text-gray-500 mb-4">Period: ${numDays} days ${period}</p>
+            <p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Channel</th>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Period</th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Usage (kWh)</th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Amber</th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">${Amber.escapeHTML(planName)}</th>
+                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colLine" data-help-label="What">What</span></th>
+                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colPeriod" data-help-label="When">When</span></th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colUsage" data-help-label="kWh">kWh</span></th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colAmber" data-help-label="Amber">Amber</span></th>
+                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colOther" data-help-label="${Amber.escapeHTML(planName)}">${Amber.escapeHTML(planName)}</span></th>
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">`;
@@ -1209,7 +1262,7 @@
                 channelAmber += adjustedAmberCost;
                 channelOther += adjustedOtherCost;
                 tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">${Amber.escapeHTML(c.type)}</span></td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${channelName(c)} <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedAmberCost)}</td>
@@ -1221,8 +1274,8 @@
                 adjustedAmberTotal += exportAmber;
                 channelAmber += exportAmber;
                 tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${Amber.escapeHTML(c.identifier)} <span class="font-normal text-gray-500">export</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">Export charge</td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Solar sent out <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
+                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700"><span data-help="rowExportCharge" data-help-label="Network export charge">Network export charge</span></td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(c.amberExportChargeKwh || 0).toFixed(1)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}${money(exportAmber)}</td>
                     <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$0.00</td>
@@ -1230,8 +1283,8 @@
             }
             if (periodRows.length + (c.amberExportCharge ? 1 : 0) > 1) {
                 tableHTML += `<tr class="bg-gray-50 font-semibold">
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${Amber.escapeHTML(c.identifier)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Total</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${channelName(c)}</td>
+                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Subtotal</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${channelKwh.toFixed(1)}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelAmber)}</td>
                     <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelOther)}</td>
@@ -1258,10 +1311,10 @@
             };
             tableHTML += `<tr class="font-semibold border-t">
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">
-                    <span id="amber-demand-tooltip-trigger" class="cursor-help border-b border-dotted border-gray-500">Amber Demand Tariff</span>
+                    <span id="amber-demand-tooltip-trigger" class="border-b border-dotted border-gray-500">Amber demand charge</span><span data-help="rowDemand" data-help-label="Amber demand charge"></span>
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Max: ${maxDemandKw} kW</div>
+                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
                     ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">X ${demandTariffInfo.demandDays} days</div>`}
                 </td>
@@ -1277,9 +1330,9 @@
             const maxDemandDateTime = otherDemandTariffInfo.maxDemandTime || '';
             const dayCount = otherDemandTariffInfo.applicableDaysCount || numDays;
             tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} Demand Tariff</td>
+                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} demand charge<span data-help="rowOtherDemand" data-help-label="Demand charge"></span></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Max: ${maxDemandKw} kW</div>
+                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
                     ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">X ${dayCount} applicable days</div>`}
                 </td>
@@ -1296,33 +1349,38 @@
         adjustedOtherTotal += otherDailyConnection;
 
         tableHTML += `<tr class="font-semibold border-t">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily Connection</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily supply charge<span data-help="rowDaily" data-help-label="Daily supply charge"></span></td>
             <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberConnectionCost)}</td>
             <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(otherDailyConnection)}</td>
         </tr>
         <tr class="font-semibold">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber Subscription</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber membership fee<span data-help="rowSubscription" data-help-label="Amber membership fee"></span></td>
             <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberSubscriptionCost)}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">N/A</td>
+            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500 text-right">none</td>
         </tr>
         <tr class="bg-gray-50 font-bold">
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="3">Total</td>
+            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="3">Total<span data-help="rowTotal" data-help-label="Total"></span></td>
             <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedAmberTotal)}</td>
             <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedOtherTotal)}</td>
         </tr></tbody></table>`;
 
         const savings = adjustedOtherTotal - adjustedAmberTotal;
-        let savingsSummaryHTML = '<div class="mt-6 p-4 rounded-lg text-center ';
+        let savingsSummaryHTML = '<div class="mb-4 p-4 rounded-lg text-center ';
         if (savings > 0) {
             const percent = adjustedOtherTotal > 0 ? ` (${((savings / adjustedOtherTotal) * 100).toFixed(1)}%)` : '';
-            savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber saved you <span class="font-bold">$${savings.toFixed(2)}${percent}</span> compared to <span class="italic">${Amber.escapeHTML(planName)}</span>.</p>`;
+            savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber was <span class="font-bold">$${savings.toFixed(2)}${percent}</span> cheaper than <span class="italic">${Amber.escapeHTML(planName)}</span> for these dates.</p>`;
         } else if (savings < 0) {
-            savingsSummaryHTML += `bg-red-100"><p class="text-lg font-medium text-red-800">It would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper with <span class="italic">${Amber.escapeHTML(planName)}</span>.</p>`;
+            savingsSummaryHTML += `bg-red-100"><p class="text-lg font-medium text-red-800"><span class="italic">${Amber.escapeHTML(planName)}</span> would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper than Amber for these dates.</p>`;
         } else {
-            savingsSummaryHTML += 'bg-gray-100"><p class="text-lg font-medium text-gray-800">No material difference versus the selected plan.</p>';
+            savingsSummaryHTML += 'bg-gray-100"><p class="text-lg font-medium text-gray-800">Amber and this plan cost about the same for these dates.</p>';
+        }
+        if (!$('planSelector').value && !$('planName').value.trim()) {
+            savingsSummaryHTML += '<p class="mt-2 text-sm text-gray-700">That\'s against example prices. For a real answer, choose the plan you\'re on (or type its prices) under <button type="button" data-jump="planChooser" class="text-indigo-600 font-medium hover:underline">Compare Amber with…</button></p>';
         }
         savingsSummaryHTML += '</div>';
-        $('results-table-container').innerHTML = tableHTML + savingsSummaryHTML;
+        // The answer first; the table (which scrolls sideways on a phone) underneath.
+        const scrollHint = '<p class="sm:hidden text-xs text-gray-500 mb-2">Swipe the table sideways to see every column →</p>';
+        $('results-table-container').innerHTML = savingsSummaryHTML + scrollHint + tableHTML;
 
         if (projectedMonthlyCostData) {
             const trigger = $('amber-demand-tooltip-trigger');
@@ -1339,18 +1397,18 @@
         const banner = $('estimateBanner');
         if (estSite && estSite.local) {
             const e = estSite.estimate || {};
-            banner.textContent = `NMI ${estSite.nmi} isn't on Amber, so the Amber column is an estimate: each interval priced at AEMO's wholesale price for the region plus Amber's 2026-27 charges for ${estSite.network} tariff ${e.tariffCode}${e.exportCode ? ` and export tariff ${e.exportCode}` : ''}. It assumes they use power exactly as they did; on Amber with a battery, SmartShift would usually do better.`;
+            banner.textContent = `NMI ${estSite.nmi} isn't on Amber, so the Amber column is an estimate of what Amber would have charged: every reading priced at the wholesale price at that moment plus Amber's 2026-27 charges for ${estSite.network} (tariff ${e.tariffCode}${e.exportCode ? `, export tariff ${e.exportCode}` : ''}). It assumes power is used exactly as it was; with a home battery, Amber's automatic battery control (SmartShift) would usually do better. Pick the plan this household is on now under "Compare Amber with…" above.`;
             banner.classList.remove('hidden');
         } else {
             banner.classList.add('hidden');
         }
-        $('resultsDisclaimer').textContent = `All plan, custom and Amber rates are entered inc GST (GST-inclusive), as at ${asAt}. Turn inc GST off to show dollar totals excluding GST (feed-in credits are unchanged). Verify current rates with Energy Made Easy or the retailer before switching. Amber daily connection, subscription and demand rates are editable and may differ by network. Public holidays are not treated as off-peak.`;
+        $('resultsDisclaimer').textContent = `Plan prices are the published ones as at ${asAt}, including GST. Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
 
         const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
         const qualityBanner = $('qualityBanner');
         if (estimatedDays > 0) {
             qualityBanner.classList.remove('hidden');
-            qualityBanner.textContent = `${estimatedDays} day(s) in this range include estimated meter data (not yet billable). Recent days are often estimated.`;
+            qualityBanner.textContent = `${estimatedDays} day${estimatedDays === 1 ? '' : 's'} in these dates still ${estimatedDays === 1 ? 'has' : 'have'} estimated meter readings, so the figures may change a little. This is normal for the last few days.`;
         } else {
             qualityBanner.classList.add('hidden');
         }
@@ -1470,7 +1528,7 @@
         const gst = gstInclusive();
         const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
         const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
-        const planName = $('planName').value.trim() || 'Other Supplier';
+        const planName = $('planName').value.trim() || 'your plan';
         const view = (r) => {
             const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
             const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
@@ -1480,15 +1538,15 @@
             ? 'Total'
             : new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }));
         const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
-        const th = (t, right) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${t}</th>`;
+        const th = (t, right, help) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${help ? `<span data-help="${help}" data-help-label="${t}">${t}</span>` : t}</th>`;
         let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Month')}${th('Days', 1)}${th('Import kWh', 1)}${th('Export kWh', 1)}${th('Usage', 1)}${th('Feed-in', 1)}${th('Demand', 1)}${th('Fixed', 1)}${th('Amber', 1)}${th(Amber.escapeHTML(planName), 1)}${th('Difference', 1)}
+            ${th('Month')}${th('Days', 1, 'Days in the month. If some show as 25/31, only 25 days had meter readings.')}${th('kWh bought', 1, 'colUsage')}${th('kWh sent out', 1, 'Solar sent to the grid, in kWh.')}${th('Power', 1, 'What Amber charged for the power you bought (including any network export charge).')}${th('Solar credit', 1, 'What Amber paid for solar you sent out (shown with a minus sign).')}${th('Demand', 1, 'rowDemand')}${th('Daily + fees', 1, 'Daily supply charge plus Amber\'s membership fee.')}${th('Amber', 1, 'Everything on Amber for the month.')}${th(Amber.escapeHTML(planName), 1, 'colOther')}${th('Difference', 1, 'Which was cheaper that month, and by how much.')}
         </tr></thead><tbody class="divide-y divide-gray-200">`;
         rows.concat([total]).forEach((r) => {
             const v = view(r);
             const isTotal = r.month === 'Total';
             const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
-            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber ' : 'Other '}${money(Math.abs(v.diff))} cheaper`;
+            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber ' : 'Other plan '}${money(Math.abs(v.diff))} cheaper`;
             const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
             html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
                 ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
@@ -1497,7 +1555,7 @@
             </tr>`;
         });
         html += '</tbody></table>';
-        html += `<p class="text-xs text-gray-500 mt-2">Usage includes any Ausgrid export charge, as on the bill. Fixed = daily connection + Amber subscription. ${gst ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}.</p>`;
+        html += `<p class="text-xs text-gray-500 mt-2">${gst ? 'Includes GST' : 'Without GST (solar credits unchanged)'}.</p>`;
         $('monthlyTable').innerHTML = html;
         renderBatteryShift();
     }
@@ -1609,13 +1667,13 @@
         const note = $('shiftBatteryNote');
         let text;
         if (entered == null && detected.likely) {
-            text = `Battery: auto. Exports after dark on ${detected.darkDays} of ${detected.days} days look like a battery, so each budget is assumed to fit in it. Enter its usable size to cap that (13.5 kWh per Powerwall 2, for example); budget above it is then load you move, with no losses.`;
+            text = `Home battery: worked out for you. Your readings show power going to the grid after dark on ${detected.darkDays} of ${detected.days} days, which means a battery, so the app assumes yours can hold each amount above. Type its size to be exact (a Tesla Powerwall holds 13.5 kWh); anything over that is then treated as things like an electric car or pool pump.`;
         } else if (entered == null) {
-            text = 'Battery: auto. There are no exports after dark in this data, so this assumes no battery: only load you move (EV, pool pump, timer hot water) is shifted, and nothing is exported from a battery. Enter a size if you do have one.';
+            text = 'Home battery: worked out for you. Your readings show no power going to the grid after dark, so the app assumes there is no battery and only moves things like an electric car, pool pump or timer hot water. Type a size if you do have a battery.';
         } else if (entered === 0) {
-            text = 'No battery: only load you move (EV, pool pump, timer hot water) is shifted, and nothing is exported from a battery. If you have none of those, the As metered column is the one to use.';
+            text = 'No home battery: only things like an electric car, pool pump or timer hot water are moved. If you have none of those, look at the "As you used it" column.';
         } else {
-            text = `Battery ${entered} kWh: up to ${entered} kWh/day of each budget is battery charging (with round-trip losses); the rest is load you move.`;
+            text = `Home battery ${entered} kWh: up to ${entered} kWh a day is moved through the battery (losing a little on the way); the rest is things like an electric car or pool pump.`;
         }
         note.textContent = text;
         note.classList.remove('hidden');
@@ -1635,9 +1693,9 @@
         const n = table.months.length;
         const span = n === 1 ? monthLabel(table.months[0]) : `${monthLabel(table.months[0])} – ${monthLabel(table.months[n - 1])}`;
         const amber = table.amber;
-        let html = `<p class="text-sm text-gray-700 mb-2">${n} whole month${n === 1 ? '' : 's'} (${span}). Amber over the same months: <span class="font-semibold">${money(amber.total)}</span>, including ${money(amber.demand)} of demand charges.${n < 12 ? ' Under 12 months, so seasons are not evenly weighted.' : ''}</p>`;
+        let html = `<p class="text-sm text-gray-700 mb-2">Using ${n} whole month${n === 1 ? '' : 's'} of readings (${span}). Amber cost <span class="font-semibold">${money(amber.total)}</span> over the same months, including ${money(amber.demand)} of demand charges.${n < 12 ? ' That\'s less than a year, so summer and winter aren\'t balanced yet.' : ''}</p>`;
         html += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Plan')}${th('As metered', 1)}${table.budgets.map((b) => th(`Shift ${b} kWh/day`, 1)).join('')}
+            ${th('Plan')}${th('As you used it', 1)}${table.budgets.map((b) => th(`Move ${b} kWh a day`, 1)).join('')}
         </tr></thead><tbody class="divide-y divide-gray-200">`;
         table.plans.slice().sort((a, b) => a.shifted[a.shifted.length - 1] - b.shifted[b.shifted.length - 1]).forEach((row) => {
             html += `<tr>
@@ -1647,7 +1705,7 @@
             </tr>`;
         });
         html += '</tbody></table>';
-        html += `<p class="text-xs text-gray-500 mt-2">An estimate from meter data alone (no battery telemetry). It assumes each day's shift budget is available, ignores what a battery held overnight, and re-timed exports are capped by the plan's daily feed-in cap and the max export. Retail plans here have no demand charge. ${gstInclusive() ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}. Check each plan's Basic Plan Information Document before switching.</p>`;
+        html += `<p class="text-xs text-gray-500 mt-2">An estimate from your meter readings only. It assumes you can move the same amount every day, and limits extra solar or battery exports to the plan's daily feed-in cap and the maximum export. These plans have no demand charge. ${gstInclusive() ? 'Includes GST' : 'Without GST (solar credits unchanged)'}. Check each plan's fact sheet before switching.</p>`;
         $('batteryShiftTable').innerHTML = html;
 
         // Month by month for one plan and budget.
@@ -1662,16 +1720,16 @@
         const plan = table.plans.find((p) => p.name === state.shiftPlan);
         const bi = table.budgets.indexOf(state.shiftBudget);
         let m = `<div class="flex flex-wrap items-end gap-3 mb-2 text-sm">
-            <h4 class="font-semibold text-gray-800 mr-2">By month</h4>
+            <h4 class="font-semibold text-gray-800 mr-2">One plan, month by month</h4>
             <label class="text-xs text-gray-600">Plan <select id="shiftPlanSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
                 ${names.map((nm) => `<option value="${Amber.escapeHTML(nm)}"${nm === state.shiftPlan ? ' selected' : ''}>${Amber.escapeHTML(Amber.planListLabel(nm, currentSiteNetwork()))}</option>`).join('')}
             </select></label>
-            <label class="text-xs text-gray-600">Shift <select id="shiftBudgetSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
-                ${table.budgets.map((b) => `<option value="${b}"${b === state.shiftBudget ? ' selected' : ''}>${b} kWh/day</option>`).join('')}
+            <label class="text-xs text-gray-600">Move <select id="shiftBudgetSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
+                ${table.budgets.map((b) => `<option value="${b}"${b === state.shiftBudget ? ' selected' : ''}>${b} kWh a day</option>`).join('')}
             </select></label>
         </div>`;
         m += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Month')}${th('Amber', 1)}${th('of which demand', 1)}${th('Plan as metered', 1)}${th('Plan re-scheduled', 1)}${th('Difference', 1)}
+            ${th('Month')}${th('Amber', 1)}${th('incl. demand', 1)}${th('Plan as you used it', 1)}${th('Plan with use moved', 1)}${th('Difference', 1)}
         </tr></thead><tbody class="divide-y divide-gray-200">`;
         let tot = { amber: 0, demand: 0, metered: 0, shifted: 0 };
         table.months.forEach((month) => {
@@ -1889,7 +1947,7 @@
             const opts = Object.keys(ROLE_LABELS).map((r) => `<option value="${r}"${p.roles[c.suffix] === r ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
             return `<label class="inline-flex items-center gap-2 mr-4 mb-1">${Amber.escapeHTML(c.suffix)} (${Math.round(c.kwh).toLocaleString('en-AU')} kWh) <select data-nem12-role="${Amber.escapeHTML(c.suffix)}" class="border border-gray-300 rounded px-1 py-0.5 text-xs">${opts}</select></label>`;
         });
-        $('nem12Channels').innerHTML = `<div class="mb-1 font-medium text-gray-700">Meter channels</div>${rows.join('')}`;
+        $('nem12Channels').innerHTML = `<div class="mb-1 font-medium text-gray-700"><span data-help="nem12Channels" data-help-label="What each meter channel is">What each meter channel is</span></div>${rows.join('')}`;
         document.querySelectorAll('[data-nem12-role]').forEach((sel) => {
             sel.addEventListener('change', () => {
                 p.roles[sel.getAttribute('data-nem12-role')] = sel.value;
@@ -2084,11 +2142,11 @@
         }
         if (!bill || !bill.ok) {
             $('billCheckPeriod').textContent = '';
-            body.innerHTML = '<p class="text-sm text-gray-600">Upload an Amber bill (the PDF Amber emails you) to check each line against your meter data for the bill period. It also fills in the Amber charges on the Setup tab.</p>';
+            body.innerHTML = '<p class="text-sm text-gray-600">Choose an Amber bill (the PDF Amber emails you) to check each line against your meter readings for the same dates. It\'s read here in your browser, and it also fills in Amber\'s fixed charges on the Start tab.</p>';
             return;
         }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);
-        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are ex GST; meter figures are shown the same way.`;
+        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are shown without GST, and so are the figures from your meter readings.`;
         if (!billPeriodLoaded(bill)) {
             let msg;
             if (!billPeriodFinished(bill)) {
@@ -2141,7 +2199,7 @@
         const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
         if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
         if (bill.otherCost) notes.push(`The charges total includes $${bill.otherCost.toFixed(2)} of other charges from the bill (e.g. a card payment fee) that aren't in meter data.`);
-        if (bill.voucherCredit) notes.push(`Vouchers & concessions of $${bill.voucherCredit.toFixed(2)} (ex GST) are credited on the bill but aren't part of this check.`);
+        if (bill.voucherCredit) notes.push(`Vouchers & concessions of $${bill.voucherCredit.toFixed(2)} (without GST) are credited on the bill but aren't part of this check.`);
         if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
         const reward = rows.find((r) => r.key === 'exportRewardKwh');
         if (reward) {
@@ -2196,19 +2254,28 @@
         const money = (v) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
         const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)}%` : '–');
         const rows = [
-            ['Average import price', s.avgImportCents != null ? `${s.avgImportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.importKwh, 0)} kWh imported, ${money(s.importCost)} energy cost`],
-            ['Average feed-in earned', s.avgExportCents != null ? `${s.avgExportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.exportKwh, 0)} kWh exported, ${money(s.exportEarn)} earned`],
-            ['Imported during price spikes (≥ 50c)', `${fmt(s.spikeImportKwh)} kWh`, `${money(s.spikeImportCost)} — ${pct(s.spikeImportCost, s.importCost)} of energy cost`],
-            ['Exported during price spikes (≥ 50c)', `${fmt(s.spikeExportKwh)} kWh`, `${money(s.spikeExportEarn)} — ${pct(s.spikeExportEarn, s.exportEarn)} of feed-in earnings`],
-            ['Imported at negative prices', `${fmt(s.negImportKwh)} kWh`, `${money(s.negImportCredit)} paid to you`],
-            ['Exported at negative prices', `${fmt(s.negExportKwh)} kWh`, `${money(s.negExportCost)} cost`],
-            ['Evening import (4–9 pm)', `${fmt(s.eveningImportKwh)} kWh`, `${pct(s.eveningImportKwh, s.importKwh)} of all import`],
-            ['Days with (almost) no grid import', `${s.gridFreeDays} of ${s.dayCount}`, 'under 0.5 kWh imported'],
-            ['Days exporting more than importing', `${s.netExportDays} of ${s.dayCount}`, '']
+            ['Average price you paid', s.avgImportCents != null ? `${s.avgImportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.importKwh, 0)} kWh bought for ${money(s.importCost)}`,
+                'Your power cost (not counting daily charges) divided by the kWh you bought. Handy to compare with another plan\'s price per kWh.'],
+            ['Average paid for your solar', s.avgExportCents != null ? `${s.avgExportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.exportKwh, 0)} kWh sent out, ${money(s.exportEarn)} earned`,
+                'What Amber paid on average for each kWh of solar (or battery power) you sent to the grid.'],
+            ['Bought during price spikes (50c+)', `${fmt(s.spikeImportKwh)} kWh`, `${money(s.spikeImportCost)}, ${pct(s.spikeImportCost, s.importCost)} of your power cost`,
+                'Amber\'s price jumps when the market is short of power, sometimes to several dollars per kWh. This is how much you bought while it was 50 c/kWh or more. A battery or shifting use helps avoid these moments.'],
+            ['Sold during price spikes (50c+)', `${fmt(s.spikeExportKwh)} kWh`, `${money(s.spikeExportEarn)}, ${pct(s.spikeExportEarn, s.exportEarn)} of your solar credit`,
+                'Power you sent out while Amber\'s price was 50 c/kWh or more: the best-paid moments, usually on hot evenings.'],
+            ['Bought at negative prices', `${fmt(s.negImportKwh)} kWh`, `${money(s.negImportCredit)} paid to you`,
+                'On very sunny days there can be so much power that the price drops below zero, so you\'re paid to use it.'],
+            ['Sold at negative prices', `${fmt(s.negExportKwh)} kWh`, `${money(s.negExportCost)} cost`,
+                'When the price is below zero, sending solar to the grid costs you a little. Storing it in a battery or turning exports down avoids that.'],
+            ['Evening use (4pm to 9pm)', `${fmt(s.eveningImportKwh)} kWh`, `${pct(s.eveningImportKwh, s.importKwh)} of all power bought`,
+                'Power bought in the evening, when prices are usually highest. Moving use out of these hours saves the most.'],
+            ['Days with almost no grid power', `${s.gridFreeDays} of ${s.dayCount}`, 'under 0.5 kWh bought',
+                'Days you bought less than half a kWh from the grid in total, for example thanks to solar and a battery.'],
+            ['Days you sent out more than you bought', `${s.netExportDays} of ${s.dayCount}`, '',
+                'Days when the solar you sent to the grid was more than the power you bought from it.']
         ];
         $('moreStatsTable').innerHTML = `<table class="min-w-full divide-y divide-gray-200 text-sm"><tbody class="divide-y divide-gray-200">${rows.map((r) => `
             <tr>
-                <td class="px-3 py-2 text-gray-900 font-medium">${Amber.escapeHTML(r[0])}</td>
+                <td class="px-3 py-2 text-gray-900 font-medium"><span data-help="${Amber.escapeHTML(r[3])}" data-help-label="${Amber.escapeHTML(r[0])}">${Amber.escapeHTML(r[0])}</span></td>
                 <td class="px-3 py-2 text-right text-gray-900 whitespace-nowrap">${Amber.escapeHTML(r[1])}</td>
                 <td class="px-3 py-2 text-gray-500">${Amber.escapeHTML(r[2])}</td>
             </tr>`).join('')}</tbody></table>`;
@@ -2265,7 +2332,7 @@
         if (!apiKey && !localMode) {
             selectTab('setup');
             $('apiKey').focus();
-            showMessage('Please enter your Amber API key (or import a NEM12 file for a household that is not on Amber).', true);
+            showMessage('First connect your Amber account (paste your API key below), or import meter readings if you are not with Amber yet.', true);
             return;
         }
         if (!startDateValue || !endDateValue) {
@@ -2569,9 +2636,9 @@
     function buildSettingsMenu() {
         const settingsMenu = $('settingsMenu');
         let html = `
-            <button type="button" id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear cached data</button>
+            <button type="button" id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear saved meter readings<span class="block text-xs text-gray-500">They download again from Amber next time (about the last 3 months only)</span></button>
             <div class="border-t border-gray-100"></div>
-            <button type="button" id="clearCustomPlansBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear custom plans</button>
+            <button type="button" id="clearCustomPlansBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Delete plans I typed in<span class="block text-xs text-gray-500">The built-in plans stay</span></button>
         `;
         const urlParams = new URLSearchParams(root.location.search);
         if (urlParams.get('name') === 'Rick') {
@@ -2650,6 +2717,7 @@
         $('rememberApiKey').checked = storedKey.remember;
         try { localStorage.removeItem('configHidden'); } catch (e) { /* retired */ }
         setupTabs();
+        setupStartTab();
 
         const yesterday = Amber.formatForInput(Amber.localYesterday());
         $('startDate').setAttribute('max', yesterday);
@@ -2841,6 +2909,7 @@
         let siteFetchTimer = null;
         $('apiKey').addEventListener('input', () => {
             resetSitesIfKeyChanged($('apiKey').value.trim());
+            syncConnectedUi();
         });
         $('apiKey').addEventListener('blur', () => {
             const key = $('apiKey').value.trim();
@@ -2857,6 +2926,7 @@
         $('nem12Tariff').addEventListener('change', () => renderNem12Options(true));
         $('nem12Build').addEventListener('click', buildNem12Estimate);
         populateSites([]);
+        syncConnectedUi();
         if (storedKey.key) tryLoadSites(storedKey.key);
         state.ready = true;
         const localSelected = !!(selectedSite() && selectedSite().local);

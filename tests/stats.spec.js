@@ -57,8 +57,8 @@ test.describe('More Stats', () => {
         await page.click('#fetchData');
         await page.click('#tab-check');
         await page.waitForSelector('#moreStatsSection:not(.hidden)');
-        await expect(page.locator('#moreStatsTable')).toContainText('Average import price');
-        await expect(page.locator('#moreStatsTable')).toContainText('Imported during price spikes');
+        await expect(page.locator('#moreStatsTable')).toContainText('Average price you paid');
+        await expect(page.locator('#moreStatsTable')).toContainText('Bought during price spikes');
         await expect(page.locator('#nightStatsSection')).toHaveCount(0);
         const leftovers = await page.evaluate(() => [localStorage.getItem('teslaHomeLoad'), localStorage.getItem('nightStatsSettings')]);
         expect(leftovers).toEqual([null, null]);

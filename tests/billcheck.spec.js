@@ -51,7 +51,7 @@ test('bill check and monthly breakdown', async ({ page }) => {
     // Visible before any bill, with its own upload button
     await page.click('#tab-bill');
     await expect(page.locator('#billCheckSection')).toBeVisible();
-    await expect(page.locator('#billCheckBody')).toContainText('Upload an Amber bill');
+    await expect(page.locator('#billCheckBody')).toContainText('Choose an Amber bill');
 
     // A file it can't read explains what was missing and shows the extracted text
     await page.setInputFiles('#billCheckFile', { name: 'odd.txt', mimeType: 'text/plain', buffer: Buffer.from('Some statement\nTotal due $12.00\n') });
@@ -86,20 +86,20 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await page.fill('#startDate', '2025-08-01');
     await page.fill('#endDate', '2025-08-05');
     await page.click('#fetchData');
-    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(page.locator('#monthlySection')).toBeVisible();
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, 'Total']);
     await expect(page.locator('#monthlyTable tbody tr:first-child td:nth-child(2)')).toHaveText('31');
     await page.fill('#endDate', '2025-08-31');
     await page.click('#fetchData');
-    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, /Aug(ust)? 2025/, 'Total']);
 
     // Coming back to Bill Check loads the bill period again
     await page.click('#tab-bill');
     await page.waitForSelector('#billCheckBody table');
     await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
-    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
 
     // Other dates chosen on Bill Check: say so, with a link back to the bill period
     await page.fill('#startDate', '2025-08-01');
@@ -114,7 +114,7 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await page.fill('#startDate', '2025-08-01');
     await page.fill('#endDate', '2025-08-05');
     await page.click('#fetchData');
-    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await page.click('#tab-compare');
     await page.reload();
     await page.click('#tab-bill');
@@ -188,7 +188,7 @@ test('a bill period that fails to load is not retried by opening the tab', async
     await page.click('#tab-bill');
     await page.waitForTimeout(300);
     expect(julyCalls).toBe(calls);
-    await expect(page.locator('#fetchData')).toHaveText('Compare Costs');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
 
     failJuly = false;
     await page.click('#billCheckBody [data-bill-reload]');

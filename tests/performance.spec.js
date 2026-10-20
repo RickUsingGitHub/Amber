@@ -188,7 +188,7 @@ test.describe('Amber fetch and UI', () => {
     });
 
     test('exposes export, date presets, remember-key and site selector', async ({ page }) => {
-        await expect(page.locator('#downloadCsvButton')).toHaveText(/Export/);
+        await expect(page.locator('#downloadCsvButton')).toHaveText(/Download/);
         await expect(page.locator('[data-preset="7d"]')).toBeVisible();
         await page.click('#tab-setup');
         await expect(page.locator('#rememberApiKey')).toBeVisible();
