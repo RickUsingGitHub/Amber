@@ -42,10 +42,21 @@
     }
 
     function readAmberRates() {
+        const prev = (id) => {
+            const v = parseFloat($(id).value);
+            return Number.isFinite(v) && v > 0 ? v : null;
+        };
         return {
             connectionCents: parseFloat($('amberConnectionRate').value) || Amber.DEFAULT_AMBER_CONNECTION_CENTS,
             subscriptionCents: parseFloat($('amberSubscriptionRate').value) || Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS,
-            demandCents: parseFloat($('amberDemandRate').value) || Amber.DEFAULT_AMBER_DEMAND_CENTS
+            demandCents: parseFloat($('amberDemandRate').value) || Amber.DEFAULT_AMBER_DEMAND_CENTS,
+            // Days before 1 July use last financial year's charges (blank = same as now).
+            earlier: {
+                until: Amber.AMBER_RATES_CHANGE_DATE,
+                connectionCents: prev('amberConnectionRatePrev'),
+                subscriptionCents: prev('amberSubscriptionRatePrev'),
+                demandCents: prev('amberDemandRatePrev')
+            }
         };
     }
 
@@ -97,13 +108,17 @@
             showBill();
             return;
         }
-        if (parsed.connectionCents != null) $('amberConnectionRate').value = parsed.connectionCents.toFixed(3);
-        if (parsed.subscriptionCents != null) $('amberSubscriptionRate').value = parsed.subscriptionCents.toFixed(3);
-        if (parsed.demandCents != null) $('amberDemandRate').value = parsed.demandCents.toFixed(3);
+        // A bill for a period before 1 July carries last financial year's charges.
+        const earlier = !!(parsed.check && parsed.check.end && parsed.check.end < Amber.AMBER_RATES_CHANGE_DATE);
+        const suffix = earlier ? 'Prev' : '';
+        if (parsed.connectionCents != null) $('amberConnectionRate' + suffix).value = parsed.connectionCents.toFixed(3);
+        if (parsed.subscriptionCents != null) $('amberSubscriptionRate' + suffix).value = parsed.subscriptionCents.toFixed(3);
+        if (parsed.demandCents != null) $('amberDemandRate' + suffix).value = parsed.demandCents.toFixed(3);
         saveAllSettings();
         const gstNote = parsed.exGst ? ' Bill unit prices were ex GST; 10% GST was added.' : '';
         const billNote = billOk ? ' The bill is checked on the Bill Check tab.' : '';
-        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${gstNote} Edit the fields if a line looks wrong.${billNote}`, false);
+        const yearNote = earlier ? ' The bill is from before 1 July 2026, so these went into last year\'s charges.' : '';
+        setAmberBillStatus(`Prefill (inc GST): ${parsed.found.join(', ')}.${yearNote}${gstNote} Edit the fields if a line looks wrong.${billNote}`, false);
         if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
         showBill();
     }
@@ -534,6 +549,7 @@
         localStorage.setItem('amberConnectionRate', $('amberConnectionRate').value);
         localStorage.setItem('amberSubscriptionRate', $('amberSubscriptionRate').value);
         localStorage.setItem('amberDemandRate', $('amberDemandRate').value);
+        ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => localStorage.setItem(id, $(id).value));
 
         const getPeriodSettings = (period) => {
             const container = document.querySelector(`[data-tou-period="${period}"]`);
@@ -617,15 +633,32 @@
 
         const savedDaily = localStorage.getItem('dailyConnectionRate');
         if (savedDaily) $('dailyConnectionRate').value = savedDaily;
-        const storedConn = localStorage.getItem('amberConnectionRate');
-        const storedSub = localStorage.getItem('amberSubscriptionRate');
+        let storedConn = localStorage.getItem('amberConnectionRate');
+        let storedSub = localStorage.getItem('amberSubscriptionRate');
+        let storedDemand = localStorage.getItem('amberDemandRate');
+        const storedPrev = ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].map((id) => localStorage.getItem(id));
+        // Before v1.40 there was one set of charges; the old defaults (and bills that matched them)
+        // were 2025-26 charges, so they move to last year and this year starts from the new defaults.
+        if (storedPrev.every((v) => v == null)) {
+            const was = (v, d) => v != null && Math.abs(parseFloat(v) - d) < 0.0005;
+            if (was(storedConn, Amber.PREVIOUS_AMBER_CONNECTION_CENTS) || was(storedDemand, Amber.PREVIOUS_AMBER_DEMAND_CENTS)) {
+                storedPrev[0] = storedConn;
+                storedPrev[1] = storedSub;
+                storedPrev[2] = storedDemand;
+                storedConn = null;
+                storedDemand = null;
+            }
+        }
         $('amberConnectionRate').value = (!storedConn || storedConn === '109.894')
             ? Amber.DEFAULT_AMBER_CONNECTION_CENTS
             : storedConn;
         $('amberSubscriptionRate').value = (!storedSub || storedSub === '82.203')
             ? Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS
             : storedSub;
-        $('amberDemandRate').value = localStorage.getItem('amberDemandRate') || Amber.DEFAULT_AMBER_DEMAND_CENTS;
+        $('amberDemandRate').value = storedDemand || Amber.DEFAULT_AMBER_DEMAND_CENTS;
+        $('amberConnectionRatePrev').value = storedPrev[0] != null && storedPrev[0] !== '' ? storedPrev[0] : Amber.PREVIOUS_AMBER_CONNECTION_CENTS;
+        $('amberSubscriptionRatePrev').value = storedPrev[1] != null && storedPrev[1] !== '' ? storedPrev[1] : Amber.PREVIOUS_AMBER_SUBSCRIPTION_CENTS;
+        $('amberDemandRatePrev').value = storedPrev[2] != null && storedPrev[2] !== '' ? storedPrev[2] : Amber.PREVIOUS_AMBER_DEMAND_CENTS;
 
         const savedDemand = localStorage.getItem('demandSettings');
         if (savedDemand) {
@@ -813,8 +846,9 @@
         };
     }
 
-    function computeAmberDisplayTotal(channelTotals, demandTariffInfo, numDays) {
+    function computeAmberDisplayTotal(channelTotals, demandTariffInfo, startDateStr, endDateStr) {
         const rates = readAmberRates();
+        const fixed = Amber.amberFixedForPeriod(rates, startDateStr, endDateStr);
         let total = 0;
         Object.values(channelTotals).forEach((c) => {
             total += Amber.adjustForGst(c.totalAmberCost || 0, gstInclusive(), c.type === 'feedIn');
@@ -822,8 +856,8 @@
         if (demandTariffInfo && demandTariffInfo.cost > 0) {
             total += Amber.adjustForGst(demandTariffInfo.cost, gstInclusive(), false);
         }
-        total += Amber.adjustForGst((rates.connectionCents * numDays) / 100, gstInclusive(), false);
-        total += Amber.adjustForGst((rates.subscriptionCents * numDays) / 100, gstInclusive(), false);
+        total += Amber.adjustForGst(fixed.connection, gstInclusive(), false);
+        total += Amber.adjustForGst(fixed.subscription, gstInclusive(), false);
         return total;
     }
 
@@ -921,7 +955,8 @@
         const amberTotal = computeAmberDisplayTotal(
             payload.channelTotals,
             payload.demandTariffInfo,
-            payload.numDays
+            payload.startDateStr,
+            payload.endDateStr
         );
         state.amberCostBaseline = amberTotal;
         const stateCode = currentStateCode();
@@ -1149,7 +1184,8 @@
             const monthOfMaxDemand = maxDemandDateTimeObj.getMonth();
             const yearOfMaxDemand = maxDemandDateTimeObj.getFullYear();
             const daysInMonth = new Date(yearOfMaxDemand, monthOfMaxDemand + 1, 0).getDate();
-            const projectedMonthlyCost = (demandTariffInfo.maxDemandKwh * 2) * (rates.demandCents / 100) * daysInMonth;
+            const monthKey = `${yearOfMaxDemand}-${String(monthOfMaxDemand + 1).padStart(2, '0')}`;
+            const projectedMonthlyCost = (demandTariffInfo.maxDemandKwh * 2) * (Amber.demandCentsFor(rates, monthKey) / 100) * daysInMonth;
             projectedMonthlyCostData = {
                 cost: Amber.adjustForGst(projectedMonthlyCost, gstInclusive(), false),
                 month: maxDemandDateTimeObj.toLocaleString('default', { month: 'long' })
@@ -1186,9 +1222,10 @@
             </tr>`;
         }
 
-        const amberConnectionCost = Amber.adjustForGst((rates.connectionCents * numDays) / 100, gstInclusive(), false);
+        const amberFixed = Amber.amberFixedForPeriod(rates, startDateStr, endDateStr);
+        const amberConnectionCost = Amber.adjustForGst(amberFixed.connection, gstInclusive(), false);
         const otherDailyConnection = Amber.adjustForGst(((parseFloat($('dailyConnectionRate').value) || 0) * numDays) / 100, gstInclusive(), false);
-        const amberSubscriptionCost = Amber.adjustForGst((rates.subscriptionCents * numDays) / 100, gstInclusive(), false);
+        const amberSubscriptionCost = Amber.adjustForGst(amberFixed.subscription, gstInclusive(), false);
         adjustedAmberTotal += amberConnectionCost + amberSubscriptionCost;
         adjustedOtherTotal += otherDailyConnection;
 
@@ -1402,7 +1439,10 @@
             budgets: unique.length ? unique : Amber.REDISPATCH_DEFAULTS.budgets.slice(),
             windowKw: parseFloat($('shiftWindowKw').value) || Amber.REDISPATCH_DEFAULTS.windowKw,
             exportKw: parseFloat($('shiftExportKw').value) >= 0 ? parseFloat($('shiftExportKw').value) : Amber.REDISPATCH_DEFAULTS.exportKw,
-            rte: parseFloat($('shiftRte').value) || Amber.REDISPATCH_DEFAULTS.rte
+            rte: parseFloat($('shiftRte').value) || Amber.REDISPATCH_DEFAULTS.rte,
+            // Blank = auto (from the meter data); 0 = no battery.
+            batteryKwh: $('shiftBatteryKwh').value.trim() === '' || !(parseFloat($('shiftBatteryKwh').value) >= 0)
+                ? null : parseFloat($('shiftBatteryKwh').value)
         };
     }
 
@@ -1414,6 +1454,7 @@
             if (s.windowKw) $('shiftWindowKw').value = s.windowKw;
             if (s.exportKw != null) $('shiftExportKw').value = s.exportKw;
             if (s.rte) $('shiftRte').value = s.rte;
+            if (s.batteryKwh != null) $('shiftBatteryKwh').value = s.batteryKwh;
             if (s.plan) state.shiftPlan = s.plan;
             if (s.budget != null) state.shiftBudget = s.budget;
         } catch (err) {
@@ -1458,9 +1499,15 @@
         }
         section.classList.remove('hidden');
         const params = readShiftParams();
+        if (!state.batteryDetect || state.batteryDetect.data !== monthly.channelData) {
+            state.batteryDetect = { data: monthly.channelData, result: Amber.detectBattery(monthly.channelData, currentStateCode()) };
+        }
+        const detected = state.batteryDetect.result;
+        const batteryKwh = params.batteryKwh != null ? params.batteryKwh : (detected.likely ? null : 0);
+        showBatteryNote(params.batteryKwh, detected);
         const opts = {
             site: selectedSite(), state: currentStateCode(), gstInclusive: gstInclusive(), amberRates: readAmberRates(),
-            budgets: params.budgets, params: { windowKw: params.windowKw, exportKw: params.exportKw, rte: params.rte }
+            budgets: params.budgets, params: { windowKw: params.windowKw, exportKw: params.exportKw, rte: params.rte, batteryKwh }
         };
         const key = JSON.stringify([monthly.months, plans, opts]);
         const run = ++shiftRun;
@@ -1481,6 +1528,22 @@
             state.batteryShift = { key, data: monthly.channelData, table };
         }
         drawBatteryShift(state.batteryShift.table);
+    }
+
+    function showBatteryNote(entered, detected) {
+        const note = $('shiftBatteryNote');
+        let text;
+        if (entered == null && detected.likely) {
+            text = `Battery: auto. Exports after dark on ${detected.darkDays} of ${detected.days} days look like a battery, so each budget is assumed to fit in it. Enter its usable size to cap that (13.5 kWh per Powerwall 2, for example); budget above it is then load you move, with no losses.`;
+        } else if (entered == null) {
+            text = 'Battery: auto. There are no exports after dark in this data, so this assumes no battery: only load you move (EV, pool pump, timer hot water) is shifted, and nothing is exported from a battery. Enter a size if you do have one.';
+        } else if (entered === 0) {
+            text = 'No battery: only load you move (EV, pool pump, timer hot water) is shifted, and nothing is exported from a battery. If you have none of those, the As metered column is the one to use.';
+        } else {
+            text = `Battery ${entered} kWh: up to ${entered} kWh/day of each budget is battery charging (with round-trip losses); the rest is load you move.`;
+        }
+        note.textContent = text;
+        note.classList.remove('hidden');
     }
 
     function drawBatteryShift(table) {
@@ -1509,7 +1572,7 @@
             </tr>`;
         });
         html += '</tbody></table>';
-        html += `<p class="text-xs text-gray-500 mt-2">An estimate from meter data alone (no battery telemetry). It assumes each day's shift budget is available, ignores what the battery held overnight, and re-timed exports are capped by the plan's daily feed-in cap and the max export. Retail plans here have no demand charge. ${gstInclusive() ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}. Check each plan's Basic Plan Information Document before switching.</p>`;
+        html += `<p class="text-xs text-gray-500 mt-2">An estimate from meter data alone (no battery telemetry). It assumes each day's shift budget is available, ignores what a battery held overnight, and re-timed exports are capped by the plan's daily feed-in cap and the max export. Retail plans here have no demand charge. ${gstInclusive() ? 'Inc GST' : 'Ex GST (feed-in unchanged)'}. Check each plan's Basic Plan Information Document before switching.</p>`;
         $('batteryShiftTable').innerHTML = html;
 
         // Month by month for one plan and budget.
@@ -1636,7 +1699,10 @@
             const cached = await Amber.loadSiteCacheDates(db, site.id, parsed.days);
             // The last week is left to the API, which may still revise it.
             const recentCutoff = Amber.addDays(Amber.formatForInput(Amber.localYesterday()), -6);
-            const plan = Amber.planUsageImport(parsed, site, cached.byDate, { recentCutoff });
+            const timeZone = Amber.STATE_TIMEZONES[currentStateCode()] || 'Australia/Sydney';
+            // A tariff without a known demand window: learn it from the days Amber's API flagged.
+            const learnFrom = Amber.demandWindowForSite(site) ? null : (await Amber.loadAllSiteCache(db, site.id)).byDate;
+            const plan = Amber.planUsageImport(parsed, site, cached.byDate, { recentCutoff, timeZone, learnFrom });
             await Amber.writeUsageImport(db, plan.write, (f) => setUsageImportProgress(f));
             setUsageImportProgress(null);
 
@@ -1647,8 +1713,9 @@
             if (plan.kept) notes.push(plan.kept === 1 ? '1 day already cached from Amber\'s API was kept.' : `${plan.kept} days already cached from Amber's API were kept.`);
             if (plan.recent) notes.push(plan.recent === 1 ? 'The last day is left for Amber\'s API.' : `The last ${plan.recent} days are left for Amber's API.`);
             if (plan.partial) notes.push(plan.partial === 1 ? '1 part day was skipped.' : `${plan.partial} part days were skipped.`);
-            if (plan.demandRule) notes.push(`Demand window flagged for ${plan.demandRule.tariff}: ${plan.demandRule.start}–${plan.demandRule.end} local time in ${plan.demandRule.months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).join(', ')}.`);
-            else notes.push('No demand window is known for this site\'s tariff, so imported days carry no demand charge.');
+            if (plan.demandRule && plan.demandRule.learned) notes.push(`Demand window for ${plan.demandRule.tariff}, learned from the days Amber's API flagged: ${Amber.describeDemandWindow(plan.demandRule)}.`);
+            else if (plan.demandRule) notes.push(`Demand window flagged for ${plan.demandRule.tariff}: ${Amber.describeDemandWindow(plan.demandRule)}.`);
+            else notes.push('No demand window is known for this site\'s tariff (and none is flagged in the days cached from Amber\'s API), so imported days carry no demand charge.');
             notes.push(...plan.notes);
             setUsageImportStatus(notes.join(' '), false);
             updateCacheSummary();
@@ -1878,7 +1945,7 @@
         Amber.applyAmberFeedInSettlement(state.cachedChannelData, selectedSite(), numDays);
         Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, currentStateCode());
         const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, currentStateCode());
-        const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates.demandCents);
+        const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates);
         const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(
             state.cachedAllChannelData || state.cachedChannelData, planConfig, rates, currentStateCode()
         );
@@ -2061,7 +2128,7 @@
             const rates = readAmberRates();
             Amber.calculateOtherSupplierCosts(channelTotalsSelectedPeriod, planConfig, currentStateCode());
             const otherDemandInfo = Amber.calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, clampedEnd, planConfig, currentStateCode());
-            const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates.demandCents);
+            const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates);
             const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsSelectedPeriod, planConfig, rates, currentStateCode());
 
             state.lastFetchedStartDate = startDateValue;
@@ -2350,7 +2417,7 @@
             addWindowRow($('feedInWindowsContainer'), { start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5, 6, 0], rate: 10 }, true);
             saveAllSettings();
         });
-        ['shiftBudgets', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
+        ['shiftBudgets', 'shiftBatteryKwh', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
             $(id).addEventListener('change', () => {
                 saveShiftSettings();
                 renderBatteryShift();
@@ -2359,10 +2426,16 @@
         document.querySelectorAll('[data-add-tou-window]').forEach((btn) => {
             btn.addEventListener('click', () => addTouWindow(btn.getAttribute('data-add-tou-window')));
         });
-        document.querySelectorAll('#configContent input, #configContent select').forEach((el) => {
-            if (el.id !== 'stateSelector' && el.id !== 'planSelector' && el.id !== 'planName' && el.id !== 'apiKey') {
-                el.addEventListener('input', saveAllSettings);
-            }
+        document.querySelectorAll('#planChooser input, #planChooser select, #setupSection input').forEach((el) => {
+            if (el.type === 'file' || ['stateSelector', 'planSelector', 'planName', 'apiKey', 'rememberApiKey', 'siteSelector'].includes(el.id)) return;
+            el.addEventListener('input', saveAllSettings);
+        });
+        // Amber's charges change the results straight away.
+        ['amberConnectionRate', 'amberSubscriptionRate', 'amberDemandRate', 'amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => {
+            $(id).addEventListener('change', () => {
+                saveAllSettings();
+                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
+            });
         });
         $('rateTypeSelector').addEventListener('change', () => {
             const selectedType = document.querySelector('input[name="rateType"]:checked').value;

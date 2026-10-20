@@ -2,22 +2,26 @@
     const Amber = root.Amber = root.Amber || {};
 
     /*
-     * Battery re-scheduling estimate.
+     * Re-scheduling estimate for free-window plans.
      *
      * The comparison tables price the meter data exactly as it happened on Amber. With a home
-     * battery (and EVs) that is pessimistic for free-window plans: SmartShift charged and
-     * exported around wholesale prices, not around the plan's free window or its evening
+     * battery or flexible loads (EV, pool pump, hot water) that is pessimistic for free-window
+     * plans: they would run in the plan's free window, and a battery would export in its best
      * feed-in window. This re-times the real interval data day by day:
      *
      *   1. Shift out-of-window grid use into the free window (most expensive first), limited by
-     *      a daily shift budget (battery capacity plus EV charging you can move), the window's
-     *      daily cap and an import power limit. Shifted energy costs 1/round-trip in the window.
-     *   2. Use battery exports (evening/overnight) to cover remaining grid use priced above the
-     *      plan's best feed-in rate instead of exporting.
-     *   3. Move the remaining battery exports into the plan's best feed-in window, up to its
-     *      daily cap and an export power limit.
-     *   4. Spend any budget and window room left on extra exports into that window, charged
-     *      for free in the free window (only where that beats shifting more grid use).
+     *      a daily shift budget, the window's daily cap and an import power limit. The part of
+     *      the budget the battery can hold costs 1/round-trip in the window; anything beyond
+     *      the battery is load that moves itself (EV, pool, hot water) and costs no losses.
+     *   2. With a battery: use its exports (evening/overnight) to cover remaining grid use
+     *      priced above the plan's best feed-in rate instead of exporting.
+     *   3. With a battery: move its remaining exports into the plan's best feed-in window, up
+     *      to its daily cap and an export power limit.
+     *   4. With a battery: spend any battery budget and window room left on extra exports into
+     *      that window, charged for free in the free window.
+     *
+     * Battery size: params.batteryKwh (0 = no battery, so only load is moved and nothing is
+     * exported from a battery; null = big enough for the budget).
      *
      * It needs no battery telemetry, so it is an estimate: midday solar exports stay put, and
      * a day's budget is assumed available whatever happened the day before.
@@ -28,7 +32,41 @@
         windowKw: 13,
         exportKw: 5,
         batteryExportStart: '17:00',
-        batteryExportEnd: '08:00'
+        batteryExportEnd: '08:00',
+        batteryKwh: null
+    };
+
+    /*
+     * Signs of a home battery in meter data: exports when solar can't be running. Dark means
+     * 9pm–5am local in any month, or after 6:30pm in May–August (sunset in every NEM region is
+     * before then in winter), or a 2 kW+ export after 7:30pm. Solar-only homes never export then.
+     */
+    function darkExport(parts, item) {
+        const t = parts.timeValue;
+        if (t >= 2100 || t < 500) return true;
+        if (parts.month >= 5 && parts.month <= 8 && t >= 1830) return true;
+        const hours = (parseFloat(item.duration) || 30) / 60;
+        return t >= 1930 && Amber.absKwh(item.kwh) / hours >= 2;
+    }
+
+    /** { days, darkDays, likely, maxDarkKwh } from the feed-in channels' intervals. */
+    Amber.detectBattery = function (channelTotals, state) {
+        const all = Object.create(null);
+        const dark = Object.create(null);
+        Object.keys(channelTotals || {}).forEach((id) => {
+            const c = channelTotals[id];
+            if (!c || c.type !== 'feedIn') return;
+            (c.usageData || []).forEach((item) => {
+                const parts = Amber.clockPartsForItem(item, null, state);
+                all[parts.dateStr] = true;
+                const kwh = Amber.absKwh(item.kwh);
+                if (kwh > 0 && darkExport(parts, item)) dark[parts.dateStr] = (dark[parts.dateStr] || 0) + kwh;
+            });
+        });
+        const days = Object.keys(all).length;
+        const darkDates = Object.keys(dark).filter((d) => dark[d] >= 0.3);
+        const maxDarkKwh = darkDates.reduce((m, d) => Math.max(m, dark[d]), 0);
+        return { days, darkDays: darkDates.length, likely: darkDates.length >= 3 && darkDates.length >= days * 0.02, maxDarkKwh };
     };
 
     function minutes(hhmm) {
@@ -95,6 +133,8 @@
         const budgetPerDay = Math.max(0, parseFloat(p.budgetKwh) || 0);
         const windowKw = Math.max(0, parseFloat(p.windowKw) || 0);
         const exportKw = Math.max(0, parseFloat(p.exportKw) || 0);
+        const batteryCap = p.batteryKwh == null || p.batteryKwh === '' ? Infinity : Math.max(0, parseFloat(p.batteryKwh) || 0);
+        const hasBattery = batteryCap > 0;
         const tou = planConfig.tou;
         const fallback = parseFloat(planConfig.flat) || 0;
         const freeCap = parseFloat(tou.free.capKwh) > 0 ? parseFloat(tou.free.capKwh) : Infinity;
@@ -132,7 +172,7 @@
             });
         });
 
-        const summary = { days: 0, shiftedKwh: 0, redirectedKwh: 0, retimedKwh: 0, extraExportKwh: 0, addedWindowImportKwh: 0 };
+        const summary = { days: 0, shiftedKwh: 0, loadShiftedKwh: 0, redirectedKwh: 0, retimedKwh: 0, extraExportKwh: 0, addedWindowImportKwh: 0 };
         const sum = (items) => items.reduce((s, item) => s + item.kwh, 0);
 
         Object.keys(days).forEach((dateStr) => {
@@ -142,12 +182,23 @@
             let room = d.free.length
                 ? Math.max(0, Math.min(freeCap, windowKw * freeHours) - sum(d.free))
                 : 0;
-            let budget = budgetPerDay;
+            // The battery holds what it can of the budget; the rest is load that moves itself.
+            let budget = Math.min(budgetPerDay, batteryCap);
+            let loadBudget = budgetPerDay - budget;
             let windowImport = 0;
             const loads = Object.keys(d.loads).map((k) => d.loads[k]).sort((a, b) => b.rate - a.rate);
             loads.forEach((b) => { b.left = b.kwh; });
 
             const shift = (bucket) => {
+                const direct = Math.min(bucket.left, loadBudget, room);
+                if (direct > 0) {
+                    bucket.left -= direct;
+                    loadBudget -= direct;
+                    room -= direct;
+                    windowImport += direct;
+                    summary.shiftedKwh += direct;
+                    summary.loadShiftedKwh += direct;
+                }
                 const m = Math.min(bucket.left, budget, room * rte);
                 if (m <= 0) return;
                 bucket.left -= m;
@@ -161,11 +212,12 @@
             loads.filter((b) => b.rate > 0 && (premiumRate == null || b.rate > premiumRate)).forEach(shift);
 
             // 2. Battery exports cover remaining grid use priced above the export value.
-            const batteryKwh = sum(d.battery);
+            // Without a battery, evening exports are solar and stay where they are.
+            const batteryKwh = hasBattery ? sum(d.battery) : 0;
             const premiumKwh = sum(d.premium);
             let batteryLeft = batteryKwh;
             let premiumLeft = premiumKwh;
-            loads.filter((b) => b.rate > exportValue).forEach((b) => {
+            if (hasBattery) loads.filter((b) => b.rate > exportValue).forEach((b) => {
                 const fromBattery = Math.min(b.left, batteryLeft);
                 b.left -= fromBattery;
                 batteryLeft -= fromBattery;
@@ -176,7 +228,7 @@
             });
 
             // 3. Move the remaining battery exports into the best feed-in window.
-            let exportRoom = premium && d.premium.length
+            let exportRoom = hasBattery && premium && d.premium.length
                 ? Math.max(0, Math.min(premiumCap, exportKw * Amber.windowHoursOn([premium], d.parts.weekday, d.parts.month)) - premiumLeft)
                 : 0;
             const retimed = Math.min(batteryLeft, exportRoom);
@@ -186,7 +238,7 @@
 
             // 4. Spend what is left: extra exports where the window pays more than shifting saves.
             let extraExport = 0;
-            if (premium && premiumRate > 0) {
+            if (hasBattery && premium && premiumRate > 0) {
                 const x = Math.min(exportRoom, budget, room * rte);
                 if (x > 0) {
                     extraExport = x;

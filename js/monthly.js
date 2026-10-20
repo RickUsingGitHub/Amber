@@ -36,7 +36,8 @@
             Amber.processUsageData(items, ct, true);
         });
         Amber.applyAmberFeedInSettlement(ct, o.site, days);
-        const demand = Amber.calculateDemandTariff(ct, rates.demandCents);
+        const demand = Amber.calculateDemandTariff(ct, rates);
+        const fixed = Amber.amberFixedForPeriod(rates, from, to);
 
         const out = {
             from, to, days, dataDays: dataDays.size,
@@ -46,8 +47,8 @@
             demandKw: (demand.maxDemandKwh || 0) * 2,
             demandDays: demand.demandDays || 0,
             demandMonths: demand.months || null,
-            amberConnection: (rates.connectionCents * days) / 100,
-            amberSubscription: (rates.subscriptionCents * days) / 100,
+            amberConnection: fixed.connection,
+            amberSubscription: fixed.subscription,
             channels: ct
         };
         const timeZone = Amber.STATE_TIMEZONES[o.state] || 'Australia/Sydney';

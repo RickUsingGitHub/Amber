@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.39</title>
+    <title>Amber Compare &amp; Export v1.40</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.39">
+    <link rel="stylesheet" href="css/app.css?v=1.40">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
@@ -16,7 +16,7 @@
             <div class="flex justify-between items-start">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.39
+                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.40
                     </h1>
                     <p class="mt-2 text-gray-600">Check your Amber usage and bills, and compare Amber with other plans. Your API key and data stay in this browser.</p>
                 </div>
@@ -349,27 +349,32 @@
                     </div>
 
                     <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Free-window plans with your battery re-scheduled</h3>
-                        <p class="text-sm text-gray-500 mb-2">The tables above price your meter data exactly as it happened on Amber. On a free-window plan you would charge the battery and cars in the free window and export in the plan's best feed-in window instead. This re-times your real intervals, day by day, to estimate that.</p>
-                        <p class="text-sm text-gray-500 mb-4"><span class="font-medium text-gray-700">Shift budget</span> is the extra kWh a day your batteries and EV charging could move into the free window, beyond what they already did on Amber. Battery exports outside the plan's best feed-in window are moved into it (or used at home when that is worth more). Midday solar exports stay put.</p>
-                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 text-sm">
-                            <div>
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Free-window plans with your use re-scheduled</h3>
+                        <p class="text-sm text-gray-500 mb-2">The tables above price your meter data exactly as it happened on Amber. On a free-window plan you would charge a battery, cars and timer loads in the free window, and a battery would export in the plan's best feed-in window. This re-times your real intervals, day by day, to estimate that.</p>
+                        <p class="text-sm text-gray-500 mb-4"><span class="font-medium text-gray-700">Shift budget</span> is the extra kWh a day you could move into the free window, beyond what already ran there on Amber: battery charging (up to the battery size, with round-trip losses) plus EV charging, pool pump or timer hot water. With no battery, only that load moves and nothing is exported from a battery. Midday solar exports stay put.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 text-sm">
+                            <div class="flex flex-col justify-between">
                                 <label for="shiftBudgets" class="block text-xs font-medium text-gray-600">Shift budgets (kWh/day)</label>
                                 <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
-                            <div>
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftBatteryKwh" class="block text-xs font-medium text-gray-600">Battery (usable kWh, 0 = none)</label>
+                                <input type="number" id="shiftBatteryKwh" step="0.5" min="0" placeholder="Auto" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex flex-col justify-between">
                                 <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600">Max import in free window (kW)</label>
                                 <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
-                            <div>
+                            <div class="flex flex-col justify-between">
                                 <label for="shiftExportKw" class="block text-xs font-medium text-gray-600">Max export (kW)</label>
                                 <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
-                            <div>
+                            <div class="flex flex-col justify-between">
                                 <label for="shiftRte" class="block text-xs font-medium text-gray-600">Battery round trip (%)</label>
                                 <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
                         </div>
+                        <p id="shiftBatteryNote" class="text-xs text-gray-600 mb-3 hidden"></p>
                         <div id="batteryShiftTable"></div>
                         <div id="batteryShiftMonthly" class="mt-6"></div>
                     </div>
@@ -404,6 +409,7 @@
                             <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
                         </div>
                         <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
+                        <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">From 1 July 2026</h4>
                         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
                             <div>
                                 <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
@@ -416,6 +422,22 @@
                             <div>
                                 <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
                                 <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                        </div>
+                        <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mt-4 mb-1">Before 1 July 2026</h4>
+                        <p class="text-xs text-gray-500 mb-2">Network charges change every 1 July, so days before then are costed at last year's charges. A bill for a period before 1 July fills these.</p>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label for="amberConnectionRatePrev" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
+                                <input type="number" id="amberConnectionRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label for="amberSubscriptionRatePrev" class="block text-sm font-medium text-gray-700">Subscription (c/day, inc GST)</label>
+                                <input type="number" id="amberSubscriptionRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                            </div>
+                            <div>
+                                <label for="amberDemandRatePrev" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
+                                <input type="number" id="amberDemandRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                             </div>
                         </div>
                     </div>
@@ -439,20 +461,20 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.39"></script>
-    <script src="js/time.js?v=1.39"></script>
-    <script src="js/templates.js?v=1.39"></script>
-    <script src="js/storage.js?v=1.39"></script>
-    <script src="js/costs.js?v=1.39"></script>
-    <script src="js/api.js?v=1.39"></script>
-    <script src="js/bill.js?v=1.39"></script>
-    <script src="js/csv.js?v=1.39"></script>
-    <script src="js/charts.js?v=1.39"></script>
-    <script src="js/calendar.js?v=1.39"></script>
-    <script src="js/stats.js?v=1.39"></script>
-    <script src="js/monthly.js?v=1.39"></script>
-    <script src="js/redispatch.js?v=1.39"></script>
-    <script src="js/import.js?v=1.39"></script>
-    <script src="js/app.js?v=1.39"></script>
+    <script src="js/constants.js?v=1.40"></script>
+    <script src="js/time.js?v=1.40"></script>
+    <script src="js/templates.js?v=1.40"></script>
+    <script src="js/storage.js?v=1.40"></script>
+    <script src="js/costs.js?v=1.40"></script>
+    <script src="js/api.js?v=1.40"></script>
+    <script src="js/bill.js?v=1.40"></script>
+    <script src="js/csv.js?v=1.40"></script>
+    <script src="js/charts.js?v=1.40"></script>
+    <script src="js/calendar.js?v=1.40"></script>
+    <script src="js/stats.js?v=1.40"></script>
+    <script src="js/monthly.js?v=1.40"></script>
+    <script src="js/redispatch.js?v=1.40"></script>
+    <script src="js/import.js?v=1.40"></script>
+    <script src="js/app.js?v=1.40"></script>
 </body>
 </html>
