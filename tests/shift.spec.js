@@ -57,7 +57,7 @@ test.describe('Battery re-scheduling estimate', () => {
         await expect(table).toContainText('GloBird Four4Free');
         await expect(table).toContainText('OVO The Free 4 Plan');
         await expect(table).toContainText('Solar Sharer Offer');
-        await expect(table).toContainText('Shift 20 kWh/day');
+        await expect(table).toContainText('Move 20 kWh a day');
         await expect(table).toContainText('1 whole month');
         await expect(page.locator('#batteryShiftMonthly')).toContainText('Total');
 
@@ -68,8 +68,8 @@ test.describe('Battery re-scheduling estimate', () => {
 
         await page.fill('#shiftBudgets', '5, 15');
         await page.locator('#shiftBudgets').dispatchEvent('change');
-        await expect(table).toContainText('Shift 15 kWh/day');
-        await expect(table).not.toContainText('Shift 20 kWh/day');
+        await expect(table).toContainText('Move 15 kWh a day');
+        await expect(table).not.toContainText('Move 20 kWh a day');
     });
 
     test('free window, EV rate and capped feed-in survive the plan form', async ({ page }) => {

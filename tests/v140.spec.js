@@ -59,7 +59,7 @@ test('charges before 1 July use last year\'s rates, and old saved rates move the
     await page.click('#fetchData');
     await page.waitForSelector('#resultsSection:not(.hidden)');
     // 2 days at 116.787 + 2 days at 125.367 c/day.
-    const row = page.locator('#results-table-container tr', { hasText: 'Daily Connection' });
+    const row = page.locator('#results-table-container tr', { hasText: 'Daily supply charge' });
     await expect(row).toContainText('$4.84');
 });
 
@@ -88,13 +88,13 @@ test('solar-only data: the re-scheduling estimate assumes no battery until one i
     await page.click('#fetchData');
     await page.waitForSelector('#batteryShiftSection:not(.hidden)');
     const note = page.locator('#shiftBatteryNote');
-    await expect(note).toContainText('assumes no battery');
-    await expect(page.locator('#batteryShiftTable')).toContainText('Shift 20 kWh/day');
+    await expect(note).toContainText('assumes there is no battery');
+    await expect(page.locator('#batteryShiftTable')).toContainText('Move 20 kWh a day');
     const before = await page.locator('#batteryShiftTable').innerText();
 
     await page.fill('#shiftBatteryKwh', '13.5');
     await page.locator('#shiftBatteryKwh').dispatchEvent('change');
-    await expect(note).toContainText('Battery 13.5 kWh');
+    await expect(note).toContainText('Home battery 13.5 kWh');
     await expect.poll(() => page.locator('#batteryShiftTable').innerText()).not.toBe(before);
 
     // The size is remembered.

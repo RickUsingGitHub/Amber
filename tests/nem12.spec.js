@@ -40,7 +40,7 @@ test('a household not on Amber: NEM12 import estimates Amber and compares, with 
     await expect(page.locator('#startDate')).toHaveValue('2026-05-01');
     await expect(page.locator('#endDate')).toHaveValue('2026-06-30');
     await expect(page.locator('#results-table-container')).toContainText('Total');
-    await expect(page.locator('#results-table-container')).toContainText('Demand');
+    await expect(page.locator('#results-table-container')).toContainText('demand charge');
     await expect(page.locator('#siteSelector option:checked')).toContainText('not on Amber');
 
     // Setup shows the estimated Amber charges, read-only.
@@ -124,5 +124,5 @@ test('header-less NEM12 (data rows only) with a daytime hot-water circuit', asyn
     await expect(page.locator('#nem12ExportRow')).toBeHidden();
     await page.click('#nem12Build');
     await page.waitForSelector('#resultsSection:not(.hidden)');
-    await expect(page.locator('#results-table-container')).toContainText('controlledLoad');
+    await expect(page.locator('#results-table-container')).toContainText('Hot water (controlled load)');
 });

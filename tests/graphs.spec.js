@@ -32,7 +32,7 @@ test('graphs use local time and the real interval length', async ({ page }) => {
     await page.click('#tab-check');
     await page.waitForSelector('#dailyGraphSection:not(.hidden)');
     const r = await page.evaluate(() => {
-        const pick = (chart) => chart.data.datasets.find((x) => /^Usage/.test(x.label) || /Average Usage/.test(x.label));
+        const pick = (chart) => chart.data.datasets.find((x) => /^Bought from grid/.test(x.label));
         const daily = pick(Chart.getChart('dailyChart'));
         const avg = pick(Chart.getChart('usagePriceChart'));
         const dLabels = Chart.getChart('dailyChart').data.labels;
