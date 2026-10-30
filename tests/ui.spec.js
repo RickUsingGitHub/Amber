@@ -9,6 +9,7 @@ test.describe('Amber UI flows', () => {
                     String.fromCharCode(char.charCodeAt(0) ^ key.charCodeAt(i % key.length))
                 ).join(''));
             }
+            window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
             localStorage.setItem('amberApiKey', obfuscate('fake-api-key'));
         });
         await page.route('**/sites', async (route) => {
@@ -66,9 +67,9 @@ test.describe('Amber UI flows', () => {
     test('rates panel, TOU, GST, export menu and calendar click', async ({ page }) => {
         await page.click('#ratesDetailsToggle');
         await expect(page.locator('#ratesDetails')).toBeVisible();
-        await expect(page.locator('#ratesGstNote')).toContainText(/inc GST/i);
-        await expect(page.locator('#amberRatesGstNote')).toContainText(/inc GST/i);
-        await expect(page.locator('#gstLabel')).toHaveText(/inc GST/i);
+        await expect(page.locator('#ratesGstNote')).toContainText(/include GST/i);
+        await expect(page.locator('#amberRatesGstNote')).toContainText(/include GST/i);
+        await expect(page.locator('#gstLabel')).toHaveText(/Include GST/i);
         await page.check('input[name="rateType"][value="tou"]');
         await expect(page.locator('#touRateSection')).toBeVisible();
         await expect(page.locator('#flatRateSection')).toBeHidden();
@@ -77,11 +78,15 @@ test.describe('Amber UI flows', () => {
         await page.fill('#endDate', '2025-01-10');
         await page.click('#fetchData');
         await page.waitForSelector('#resultsSection:not(.hidden)');
+        await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
 
+        await page.click('#tab-check');
         await expect(page.locator('#averageGraphContainer')).toBeVisible();
         await expect(page.locator('#dailyGraphSection')).toBeVisible();
         await expect(page.locator('#calendarSection')).toBeVisible();
+        await expect(page.locator('#resultsSection')).toBeHidden();
 
+        await page.click('#tab-compare');
         await page.click('#gstToggle', { force: true });
         await expect(page.locator('#gstToggle')).toHaveCSS('opacity', '0');
         await expect(page.locator('.gst-switch-track')).toBeVisible();
@@ -93,6 +98,8 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#csvDropdownMenu')).toBeVisible();
         await expect(page.locator('#downloadFullIntervalCsv')).toBeVisible();
 
+        await page.keyboard.press('Escape');
+        await page.click('#tab-check');
         const day = page.locator('.calendar-day.has-data').first();
         await expect(day).toBeVisible();
         await day.click();
@@ -100,6 +107,7 @@ test.describe('Amber UI flows', () => {
     });
 
     test('Ausgrid site hides Endeavour plans in the dropdown', async ({ page }) => {
+        await page.click('#tab-setup');
         await expect(page.locator('#siteSelectorRow')).toBeVisible();
         const planValues = await page.locator('#planSelector option').evaluateAll((opts) => opts.map((o) => o.value));
         const planLabels = await page.locator('#planSelector option').allTextContents();
@@ -119,18 +127,72 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#clearCacheBtn')).toBeVisible();
     });
 
-    test('hidden configuration still shows dates and Compare', async ({ page }) => {
-        await page.click('#toggleConfigBtn');
-        await expect(page.locator('#configDetails')).toBeHidden();
+    test('tabs keep dates and Compare visible and remember the last tab', async ({ page }) => {
+        await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#planSelector')).toBeVisible();
         await expect(page.locator('#apiKey')).toBeHidden();
-        await expect(page.locator('#startDate')).toBeVisible();
-        await expect(page.locator('#endDate')).toBeVisible();
-        await expect(page.locator('label[for="startDate"]')).toHaveText('Start');
-        await expect(page.locator('label[for="endDate"]')).toHaveText('End');
-        await expect(page.locator('#fetchData')).toBeVisible();
-        await expect(page.locator('[data-preset="7d"]')).toBeVisible();
+        await expect(page.locator('#panel-compare [data-results-placeholder]')).toBeVisible();
+        await expect(page.locator('#panel-compare [data-results-placeholder]')).toContainText('Compare costs');
+
+        await page.click('#tab-setup');
+        await expect(page.locator('#apiKey')).toBeVisible();
+        await expect(page.locator('#connectedCard')).toBeVisible();
+        await expect(page.locator('#welcomeCard')).toBeHidden();
+        await page.click('#amberChargesDetails summary');
+        await expect(page.locator('#amberConnectionRate')).toBeVisible();
         await expect(page.locator('#planSelector')).toBeHidden();
-        await expect(page.locator('#planSelectorContainer')).toBeHidden();
+
+        await page.click('#tab-bill');
+        await expect(page.locator('#billCheckSection')).toBeVisible();
+        await expect(page.locator('#calendarSection')).toBeHidden();
+        await expect(page.locator('#apiKey')).toBeHidden();
+
+        await page.click('#tab-check');
+        await expect(page.locator('#billCheckSection')).toBeHidden();
+        for (const id of ['#startDate', '#endDate', '#fetchData', '[data-preset="7d"]', '#gstToggle']) {
+            await expect(page.locator(id)).toBeAttached();
+        }
+        await expect(page.locator('#startDate')).toBeVisible();
+        await expect(page.locator('#fetchData')).toBeVisible();
+        await expect(page.locator('label[for="startDate"]')).toHaveText('From');
+
+        // Arrow keys move between tabs (Start, Compare, My usage, Bill check).
+        await page.focus('#tab-check');
+        await page.keyboard.press('ArrowRight');
+        await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#tab-bill')).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
+        await page.keyboard.press('End');
+        await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+        await page.keyboard.press('Home');
+        await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
+
+        await page.click('#tab-check');
+        await page.reload();
+        await expect(page.locator('#tab-check')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#panel-check')).toBeVisible();
+        await expect(page.locator('#panel-compare')).toBeHidden();
+    });
+
+    test('Compare from Setup goes to the results tab', async ({ page }) => {
+        await page.click('#tab-setup');
+        await page.fill('#startDate', '2025-01-10');
+        await page.fill('#endDate', '2025-01-10');
+        await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)');
+        await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('[data-results-placeholder]').last()).toBeHidden();
+
+        // Jump links appear with results and skip sections that are hidden.
+        const compareNav = page.locator('#panel-compare [data-jump-nav]');
+        await expect(compareNav).toBeVisible();
+        await expect(compareNav.locator('[data-jump="results-output"]')).toBeVisible();
+        await expect(compareNav.locator('[data-jump="batteryShiftSection"]')).toBeHidden();
+        await page.click('#tab-check');
+        await expect(page.locator('#panel-check [data-jump="calendarSection"]')).toBeVisible();
+        await page.click('#panel-check [data-jump="calendarSection"]');
+        await expect(page.locator('#calendarSection')).toBeInViewport();
     });
 
     test('clicking an all-plans row uses that plan in Comparison Results', async ({ page }) => {
@@ -151,8 +213,9 @@ test.describe('Amber UI flows', () => {
     });
 
     test('Amber bill text file prefills editable charge fields', async ({ page }) => {
-        await page.click('#ratesDetailsToggle');
-        await expect(page.locator('#ratesDetails')).toBeVisible();
+        await page.click('#tab-setup');
+        await page.click('#amberChargesDetails summary');
+        await expect(page.locator('#amberConnectionRate')).toBeVisible();
         await expect(page.locator('#amberBillFile')).toBeAttached();
         const bill = `Billing Period: 31 days
 Network - Daily 01 Jul - 31 Jul 31 0.7103 $22.02

@@ -62,6 +62,21 @@ const dates = [];
 for (let d = 0; d < 14; d++) dates.push(Amber.addDays('2026-04-01', d));
 const ranges = Amber.buildFetchRanges(dates, 7);
 assert(ranges.length === 2 && ranges[0].end === '2026-04-07', `DST-safe 7-day chunks (got ${JSON.stringify(ranges)})`);
+// Two general meters (E1 + E2): demand is the site's combined 30-minute peak.
+const two = { E1: Amber.emptyChannel({ identifier: 'E1', type: 'general' }), E2: Amber.emptyChannel({ identifier: 'E2', type: 'general' }) };
+const dw = { demandWindow: true };
+Amber.processUsageData([
+    { nemTime: '2026-07-10T18:00:00+10:00', date: '2026-07-10', kwh: 2, perKwh: 30, duration: 30, channelIdentifier: 'E1', tariffInformation: dw },
+    { nemTime: '2026-07-10T18:00:00+10:00', date: '2026-07-10', kwh: 1.5, perKwh: 30, duration: 30, channelIdentifier: 'E2', tariffInformation: dw },
+    { nemTime: '2026-07-11T19:00:00+10:00', date: '2026-07-11', kwh: 3, perKwh: 30, duration: 30, channelIdentifier: 'E2', tariffInformation: dw }
+], two, true);
+const both = Amber.calculateDemandTariff(two, 40);
+assert(near(both.maxDemandKwh, 3.5) && both.demandDays === 2, `demand adds every general channel (peak ${both.maxDemandKwh} kWh)`);
+const otherBoth = Amber.calculateOtherDemandTariff(two, '2026-07-10', '2026-07-11', plan, 'NSW');
+assert(near(otherBoth.maxDemandKwh, 3.5), 'competitor demand adds every general channel too');
+const merged = Amber.mergedChannelOfType(two, 'general');
+assert(merged.usageData.length === 3 && near(merged.totalKWh, 6.5) && Amber.mergedChannelOfType(two, 'feedIn') === null, 'merged channel of a type');
+assert(Amber.mergedChannelOfType(ct, 'general') === ct.E1, 'one channel is returned as it is');
 
 // Ausgrid EA029: evening reward kWh are measured but not credited (already in Amber's feed-in price)
 const fi = { B1: Object.assign(Amber.emptyChannel({ identifier: 'B1', type: 'feedIn', tariff: 'EA029' })) };

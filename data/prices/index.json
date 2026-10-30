@@ -1,0 +1,430 @@
+{
+ "regions": {
+  "NSW1": {
+   "months": {
+    "2024-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2024-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2024-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2025-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2026-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-10": {
+     "intervals": 8352,
+     "complete": false
+    }
+   },
+   "first": "2024-10",
+   "last": "2026-10"
+  },
+  "QLD1": {
+   "months": {
+    "2024-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2024-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2024-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2025-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2026-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-10": {
+     "intervals": 8352,
+     "complete": false
+    }
+   },
+   "first": "2024-10",
+   "last": "2026-10"
+  },
+  "SA1": {
+   "months": {
+    "2024-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2024-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2024-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2025-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2026-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-10": {
+     "intervals": 8352,
+     "complete": false
+    }
+   },
+   "first": "2024-10",
+   "last": "2026-10"
+  },
+  "VIC1": {
+   "months": {
+    "2024-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2024-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2024-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2025-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-10": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2025-11": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2025-12": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-01": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-02": {
+     "intervals": 8064,
+     "complete": true
+    },
+    "2026-03": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-04": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-05": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-06": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-07": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-08": {
+     "intervals": 8928,
+     "complete": true
+    },
+    "2026-09": {
+     "intervals": 8640,
+     "complete": true
+    },
+    "2026-10": {
+     "intervals": 8352,
+     "complete": false
+    }
+   },
+   "first": "2024-10",
+   "last": "2026-10"
+  }
+ },
+ "updated": "2026-10-29T20:21:05.411Z",
+ "source": "AEMO aggregated price and demand data (5-minute RRP, $/MWh, interval end in NEM time)"
+}
