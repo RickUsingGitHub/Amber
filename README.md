@@ -21,13 +21,16 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Written for everyday users: a welcome screen with two paths ("I'm with Amber" / "I'm thinking about Amber"), plain-English labels, a ? help bubble beside every input and table heading (hover, tap or keyboard; Escape closes), and a jargon buster on the Start tab
 - Four tabs: Start (welcome, Amber account, history import, non-Amber households, jargon buster), Compare (plan to compare with and its prices, the answer, every plan, month by month, free-power plans), My usage (one day, average day, calendar, more numbers) and Bill check. The dates bar appears once there's something to look at
 - Opens on This month and compares straight away when an API key is saved
-- Bill Check loads the bill period's meter data as soon as a bill is uploaded (and when you come back to the tab), then checks every line
+- Bill Check loads the bill period's meter data as soon as a bill is uploaded (and when you come back to the tab), then checks every line against your meter data: usage, peak demand and demand charges, daily supply, subscription, GST, charges total, solar exports and export credits
 - Import Amber's usage export (CSV) on Setup to go beyond the API's ~3 months: it fills the same cache as Compare (keeping days already fetched from the API and leaving the last week to the API), flags the network demand window (Ausgrid, Endeavour, Energex, Essential and Evoenergy demand tariffs; for other tariffs it is learned from the days Amber's API flagged), then compares the whole months imported. Last 12 months date preset
 - Re-scheduling estimate for free-window plans: re-times your real interval data into each plan's free window and best feed-in window, at the daily shift budgets you choose, over every whole month cached. Battery size field (blank = auto from exports after dark, 0 = none): without a battery only load you move (EV, pool pump, hot water) shifts, and no battery exports are invented
 - Households not on Amber: import their meter data (NEM12, from their retailer or network; files with only the 200/300 data rows are fine) on Setup and the app rebuilds what Amber would have charged for every interval: AEMO's 5-minute wholesale price for the region × a loss factor, plus Amber's 2026-27 network, market, environmental and hedging charges for the chosen network tariff (all 11 networks Amber serves), plus GST; feed-in at the wholesale price plus the export tariff. A second meter channel that is off most of the day is taken as controlled load (CL2 if it also runs in the daytime). Amber's daily, metering, subscription and demand charges come from the same tariff, and Amber's quarterly wholesale price cap is applied. No API key needed; the household appears as a site you can compare against any plan, including the free-window estimate. Checked against a year of real Amber prices on Ausgrid EA116/EA029: on average within 0.05 c/kWh per interval, and the year's usage and feed-in costs within 1% (the gap is last year's slightly lower network charges)
+- Demand charges worked out per calendar month, from each month's own peak
+- Ausgrid EA029 exports settled as on the bill: free midday allowance, with the export charge on usage
 - 24-hour average and daily charts, with competitor c/kWh in the hover tooltip
 - Daily calendar; click a day to open it on the graph
-- IndexedDB cache, CSV export, GST toggle
+- IndexedDB cache, GST toggle
+- CSV export of every meter reading, daily totals or the comparison table
 - Multi-site picker when your Amber account has more than one NMI
 - Editable Amber daily connection, subscription and demand rates for this financial year and last (days before 1 July 2026 use last year's); an uploaded bill fills the year it belongs to
 - More Stats: average import and feed-in prices, price-spike and negative-price exposure, evening import share, grid-free days
@@ -38,6 +41,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else. Imported files (Amber CSV, NEM12, bills) are read in the browser and stay there.
 - Wholesale prices for the NEM12 estimate are files in this repo (`data/prices`), refreshed daily from AEMO by a GitHub Action (`scripts/update-prices.js`).
 - Uncheck **Remember key on this device** to keep the key in the session only.
+- The last checked bill's line items stay in localStorage until you click **Clear**.
 
 ## Local development
 
@@ -48,7 +52,7 @@ npm test
 npm run serve
 ```
 
-`npm test` runs timezone/TOU unit checks, then Playwright against a local static server.
+`npm test` runs the unit checks (time and TOU, bill reading, More Stats, demand, Bill Check, re-scheduling, usage import, NEM12 estimate), then Playwright against a local static server. `npm run test:unit` runs only the unit checks.
 
 ## Known limitations
 
@@ -60,5 +64,6 @@ npm run serve
 - The re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 - Sites with several general meters (E1 + E2) have demand worked out on their combined use.
 - The NEM12 estimate assumes the household keeps using power exactly as it did. With a battery on Amber, SmartShift would usually do better. Loss factors other than Ausgrid's are typical values, not measured; seasonal and monthly demand charges are spread by month; Evoenergy's off-peak demand charge is not modelled.
+- Bill Check reads the Amber bill layouts seen so far. If it can't read a bill, it shows the text it read so the reader can be fixed.
 
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.
