@@ -22,6 +22,7 @@ test.describe('More Stats', () => {
         await page.addInitScript(() => {
             const key = 'amber-compare-export-secure-key';
             const ob = (str) => btoa(str.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+            window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
             localStorage.setItem('amberApiKey', ob('fake-api-key'));
         });
         await page.route('**/sites', (route) => route.fulfill({
@@ -54,9 +55,10 @@ test.describe('More Stats', () => {
         await page.fill('#startDate', '2025-07-01');
         await page.fill('#endDate', '2025-07-07');
         await page.click('#fetchData');
+        await page.click('#tab-check');
         await page.waitForSelector('#moreStatsSection:not(.hidden)');
-        await expect(page.locator('#moreStatsTable')).toContainText('Average import price');
-        await expect(page.locator('#moreStatsTable')).toContainText('Imported during price spikes');
+        await expect(page.locator('#moreStatsTable')).toContainText('Average price you paid');
+        await expect(page.locator('#moreStatsTable')).toContainText('Bought during price spikes');
         await expect(page.locator('#nightStatsSection')).toHaveCount(0);
         const leftovers = await page.evaluate(() => [localStorage.getItem('teslaHomeLoad'), localStorage.getItem('nightStatsSettings')]);
         expect(leftovers).toEqual([null, null]);

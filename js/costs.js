@@ -13,7 +13,13 @@
         return q === 'estimated' || q === 'estimate';
     };
 
-    Amber.getTouPeriod = function (parts, touConfig, fallbackRate) {
+    /**
+     * TOU period for a clock time. A free window (tou.free) wins over everything, then
+     * super off-peak (e.g. an EV overnight rate), then peak, shoulder and off-peak.
+     * skipFree prices a free-window interval at the rate that would otherwise apply
+     * (used for usage over the free window's daily cap).
+     */
+    Amber.getTouPeriod = function (parts, touConfig, fallbackRate, skipFree) {
         const fallback = parseFloat(fallbackRate) || 0;
         if (!touConfig) return { period: 'anytime', rate: fallback };
         const checkPeriod = (period) => {
@@ -23,6 +29,12 @@
             }
             return Amber.windowMatches(period, parts);
         };
+        if (!skipFree && checkPeriod(touConfig.free)) {
+            return { period: 'free', rate: parseFloat(touConfig.free.rate) || 0 };
+        }
+        if (checkPeriod(touConfig.superOffpeak)) {
+            return { period: 'superOffpeak', rate: parseFloat(touConfig.superOffpeak.rate) || 0 };
+        }
         if (checkPeriod(touConfig.peak)) {
             return { period: 'peak', rate: parseFloat(touConfig.peak.rate) || 0 };
         }
@@ -40,12 +52,16 @@
     };
 
     Amber.PERIOD_LABELS = {
+        free: 'Free window',
+        freeOverCap: 'Free window (over daily cap)',
+        superOffpeak: 'Super off-peak',
         peak: 'Peak',
         shoulder: 'Shoulder',
         offpeak: 'Off-peak',
         anytime: 'Anytime',
         controlledLoad: 'Controlled load',
-        feedIn: 'Feed-in'
+        feedIn: 'Feed-in',
+        feedInOverCap: 'Feed-in (over daily cap)'
     };
 
     Amber.classifyUsagePeriod = function (item, channelType, planConfig, state) {
@@ -81,27 +97,32 @@
 
     Amber.channelPeriodBreakdown = function (channel, planConfig, state) {
         const buckets = Object.create(null);
-        const order = ['peak', 'shoulder', 'offpeak', 'anytime', 'controlledLoad', 'feedIn'];
+        const order = ['free', 'freeOverCap', 'superOffpeak', 'peak', 'shoulder', 'offpeak', 'anytime', 'controlledLoad', 'feedIn', 'feedInOverCap'];
+        const capped = Amber.cappedSplits(channel, planConfig, state);
+        const add = (period, label, kwh, rate, amberCost) => {
+            if (!buckets[period]) {
+                buckets[period] = { period, label, kwh: 0, amberCost: 0, otherCost: 0, rate };
+            } else if (buckets[period].rate !== rate) {
+                buckets[period].rate = null;
+            }
+            buckets[period].kwh += kwh;
+            buckets[period].amberCost += amberCost;
+            const other = (kwh * rate) / 100;
+            buckets[period].otherCost += channel.type === 'feedIn' ? -other : other;
+        };
         (channel.usageData || []).forEach((item) => {
             const kwh = Amber.absKwh(item.kwh);
             const perKwh = parseFloat(item.perKwh) || 0;
-            const cls = Amber.classifyUsagePeriod(item, channel.type, planConfig, state);
-            if (!buckets[cls.period]) {
-                buckets[cls.period] = {
-                    period: cls.period,
-                    label: cls.label,
-                    kwh: 0,
-                    amberCost: 0,
-                    otherCost: 0,
-                    rate: cls.rate
-                };
-            } else if (buckets[cls.period].rate !== cls.rate) {
-                buckets[cls.period].rate = null;
+            const splits = capped && capped.get(item);
+            if (splits) {
+                splits.forEach((s) => {
+                    const share = kwh > 0 ? s.kwh / kwh : 0;
+                    add(s.period, s.label, s.kwh, s.rate, (perKwh / 100) * kwh * share);
+                });
+                return;
             }
-            buckets[cls.period].kwh += kwh;
-            buckets[cls.period].amberCost += (perKwh / 100) * kwh;
-            const other = (kwh * cls.rate) / 100;
-            buckets[cls.period].otherCost += channel.type === 'feedIn' ? -other : other;
+            const cls = Amber.classifyUsagePeriod(item, channel.type, planConfig, state);
+            add(cls.period, cls.label, kwh, cls.rate, (perKwh / 100) * kwh);
         });
         const rows = order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
         if (channel.type === 'feedIn' && rows.length === 1 && Number.isFinite(channel.totalAmberCost)) {
@@ -128,8 +149,121 @@
         return defaultRate;
     };
 
-    Amber.clockPartsForItem = function (item, planConfig, state) {
-        const opts = Amber.clockOptionsForState(state, planConfig);
+    function freeCapKwh(planConfig) {
+        const free = planConfig && planConfig.rateType === 'tou' && planConfig.tou && planConfig.tou.free;
+        if (!free || !(free.windows || []).length) return 0;
+        const cap = parseFloat(free.capKwh);
+        return Number.isFinite(cap) && cap > 0 ? cap : 0;
+    }
+
+    function feedInHasCaps(planConfig) {
+        return ((planConfig && planConfig.feedInWindows) || []).some((w) => parseFloat(w.capKwh) > 0);
+    }
+
+    /** True when some rate depends on how much was already used that day (daily kWh caps). */
+    Amber.planHasCaps = function (planConfig) {
+        return freeCapKwh(planConfig) > 0 || feedInHasCaps(planConfig);
+    };
+
+    function sortedByTime(data) {
+        const key = (item) => (item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime)) || '';
+        return data.slice().sort((a, b) => {
+            const ka = key(a);
+            const kb = key(b);
+            return ka < kb ? -1 : (ka > kb ? 1 : 0);
+        });
+    }
+
+    const capCache = typeof WeakMap === 'function' ? new WeakMap() : null;
+
+    /**
+     * Per-interval pricing splits for plans with daily kWh caps, as a Map item -> [{ period,
+     * label, kwh, rate }]. Usage in a capped free window is free until the day's cap is used,
+     * then priced at the rate that would otherwise apply; a capped feed-in window pays its rate
+     * until the cap, then overRate (or the plan's default feed-in). Days follow the plan's clock.
+     * Returns null when the channel's pricing has no caps.
+     */
+    Amber.cappedSplits = function (channel, planConfig, state) {
+        if (!channel || !planConfig) return null;
+        const type = channel.type;
+        const general = type === 'general' && freeCapKwh(planConfig) > 0;
+        const feedIn = type === 'feedIn' && feedInHasCaps(planConfig);
+        if (!general && !feedIn) return null;
+        const data = channel.usageData || [];
+        const sig = JSON.stringify([state, planConfig.clock || '', planConfig.timeZone || '', type,
+            general ? [planConfig.tou, planConfig.flat] : [planConfig.feedIn, planConfig.feedInWindows]]);
+        const hit = capCache && capCache.get(data);
+        if (hit && hit.sig === sig && hit.len === data.length) return hit.map;
+
+        const map = new Map();
+        const used = Object.create(null);
+        if (general) {
+            const cap = freeCapKwh(planConfig);
+            const fallback = parseFloat(planConfig.flat) || 0;
+            sortedByTime(data).forEach((item) => {
+                const kwh = Amber.absKwh(item.kwh);
+                const parts = Amber.clockPartsForItem(item, planConfig, state);
+                const cls = Amber.getTouPeriod(parts, planConfig.tou, fallback);
+                if (cls.period !== 'free') {
+                    map.set(item, [{ period: cls.period, label: Amber.PERIOD_LABELS[cls.period] || cls.period, kwh, rate: cls.rate }]);
+                    return;
+                }
+                const sofar = used[parts.dateStr] || 0;
+                const within = Math.max(0, Math.min(kwh, cap - sofar));
+                const over = kwh - within;
+                used[parts.dateStr] = sofar + kwh;
+                const splits = [{ period: 'free', label: Amber.PERIOD_LABELS.free, kwh: within, rate: cls.rate }];
+                if (over > 0) {
+                    const alt = Amber.getTouPeriod(parts, planConfig.tou, fallback, true);
+                    splits.push({ period: 'freeOverCap', label: Amber.PERIOD_LABELS.freeOverCap, kwh: over, rate: alt.rate });
+                }
+                map.set(item, splits);
+            });
+        } else {
+            const windows = planConfig.feedInWindows || [];
+            const defaultRate = parseFloat(planConfig.feedIn) || 0;
+            sortedByTime(data).forEach((item) => {
+                const kwh = Amber.absKwh(item.kwh);
+                const parts = Amber.clockPartsForItem(item, planConfig, state);
+                let index = -1;
+                for (let i = 0; i < windows.length; i++) {
+                    if (Amber.windowMatches(windows[i], parts)) { index = i; break; }
+                }
+                if (index < 0) {
+                    map.set(item, [{ period: 'feedIn', label: Amber.PERIOD_LABELS.feedIn, kwh, rate: defaultRate }]);
+                    return;
+                }
+                const win = windows[index];
+                const rate = parseFloat(win.rate) || 0;
+                const cap = parseFloat(win.capKwh);
+                if (!(cap > 0)) {
+                    map.set(item, [{ period: 'feedIn', label: Amber.PERIOD_LABELS.feedIn, kwh, rate }]);
+                    return;
+                }
+                const key = parts.dateStr + '#' + index;
+                const sofar = used[key] || 0;
+                const within = Math.max(0, Math.min(kwh, cap - sofar));
+                const over = kwh - within;
+                used[key] = sofar + kwh;
+                const overRate = Number.isFinite(parseFloat(win.overRate)) ? parseFloat(win.overRate) : defaultRate;
+                const splits = [{ period: 'feedIn', label: Amber.PERIOD_LABELS.feedIn, kwh: within, rate }];
+                if (over > 0) splits.push({ period: 'feedInOverCap', label: Amber.PERIOD_LABELS.feedInOverCap, kwh: over, rate: overRate });
+                map.set(item, splits);
+            });
+        }
+        if (capCache) capCache.set(data, { sig, len: data.length, map });
+        return map;
+    };
+
+    /** Competitor cost of one interval in cents (unsigned), honouring daily caps when given splits. */
+    Amber.otherItemCostCents = function (item, channelType, planConfig, state, capped) {
+        const splits = capped && capped.get(item);
+        if (splits) return splits.reduce((sum, s) => sum + s.kwh * s.rate, 0);
+        return Amber.absKwh(item.kwh) * Amber.otherRateForItem(item, channelType, planConfig, state);
+    };
+
+    /** Clock parts for an interval, cached on the item per clock and timezone. */
+    Amber.itemClockParts = function (item, opts) {
         const key = (opts.clock || 'local') + '|' + (opts.timeZone || '');
         if (!item._clockParts) item._clockParts = Object.create(null);
         if (item._clockParts[key]) return item._clockParts[key];
@@ -137,6 +271,10 @@
         const parts = Amber.getClockParts(nem, opts);
         item._clockParts[key] = parts;
         return parts;
+    };
+
+    Amber.clockPartsForItem = function (item, planConfig, state) {
+        return Amber.itemClockParts(item, Amber.clockOptionsForState(state, planConfig));
     };
 
     Amber.otherRateForItem = function (item, channelType, planConfig, state) {
@@ -159,33 +297,10 @@
 
     Amber.calculateOtherSupplierCosts = function (channelTotals, planConfig, state) {
         Object.values(channelTotals).forEach((channel) => {
-            let channelOtherCost = 0;
-            if (channel.type === 'feedIn') {
-                channelOtherCost = channel.usageData.reduce((total, item) => {
-                    const kwh = Amber.absKwh(item.kwh);
-                    const rate = Amber.otherRateForItem(item, 'feedIn', planConfig, state);
-                    return total - (kwh * rate) / 100;
-                }, 0);
-            } else if (channel.type === 'controlledLoad') {
-                channelOtherCost = channel.usageData.reduce((total, item) => {
-                    const kwh = Amber.absKwh(item.kwh);
-                    const rate = Amber.otherRateForItem(item, 'controlledLoad', planConfig, state);
-                    return total + (kwh * rate) / 100;
-                }, 0);
-            } else if (channel.type === 'general') {
-                channelOtherCost = channel.usageData.reduce((total, item) => {
-                    const kwh = Amber.absKwh(item.kwh);
-                    const rate = Amber.otherRateForItem(item, 'general', planConfig, state);
-                    return total + (kwh * rate) / 100;
-                }, 0);
-            } else {
-                channelOtherCost = channel.usageData.reduce((total, item) => {
-                    const kwh = Amber.absKwh(item.kwh);
-                    const rate = Amber.otherRateForItem(item, channel.type, planConfig, state);
-                    return total + (kwh * rate) / 100;
-                }, 0);
-            }
-            channel.totalOtherCost = channelOtherCost;
+            const sign = channel.type === 'feedIn' ? -1 : 1;
+            const capped = Amber.cappedSplits(channel, planConfig, state);
+            channel.totalOtherCost = (channel.usageData || []).reduce((total, item) =>
+                total + sign * Amber.otherItemCostCents(item, channel.type, planConfig, state, capped) / 100, 0);
         });
     };
 
@@ -222,19 +337,37 @@
      * own peak × that month's demand days, summed across the range.
      */
     Amber.calculateDemandTariff = function (channelTotals, amberDemandCents) {
+        // amberDemandCents: c/kW/day, or the amberRates object (each month at its own rate).
         const months = Amber.splitChannelsByMonth(channelTotals);
         const keys = Object.keys(months).sort();
         if (keys.length > 1) {
             const combined = combineMonthly(keys.map((k) => ({
-                month: k, info: Amber.calculateMonthDemandTariff(months[k], amberDemandCents)
+                month: k, info: Amber.calculateMonthDemandTariff(months[k], demandCentsFor(amberDemandCents, k))
             })), 'demandDays');
             return combined || { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         }
-        return Amber.calculateMonthDemandTariff(channelTotals, amberDemandCents);
+        return Amber.calculateMonthDemandTariff(channelTotals, demandCentsFor(amberDemandCents, keys[0]));
+    };
+
+    /**
+     * All channels of one type as one channel (sites can have several general meters, e.g. E1
+     * and E2). Returns the channel itself when there is only one, or null when there are none.
+     */
+    Amber.mergedChannelOfType = function (channelTotals, type) {
+        const list = Object.values(channelTotals || {}).filter((c) => c && c.type === type);
+        if (list.length <= 1) return list[0] || null;
+        return {
+            identifier: list.map((c) => c.identifier).join('+'),
+            type,
+            merged: true,
+            usageData: [].concat(...list.map((c) => c.usageData || [])),
+            totalKWh: list.reduce((s, c) => s + (c.totalKWh || 0), 0),
+            totalAmberCost: list.reduce((s, c) => s + (c.totalAmberCost || 0), 0)
+        };
     };
 
     Amber.calculateMonthDemandTariff = function (channelTotals, amberDemandCents) {
-        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        const generalChannel = Amber.mergedChannelOfType(channelTotals, 'general');
         const empty = { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
             return empty;
@@ -302,7 +435,7 @@
         const demandDays = demand.days || [];
         if (!demandDays.length) return empty;
 
-        const generalChannel = Object.values(channelTotals).find((c) => c.type === 'general');
+        const generalChannel = Amber.mergedChannelOfType(channelTotals, 'general');
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
             return empty;
         }
@@ -363,9 +496,55 @@
         return copy;
     };
 
-    Amber.amberFixedDaily = function (amberRates) {
-        return ((amberRates.connectionCents || 0) + (amberRates.subscriptionCents || 0)) / 100;
+    /**
+     * Amber's fixed rates on a date. Network charges change each 1 July, so rates.earlier
+     * ({ until, connectionCents, subscriptionCents, demandCents }) applies to dates before
+     * rates.earlier.until; any of its rates left blank fall back to the current ones.
+     */
+    Amber.amberRatesOn = function (rates, dateStr) {
+        const r = rates || {};
+        const e = r.earlier;
+        if (!e || !e.until || !dateStr || dateStr >= e.until) return r;
+        const pick = (k) => (e[k] != null && Number.isFinite(e[k]) ? e[k] : r[k]);
+        return { connectionCents: pick('connectionCents'), subscriptionCents: pick('subscriptionCents'), demandCents: pick('demandCents') };
     };
+
+    Amber.amberFixedDaily = function (amberRates, dateStr) {
+        const r = Amber.amberRatesOn(amberRates, dateStr);
+        return ((r.connectionCents || 0) + (r.subscriptionCents || 0)) / 100;
+    };
+
+    /** Connection and subscription ($) for every day from..to (inclusive), each day at its own rates. */
+    Amber.amberFixedForPeriod = function (amberRates, from, to) {
+        const r = amberRates || {};
+        const days = Amber.inclusiveDayCount(from, to);
+        const e = r.earlier;
+        let before = 0;
+        if (e && e.until && from && from < e.until) {
+            before = to < e.until ? days : Amber.inclusiveDayCount(from, Amber.addDays(e.until, -1));
+        }
+        const old = Amber.amberRatesOn(r, from);
+        const after = days - before;
+        return {
+            days,
+            connection: ((old.connectionCents || 0) * before + (r.connectionCents || 0) * after) / 100,
+            subscription: ((old.subscriptionCents || 0) * before + (r.subscriptionCents || 0) * after) / 100
+        };
+    };
+
+    // Demand rate (c/kW/day) for a month: a number, or an amberRates object (dated rates).
+    function demandCentsFor(ratesOrCents, monthKey) {
+        if (ratesOrCents && typeof ratesOrCents === 'object') {
+            const r = Amber.amberRatesOn(ratesOrCents, monthKey ? `${monthKey}-01` : null);
+            // Seasonal demand rates (e.g. Endeavour summer/winter) for the current year's charges.
+            const byMonth = r === ratesOrCents && r.demandByMonth;
+            const m = monthKey ? parseInt(monthKey.substring(5, 7), 10) : null;
+            if (byMonth && m && byMonth[m] != null) return byMonth[m];
+            return r.demandCents;
+        }
+        return ratesOrCents;
+    }
+    Amber.demandCentsFor = demandCentsFor;
 
     Amber.computePlanTotals = function (channelTotals, planConfig, options) {
         const opts = options || {};
@@ -432,6 +611,7 @@
         }
 
         Object.values(channelData).forEach((channel) => {
+            const capped = Amber.cappedSplits(channel, planConfig, state);
             channel.usageData.forEach((item) => {
                 const dateStr = Amber.usageDateStr(item);
                 if (!summaries[dateStr]) return;
@@ -439,8 +619,7 @@
                 const kwh = Amber.absKwh(item.kwh);
                 const perKwh = parseFloat(item.perKwh) || 0;
                 const amberItemCost = (kwh * perKwh) / 100;
-                const otherRate = Amber.otherRateForItem(item, channel.type, planConfig, state);
-                const otherItemCost = (kwh * otherRate) / 100;
+                const otherItemCost = Amber.otherItemCostCents(item, channel.type, planConfig, state, capped) / 100;
 
                 if (!summaries[dateStr].channels[channel.identifier]) {
                     summaries[dateStr].channels[channel.identifier] = {
@@ -499,7 +678,7 @@
             const monthStartDateStr = Amber.formatForInput(monthStartDate);
             const monthEndDateStr = Amber.formatForInput(monthEndDate);
 
-            const amberDemandInfoMonth = Amber.calculateDemandTariff(monthChannelData, amberRates.demandCents);
+            const amberDemandInfoMonth = Amber.calculateDemandTariff(monthChannelData, amberRates);
             const otherDemandInfoMonth = Amber.calculateOtherDemandTariff(
                 monthChannelData, monthStartDateStr, monthEndDateStr, planConfig, state
             );
@@ -511,7 +690,7 @@
             const otherDailyDemandCharge = otherDemandInfoMonth ? otherDemandInfoMonth.dailyCharge : 0;
 
             const amberDemandDaysInMonth = new Set();
-            const generalChannelForMonth = Object.values(monthChannelData).find((c) => c.type === 'general');
+            const generalChannelForMonth = Amber.mergedChannelOfType(monthChannelData, 'general');
             if (generalChannelForMonth) {
                 generalChannelForMonth.usageData.forEach((item) => {
                     if (item.tariffInformation && item.tariffInformation.demandWindow) {
@@ -593,8 +772,7 @@
             const kwh = Amber.absKwh(item.kwh);
             const perKwh = parseFloat(item.perKwh) || 0;
             intervalCost += (perKwh / 100) * kwh;
-            const nem = item.processedTime ? item.nemTime : Amber.adjustNemTime(item.nemTime);
-            const parts = Amber.getClockParts(nem, opts);
+            const parts = Amber.itemClockParts(item, opts);
             if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
                 middayKwh += kwh;
             }

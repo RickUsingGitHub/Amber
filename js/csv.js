@@ -31,13 +31,13 @@
     };
 
     Amber.generateDailySummariesCsv = function (dailySummaries, options) {
-        const amberFixedDailyCost = Amber.amberFixedDaily(options.amberRates);
         const otherDailyConnection = (parseFloat(options.otherDailyCents) || 0) / 100;
         let csvContent = 'Date,Total Usage (kWh),Total Feed-in (kWh),Amber Usage Cost ($),Amber Demand Cost ($),Amber Fixed Cost ($),Amber Total ($),Other Usage Cost ($),Other Demand Cost ($),Other Fixed Cost ($),Other Total ($),Estimated Intervals,Billable Intervals,Avg Renewables %\n';
         const sortedDates = Object.keys(dailySummaries).sort();
         sortedDates.forEach((dateStr) => {
             const summary = dailySummaries[dateStr];
             if (!summary) return;
+            const amberFixedDailyCost = Amber.amberFixedDaily(options.amberRates, dateStr);
             const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + amberFixedDailyCost;
             const totalOtherCost = summary.otherCost + (summary.otherDemandCost || 0) + otherDailyConnection;
             const avgRenew = summary.renewableKwh > 0 ? (summary.renewableWeighted / summary.renewableKwh) : '';

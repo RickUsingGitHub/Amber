@@ -3,196 +3,419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.31</title>
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
+    <title>Amber Compare &amp; Export v1.43</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.31">
+    <link rel="stylesheet" href="css/app.css?v=1.43">
 </head>
 <body class="bg-gray-100 text-gray-800">
-    <a href="#configSection" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to configuration</a>
+    <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
 
     <div class="container mx-auto p-4 sm:p-6 lg:p-8 max-w-4xl">
-        <header class="bg-white rounded-lg shadow-md p-6 mb-6 relative">
-            <div class="flex justify-between items-start">
+        <header class="bg-white rounded-lg shadow-md p-5 sm:p-6 mb-6 relative">
+            <div class="flex justify-between items-start gap-3">
                 <div>
                     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center">
-                        <img src="favicon.ico" alt="" class="mr-4 h-14 w-14"> Amber Compare &amp; Export v1.31
+                        <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
-                    <p class="mt-2 text-gray-600">Enter your Amber API key and a date range to compare costs or export usage data. Everything stays in your browser.</p>
+                    <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.43.</p>
                 </div>
-                <div class="relative">
+                <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                         <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M11.49 3.17a1 1 0 00-2.98 0 7.97 7.97 0 00-2.1.88 1 1 0 00-1.37-.37 1 1 0 00-.37 1.37 7.97 7.97 0 00-.88 2.1 1 1 0 000 2.98 7.97 7.97 0 00.88 2.1 1 1 0 00.37 1.37 1 1 0 001.37-.37 7.97 7.97 0 002.1.88 1 1 0 002.98 0 7.97 7.97 0 002.1-.88 1 1 0 001.37.37 1 1 0 00.37-1.37 7.97 7.97 0 00.88-2.1 1 1 0 000-2.98 7.97 7.97 0 00-.88-2.1 1 1 0 00-.37-1.37 1 1 0 00-1.37.37 7.97 7.97 0 00-2.1-.88zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
                     </button>
-                    <div id="settingsMenu" class="hidden absolute right-0 mt-2 w-60 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200" role="menu"></div>
+                    <span data-help="settings" data-help-label="Settings"></span>
+                    <div id="settingsMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200" role="menu"></div>
                 </div>
             </div>
         </header>
 
         <main>
-            <div id="configSection" class="bg-white rounded-lg shadow-md p-6 mb-6">
-                <div class="flex justify-between items-center cursor-pointer" id="configHeader">
-                    <div id="configHeaderLeftGroup" class="flex items-center gap-4 flex-wrap">
-                        <h2 class="text-lg font-bold text-gray-900">Configuration</h2>
+            <div id="configSection" class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
+                <h2 class="text-sm font-semibold text-gray-800 mb-2" data-help="dates">Dates to look at</h2>
+                <div id="configCompareBar" class="flex flex-wrap items-end gap-3">
+                    <div>
+                        <label for="startDate" class="block text-xs font-medium text-gray-600 mb-1">From</label>
+                        <input type="date" id="startDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                     </div>
-                    <button id="toggleConfigBtn" type="button" class="flex items-center text-indigo-600 hover:underline focus:outline-none font-medium">
-                        <span class="mr-1">Hide</span>
-                        <svg id="configChevron" class="w-5 h-5 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>
-                    </button>
+                    <div>
+                        <label for="endDate" class="block text-xs font-medium text-gray-600 mb-1">To</label>
+                        <input type="date" id="endDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="ml-auto flex items-center">
+                        <button id="fetchData" type="button" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Compare costs</button>
+                        <span data-help="compareBtn" data-help-label="Compare costs"></span>
+                    </div>
+                </div>
+                <div class="mt-3 flex flex-wrap items-center gap-2" id="datePresets">
+                    <span class="text-xs text-gray-500" data-help="presets">Quick picks:</span>
+                    <button type="button" data-preset="7d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 7 days</button>
+                    <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">This month</button>
+                    <button type="button" data-preset="lastMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last month</button>
+                    <button type="button" data-preset="3m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 3 months</button>
+                    <button type="button" data-preset="90d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 90 days</button>
+                    <button type="button" data-preset="12m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 12 months</button>
+                </div>
+                <div id="messageContainer" class="hidden text-center mt-4 p-4 border rounded-lg bg-gray-50">
+                    <p id="message" class="text-lg"></p>
+                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
+                        <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-wrap gap-1 bg-white rounded-lg shadow-md p-1">
+                    <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Start</button>
+                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare</button>
+                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Usage</span><span class="hidden sm:inline">My usage</span></button>
+                    <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Bill</span><span class="hidden sm:inline">Bill check</span></button>
+                </div>
+                <div id="resultTools" class="ml-auto flex items-center">
+                    <div class="flex items-center mr-3">
+                        <span class="text-sm font-medium text-gray-700 mr-2" id="gstLabel">Include GST</span>
+                        <label class="gst-switch">
+                            <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
+                            <span class="gst-switch-track" aria-hidden="true"></span>
+                        </label>
+                        <span data-help="gst" data-help-label="Include GST"></span>
+                    </div>
+                    <div class="relative flex items-center">
+                        <button id="downloadCsvButton" type="button" disabled aria-haspopup="true" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">Download</button>
+                        <span data-help="exportMenu" data-help-label="Download"></span>
+                        <div id="csvDropdownMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                            <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Every meter reading<span class="block text-xs text-gray-500">Each 5 or 30 minutes, with Amber's price (CSV)</span></a>
+                            <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily totals<span class="block text-xs text-gray-500">One row a day: kWh and cost on each plan (CSV)</span></a>
+                            <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">The comparison table<span class="block text-xs text-gray-500">As shown on the Compare tab (CSV)</span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ==================== Start ==================== -->
+            <section id="panel-setup" role="tabpanel" aria-labelledby="tab-setup" data-panel="setup" class="hidden">
+                <div id="welcomeCard" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-1">Welcome! What would you like to do?</h2>
+                    <p class="text-sm text-gray-600 mb-4">This free tool works out what your electricity really costs and whether a different plan would be cheaper. It takes a couple of minutes to set up.</p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <button type="button" id="chooseAmber" class="choice-card">
+                            <span class="text-indigo-600"><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg></span>
+                            <span class="text-base font-semibold text-gray-900">I'm with Amber</span>
+                            <span class="text-sm text-gray-600">Connect your Amber account to see what you really paid, check your bills, and compare Amber with other plans.</span>
+                            <span class="text-sm font-medium text-indigo-600">Connect my Amber account →</span>
+                        </button>
+                        <button type="button" id="chooseCurious" class="choice-card">
+                            <span class="text-indigo-600"><svg class="w-7 h-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path stroke-linecap="round" d="m20 20-3.5-3.5"/></svg></span>
+                            <span class="text-base font-semibold text-gray-900">I'm thinking about Amber</span>
+                            <span class="text-sm text-gray-600">Use the meter readings from your current retailer to see what Amber would have cost you, compared with the plan you're on now.</span>
+                            <span class="text-sm font-medium text-indigo-600">Check if Amber suits me →</span>
+                        </button>
+                    </div>
                 </div>
 
-                <div id="configContent" class="mt-3">
-                    <div id="configDetails" class="border-t pt-4">
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="md:col-span-2">
-                            <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1">Amber API Key</label>
-                            <input type="password" id="apiKey" autocomplete="off" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="psk_...">
-                            <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
-                                <label class="inline-flex items-center text-sm text-gray-700">
-                                    <input type="checkbox" id="rememberApiKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
-                                    <span class="ml-2">Remember key on this device</span>
-                                </label>
-                            </div>
-                            <p class="text-xs text-gray-500 mt-1">Stored only in this browser (not encrypted). Find your key at <a href="https://app.amber.com.au/developers" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>.</p>
-                        </div>
+                <div id="connectedCard" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold text-gray-900 mb-2">You're set up</h2>
+                    <ol class="space-y-2 text-sm text-gray-700">
+                        <li class="flex gap-2"><span class="step-num">1</span><span>Pick the dates at the top (or a quick pick) and press <strong>Compare costs</strong>.</span></li>
+                        <li class="flex gap-2"><span class="step-num">2</span><span><strong>Compare</strong> shows which plan would have been cheaper, and lets you pick the plan to compare with.</span></li>
+                        <li class="flex gap-2"><span class="step-num">3</span><span><strong>My usage</strong> has graphs and a calendar of when you use power and what it cost. <strong>Bill check</strong> checks an Amber bill line by line.</span></li>
+                    </ol>
+                    <button type="button" id="goCompare" class="mt-4 inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">Go to Compare</button>
+                </div>
 
-                        <div id="siteSelectorRow" class="md:col-span-2 hidden">
-                            <label for="siteSelector" class="block text-sm font-medium text-gray-700 mb-1">Site</label>
-                            <select id="siteSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                            <p class="text-xs text-gray-500 mt-1">Choose which NMI to analyse if your account has more than one site.</p>
-                        </div>
-
-                        <div class="md:col-span-2 border-t pt-4">
-                            <h3 id="otherSupplierHeading" class="block text-base font-medium text-gray-800 mb-2">Other Supplier Details</h3>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div>
-                                    <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1">State</label>
-                                    <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
-                                </div>
-                                <div id="planSelectorContainer">
-                                    <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1">Supplier Plan</label>
-                                    <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <option value="">-- Custom --</option>
-                                    </select>
-                                </div>
-                            </div>
+                <div id="setupSection" class="bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-900">Connect your Amber account</h2>
+                        <p class="text-sm text-gray-600 mt-1">For Amber customers. The app reads your usage and prices directly from Amber; it can't change anything on your account.</p>
+                    </div>
+                    <ol class="space-y-2 text-sm text-gray-700">
+                        <li class="flex gap-2"><span class="step-num">1</span><span>Log in at <a href="https://app.amber.com.au/developers" target="_blank" rel="noopener noreferrer" class="text-indigo-600 hover:underline">app.amber.com.au/developers</a>, choose <strong>Generate new token</strong>, and copy it (Amber only shows it once).</span></li>
+                        <li class="flex gap-2"><span class="step-num">2</span><span>Paste it below. That's it: the app opens on this month's figures.</span></li>
+                    </ol>
+                    <div>
+                        <label for="apiKey" class="block text-sm font-medium text-gray-700 mb-1" data-help="apiKey">Amber API key (token)</label>
+                        <input type="password" id="apiKey" autocomplete="off" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="Paste your key here (starts with psk_)">
+                        <div class="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                            <label class="inline-flex items-center text-sm text-gray-700" data-help="rememberKey" data-help-label="Remember my key on this device">
+                                <input type="checkbox" id="rememberApiKey" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" checked>
+                                <span class="ml-2">Remember my key on this device</span>
+                            </label>
                         </div>
                     </div>
+                    <div id="siteSelectorRow" class="hidden">
+                        <label for="siteSelector" class="block text-sm font-medium text-gray-700 mb-1" data-help="site">Property</label>
+                        <select id="siteSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                    </div>
 
-                    <div class="mt-4 border-t pt-4">
-                        <button type="button" id="ratesDetailsToggle" class="flex items-center text-sm font-medium text-indigo-600 hover:underline focus:outline-none">
-                            <span id="ratesDetailsToggleLabel">Show comparison plan rates</span>
-                        </button>
-                        <div id="ratesDetails" class="hidden mt-4 space-y-4">
-                            <p id="ratesGstNote" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">Enter all custom plan rates as <strong>inc GST</strong> (GST-inclusive), the same as Energy Made Easy, DMO/VDO and retailer fact sheets. Built-in plans already use inc GST tariffs. Household feed-in is usually GST-free — enter the published c/kWh; the GST toggle does not change feed-in credits.</p>
+                    <details id="amberChargesDetails" class="pt-6 border-t">
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-800"><span data-help="amberCharges" data-help-label="Amber's fixed charges">Amber's fixed charges (optional)</span></summary>
+                        <div class="mt-3">
+                            <p id="amberChargesLocalNote" class="hidden text-xs text-sky-900 bg-sky-50 rounded-md p-2 mb-3"></p>
+                            <p id="amberRatesGstNote" class="text-xs text-gray-600 mb-3">The defaults suit most Sydney homes. For exact figures, load one of your Amber bills: the boxes fill in by themselves. All amounts include GST.</p>
+                            <div class="flex flex-wrap items-center gap-2 mb-3">
+                                <label for="amberBillFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50" data-help="loadBill" data-help-label="Load an Amber bill">Load an Amber bill (PDF)</label>
+                                <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                            </div>
+                            <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
+                            <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mb-2">From 1 July 2026</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700" data-help="amberDaily">Daily supply (c/day)</label>
+                                    <input type="number" id="amberConnectionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700" data-help="amberSubscription">Membership fee (c/day)</label>
+                                    <input type="number" id="amberSubscriptionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="amberDemandRate" class="block text-sm font-medium text-gray-700" data-help="amberDemand">Demand (c/kW/day)</label>
+                                    <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                            <h4 class="text-xs font-semibold text-gray-600 uppercase tracking-wider mt-4 mb-1" data-help="amberPrev">Before 1 July 2026</h4>
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div>
+                                    <label for="amberConnectionRatePrev" class="block text-sm font-medium text-gray-700">Daily supply (c/day)</label>
+                                    <input type="number" id="amberConnectionRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="amberSubscriptionRatePrev" class="block text-sm font-medium text-gray-700">Membership fee (c/day)</label>
+                                    <input type="number" id="amberSubscriptionRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                                <div>
+                                    <label for="amberDemandRatePrev" class="block text-sm font-medium text-gray-700">Demand (c/kW/day)</label>
+                                    <input type="number" id="amberDemandRatePrev" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                </div>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div id="usageImportSection" class="pt-6 border-t">
+                        <h3 class="text-sm font-semibold text-gray-800 mb-1" data-help="csvImport">Add more history (optional)</h3>
+                        <p class="text-xs text-gray-600 mb-3">Amber's connection only reaches back about 3 months. To look at a whole year, import the usage file you can download from Amber.</p>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <label for="usageCsvFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Import Amber usage file (CSV)</label>
+                            <input type="file" id="usageCsvFile" class="sr-only" accept=".csv,text/csv">
+                            <span id="usageCacheSummary" class="text-xs text-gray-500"></span>
+                        </div>
+                        <div id="usageImportProgress" class="hidden w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div id="usageImportBar" class="bg-indigo-600 h-2 rounded-full w-0"></div>
+                        </div>
+                        <p id="usageImportStatus" class="hidden text-xs mt-2"></p>
+                    </div>
+                </div>
+
+                <div id="nem12Section" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-lg font-bold text-gray-900 mb-1">Not with Amber? See what it would cost you</h2>
+                    <p class="text-sm text-gray-600 mb-3">No Amber account needed. You'll need a file of your meter readings, ideally for a whole year.</p>
+                    <ol class="space-y-2 text-sm text-gray-700 mb-4">
+                        <li class="flex gap-2"><span class="step-num">1</span><span data-help="nem12">Get your meter readings as a <strong>NEM12</strong> file: ask your current retailer for your "interval data", or download it from your electricity network's website.</span></li>
+                        <li class="flex gap-2"><span class="step-num">2</span><span>Import it here, check the network details it finds, and press <strong>Estimate Amber and compare</strong>.</span></li>
+                        <li class="flex gap-2"><span class="step-num">3</span><span>On the Compare tab, pick the plan you're on now to see which is cheaper.</span></li>
+                    </ol>
+                    <div class="flex flex-wrap items-center gap-3">
+                        <label for="nem12File" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Import meter readings (NEM12)</label>
+                        <input type="file" id="nem12File" class="sr-only" accept=".csv,.txt,.dat,.nem12,text/csv,text/plain">
+                    </div>
+                    <p id="nem12Status" class="hidden text-xs mt-2"></p>
+                    <div id="nem12Options" class="hidden mt-4 space-y-3 text-sm">
+                        <p id="nem12Summary" class="text-gray-700"></p>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
-                                <label for="planName" class="block text-sm font-medium text-gray-700 mb-1">Plan Name</label>
-                                <input type="text" id="planName" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g., Energy Australia TOU 2026">
+                                <label for="nem12Network" class="block text-xs font-medium text-gray-600" data-help="nem12Network">Electricity network</label>
+                                <select id="nem12Network" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div>
+                                <label for="nem12Tariff" class="block text-xs font-medium text-gray-600" data-help="nem12Tariff">Network tariff (from the bill, or keep the default)</label>
+                                <select id="nem12Tariff" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div id="nem12ExportRow">
+                                <label for="nem12Export" class="block text-xs font-medium text-gray-600" data-help="nem12Export">Solar export tariff</label>
+                                <select id="nem12Export" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                            <div id="nem12ControlledRow">
+                                <label for="nem12Controlled" class="block text-xs font-medium text-gray-600" data-help="nem12Controlled">Hot water / controlled load tariff</label>
+                                <select id="nem12Controlled" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                            </div>
+                        </div>
+                        <div id="nem12Channels" class="text-xs text-gray-600"></div>
+                        <label class="inline-flex items-center gap-2 text-xs text-gray-700" data-help="greenPower" data-help-label="GreenPower"><input type="checkbox" id="nem12GreenPower" class="h-4 w-4 text-indigo-600 border-gray-300 rounded"> Add Amber's GreenPower option (+0.73 c/kWh)</label>
+                        <div class="flex items-center">
+                            <button type="button" id="nem12Build" class="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50">Estimate Amber and compare</button>
+                            <span data-help="nem12Build" data-help-label="Estimate Amber and compare"></span>
+                        </div>
+                        <p class="text-xs text-gray-500">Each reading is priced the way Amber would have: the wholesale price at that moment plus Amber's 2026-27 network and other charges. It assumes you use power exactly as you did. With a home battery, Amber's automatic battery control would usually do better than this.</p>
+                    </div>
+                    <div id="localSitesList" class="mt-4 text-sm"></div>
+                </div>
+
+                <details id="glossarySection" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <summary class="cursor-pointer text-lg font-bold text-gray-900">Jargon buster</summary>
+                    <p class="text-sm text-gray-600 mt-2 mb-3">The electricity words used in this app, in plain English. You can also tap any <span class="help-btn" aria-hidden="true">?</span> for help with the thing next to it.</p>
+                    <dl id="glossaryList" class="space-y-3 text-sm"></dl>
+                </details>
+            </section>
+
+            <!-- ==================== Compare ==================== -->
+            <section id="panel-compare" role="tabpanel" aria-labelledby="tab-compare" data-panel="compare" class="hidden">
+                <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
+                    <button type="button" data-jump="results-output" class="jump-link">The answer</button>
+                    <button type="button" data-jump="allPlansSection" class="jump-link">Every plan</button>
+                    <button type="button" data-jump="monthlySection" class="jump-link">Month by month</button>
+                    <button type="button" data-jump="batteryShiftSection" class="jump-link">Free-power plans</button>
+                    <button type="button" data-jump="planChooser" class="jump-link">Plan prices</button>
+                </nav>
+                <div id="planChooser" class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h3 id="otherSupplierHeading" class="text-lg font-bold text-gray-900 mb-1">Compare Amber with…</h3>
+                    <p class="text-sm text-gray-600 mb-4">Pick the plan you're on now, or one you're thinking about. Its published prices are filled in for you.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                            <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1" data-help="state">Your state</label>
+                            <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                        </div>
+                        <div id="planSelectorContainer">
+                            <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1" data-help="plan">Plan to compare with</label>
+                            <select id="planSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                <option value="">Enter my own rates</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-4 border-t pt-4">
+                        <div class="flex items-center">
+                            <button type="button" id="ratesDetailsToggle" class="flex items-center text-sm font-medium text-indigo-600 hover:underline focus:outline-none">
+                                <span id="ratesDetailsToggleLabel">Show this plan's prices</span>
+                            </button>
+                            <span data-help="ratesToggle" data-help-label="This plan's prices"></span>
+                        </div>
+                        <div id="ratesDetails" class="hidden mt-4 space-y-4">
+                            <p id="ratesGstNote" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">Type prices exactly as they appear on the plan's fact sheet, your bill or Energy Made Easy: those include GST. Solar feed-in has no GST.</p>
+                            <div>
+                                <label for="planName" class="block text-sm font-medium text-gray-700 mb-1" data-help="planName">Name for your own plan</label>
+                                <input type="text" id="planName" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. My current EnergyAustralia plan">
                             </div>
 
                             <div>
-                                <span class="block text-sm font-medium text-gray-700 mb-2">Rate Structure</span>
-                                <div class="flex items-center space-x-4" id="rateTypeSelector">
+                                <span class="block text-sm font-medium text-gray-700 mb-2" data-help="rateType">How the plan charges for power</span>
+                                <div class="flex flex-wrap items-center gap-x-4 gap-y-2" id="rateTypeSelector">
                                     <label class="flex items-center">
                                         <input type="radio" name="rateType" value="flat" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300" checked>
-                                        <span class="ml-2 text-sm text-gray-700">Flat Rate</span>
+                                        <span class="ml-2 text-sm text-gray-700">Same price all day (flat rate)</span>
                                     </label>
                                     <label class="flex items-center">
                                         <input type="radio" name="rateType" value="tou" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300">
-                                        <span class="ml-2 text-sm text-gray-700">Time of Use (TOU)</span>
+                                        <span class="ml-2 text-sm text-gray-700">Price depends on the time (time of use)</span>
                                     </label>
                                 </div>
                             </div>
 
                             <div>
-                                <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1">Daily Connection (c/day, inc GST)</label>
+                                <label for="dailyConnectionRate" class="block text-sm font-medium text-gray-700 mb-1" data-help="dailySupply">Daily supply charge (cents per day)</label>
                                 <input type="number" id="dailyConnectionRate" value="102.83" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                <p class="text-xs text-gray-500 mt-1">Fixed daily service fee for the other supplier, GST-inclusive.</p>
                             </div>
 
                             <div id="flatRateSection" class="grid grid-cols-1 sm:grid-cols-3 gap-6">
                                 <div>
-                                    <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1">General Rate (c/kWh, inc GST)</label>
+                                    <label for="otherSupplierRate" class="block text-sm font-medium text-gray-700 mb-1" data-help="usageRate">Usage price (c/kWh)</label>
                                     <input type="number" id="otherSupplierRate" value="36" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                 </div>
                                 <div>
-                                    <label for="otherSupplierControlledLoadFlat" class="block text-sm font-medium text-gray-700 mb-1">Controlled Load (c/kWh, inc GST)</label>
+                                    <label for="otherSupplierControlledLoadFlat" class="block text-sm font-medium text-gray-700 mb-1" data-help="clRate">Controlled load (c/kWh)</label>
                                     <input type="number" id="otherSupplierControlledLoadFlat" value="0" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    <p class="text-xs text-gray-500 mt-1">Leave 0 to use the general rate.</p>
+                                    <p class="text-xs text-gray-500 mt-1">Hot-water circuit. 0 = normal price.</p>
                                 </div>
                                 <div>
-                                    <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1">Feed-in Rate (c/kWh, published)</label>
+                                    <label for="otherSupplierFeedInRateFlat" class="block text-sm font-medium text-gray-700 mb-1" data-help="feedIn">Solar feed-in (c/kWh)</label>
                                     <input type="number" id="otherSupplierFeedInRateFlat" value="5" step="0.0001" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    <p class="text-xs text-gray-500 mt-1">Usually GST-free for households.</p>
+                                    <p class="text-xs text-gray-500 mt-1">What you're paid for solar sent out.</p>
                                 </div>
                             </div>
 
                             <div id="touRateSection" class="hidden">
-                                <h3 class="text-md font-medium text-gray-800 pt-2 mb-2">Consumption Rates &amp; Times</h3>
+                                <h3 class="text-md font-medium text-gray-800 pt-2 mb-1">Prices by time of day</h3>
+                                <p class="text-xs text-gray-500 mb-3">Give each price the hours it applies. Anything not covered gets the off-peak price.</p>
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                                    <div class="bg-emerald-50 p-3 rounded-lg border border-emerald-200" data-tou-period="free">
+                                        <label for="tou_free_rate" class="block text-sm font-medium text-emerald-700" data-help="touFree">Free period price (c/kWh)</label>
+                                        <input type="number" id="tou_free_rate" value="0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <label for="tou_free_cap" class="block text-xs font-medium text-gray-600 mt-2" data-help="touFreeCap">Free kWh per day (blank = no limit)</label>
+                                        <input type="number" id="tou_free_cap" value="" step="0.1" min="0" class="w-full mt-1 px-3 py-1 bg-white border border-gray-300 rounded-md shadow-sm text-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <p class="text-xs text-gray-500 mt-1">No hours added = the plan has no free period.</p>
+                                        <div id="tou_free_windows_container" class="mt-2 space-y-2"></div>
+                                        <button type="button" data-add-tou-window="free" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add hours</button>
+                                    </div>
+                                    <div class="bg-sky-50 p-3 rounded-lg border border-sky-200" data-tou-period="superOffpeak">
+                                        <label for="tou_superOffpeak_rate" class="block text-sm font-medium text-sky-700" data-help="touSuperOffpeak">Super off-peak / EV price (c/kWh)</label>
+                                        <input type="number" id="tou_superOffpeak_rate" value="0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
+                                        <p class="text-xs text-gray-500 mt-1">No hours added = not used.</p>
+                                        <div id="tou_superOffpeak_windows_container" class="mt-2 space-y-2"></div>
+                                        <button type="button" data-add-tou-window="superOffpeak" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add hours</button>
+                                    </div>
+                                </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4">
                                     <div class="bg-red-50 p-3 rounded-lg border border-red-200" data-tou-period="peak">
-                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700">Peak Rate (c/kWh, inc GST)</label>
+                                        <label for="tou_peak_rate" class="block text-sm font-medium text-red-700" data-help="touPeak">Peak price (c/kWh)</label>
                                         <input type="number" id="tou_peak_rate" value="57.93" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <div id="tou_peak_windows_container" class="mt-2 space-y-2"></div>
-                                        <button type="button" data-add-tou-window="peak" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
+                                        <button type="button" data-add-tou-window="peak" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add hours</button>
                                     </div>
                                     <div class="bg-yellow-50 p-3 rounded-lg border border-yellow-200" data-tou-period="shoulder">
-                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700">Shoulder Rate (c/kWh, inc GST)</label>
+                                        <label for="tou_shoulder_rate" class="block text-sm font-medium text-yellow-700" data-help="touShoulder">Shoulder price (c/kWh)</label>
                                         <input type="number" id="tou_shoulder_rate" value="30.61" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                         <div id="tou_shoulder_windows_container" class="mt-2 space-y-2"></div>
-                                        <button type="button" data-add-tou-window="shoulder" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add Time Window</button>
+                                        <button type="button" data-add-tou-window="shoulder" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add hours</button>
                                     </div>
                                     <div class="bg-green-50 p-3 rounded-lg border border-green-200" data-tou-period="offpeak">
-                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700">Off-Peak Rate (c/kWh, inc GST)</label>
+                                        <label for="tou_offpeak_rate" class="block text-sm font-medium text-green-700" data-help="touOffpeak">Off-peak price (c/kWh)</label>
                                         <input type="number" id="tou_offpeak_rate" value="24.28" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                        <p class="text-xs text-gray-500 mt-2">Catch-all when peak/shoulder windows do not match.</p>
+                                        <p class="text-xs text-gray-500 mt-2">All other times.</p>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div class="bg-blue-50 p-3 rounded-lg border border-blue-200">
-                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700">Controlled Load (c/kWh, inc GST)</label>
-                                        <p class="text-xs text-gray-500">Applies 24/7 to the controlled load channel.</p>
+                                        <label for="tou_controlled_load_rate" class="block text-sm font-medium text-blue-700" data-help="clRate">Controlled load (c/kWh)</label>
+                                        <p class="text-xs text-gray-500">Hot-water circuit, any time.</p>
                                         <input type="number" id="tou_controlled_load_rate" value="14.6" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div class="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                                        <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700">Feed-in Rate (c/kWh, published)</label>
-                                        <p class="text-xs text-gray-500">Default FIT; extra windows below override by time. Usually GST-free for households.</p>
+                                        <label for="otherSupplierFeedInRateTou" class="block text-sm font-medium text-gray-700" data-help="feedIn">Solar feed-in (c/kWh)</label>
+                                        <p class="text-xs text-gray-500">The normal rate; set different rates by time below.</p>
                                         <input type="number" id="otherSupplierFeedInRateTou" value="4.0" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                 </div>
                             </div>
 
                             <div class="border-t pt-4">
-                                <label class="inline-flex items-center text-sm font-medium text-gray-800 mb-2">
+                                <label class="inline-flex items-center text-sm font-medium text-gray-800 mb-2" data-help="feedInTou" data-help-label="Solar feed-in changes by time of day">
                                     <input type="checkbox" id="enableFeedInTou" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                                    <span class="ml-2">Time-varying feed-in</span>
+                                    <span class="ml-2">Solar feed-in changes by time of day</span>
                                 </label>
                                 <div id="feedInWindowsSection" class="hidden">
                                     <div id="feedInWindowsContainer" class="space-y-2"></div>
-                                    <button type="button" id="addFeedInWindowBtn" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add FIT window</button>
+                                    <button type="button" id="addFeedInWindowBtn" class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">+ Add a feed-in time</button>
                                 </div>
                             </div>
 
                             <div id="demandTariffSection" class="pt-4 border-t">
                                 <div class="flex items-center mb-2">
                                     <input type="checkbox" id="enableDemandTariff" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
-                                    <label for="enableDemandTariff" class="ml-2 block text-sm font-medium text-gray-800">Enable Demand Tariff for Other Supplier</label>
+                                    <label for="enableDemandTariff" class="ml-2 block text-sm font-medium text-gray-800" data-help="demandToggle">This plan has a demand charge</label>
                                 </div>
                                 <div id="demandTariffInputs" class="hidden grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div>
-                                        <label for="demandRate" class="block text-sm font-medium text-gray-700">Demand Rate (c/kW/day, inc GST)</label>
+                                        <label for="demandRate" class="block text-sm font-medium text-gray-700" data-help="demandRate">Demand price (c/kW per day)</label>
                                         <input type="number" id="demandRate" value="30" step="0.0001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label for="demandWindowStart" class="block text-sm font-medium text-gray-700">Window Start</label>
+                                        <label for="demandWindowStart" class="block text-sm font-medium text-gray-700" data-help="demandWindow">Counts from</label>
                                         <input type="time" id="demandWindowStart" value="16:00" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div>
-                                        <label for="demandWindowEnd" class="block text-sm font-medium text-gray-700">Window End</label>
+                                        <label for="demandWindowEnd" class="block text-sm font-medium text-gray-700">Until</label>
                                         <input type="time" id="demandWindowEnd" value="21:00" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
                                     </div>
                                     <div class="sm:col-span-3 mt-1">
-                                        <span class="text-sm font-medium text-gray-700">Applicable Days</span>
+                                        <span class="text-sm font-medium text-gray-700" data-help="demandDays">On these days</span>
                                         <div class="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-sm" id="demandDaysContainer">
                                             <label class="day-checkbox-label"><input type="checkbox" value="1"><span>Mon</span></label>
                                             <label class="day-checkbox-label"><input type="checkbox" value="2"><span>Tue</span></label>
@@ -204,178 +427,162 @@
                                         </div>
                                     </div>
                                 </div>
-                                <p class="text-xs text-gray-500 mt-1">Charge on your highest 30-min usage during the daily window, billed for each applicable day in the period.</p>
-                            </div>
-
-                            <div class="pt-4 border-t">
-                                <h3 class="text-sm font-medium text-gray-800 mb-2">Amber charges (editable, inc GST)</h3>
-                                <p id="amberRatesGstNote" class="text-xs text-gray-500 mb-3">Type GST-inclusive (<strong>inc GST</strong>) charges from your Amber bill, or prefill them from the PDF Amber emailed you. The bill breakdown is ex GST; this app stores inc GST (10% added). Wholesale per-kWh from the API already includes GST.</p>
-                                <div class="flex flex-wrap items-center gap-2 mb-3">
-                                    <label for="amberBillFile" class="text-sm font-medium text-indigo-600 hover:underline cursor-pointer">Load Amber bill (prefill rates + Bill Check)</label>
-                                    <input type="file" id="amberBillFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
-                                    <span class="text-xs text-gray-500">PDF or text. Stays in this browser.</span>
-                                </div>
-                                <p id="amberBillStatus" class="hidden text-xs mb-3"></p>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div>
-                                        <label for="amberConnectionRate" class="block text-sm font-medium text-gray-700">Daily connection (c/day, inc GST)</label>
-                                        <input type="number" id="amberConnectionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                    <div>
-                                        <label for="amberSubscriptionRate" class="block text-sm font-medium text-gray-700">Subscription (c/day, inc GST)</label>
-                                        <input type="number" id="amberSubscriptionRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                    <div>
-                                        <label for="amberDemandRate" class="block text-sm font-medium text-gray-700">Demand (c/kW/day, inc GST)</label>
-                                        <input type="number" id="amberDemandRate" step="0.001" class="w-full mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
-                    </div>
-
-                    <div id="configCompareBar" class="flex flex-wrap items-center gap-2 mt-3">
-                        <label for="startDate" class="text-sm font-medium text-gray-700">Start</label>
-                        <input type="date" id="startDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        <label for="endDate" class="text-sm font-medium text-gray-700 ml-2">End</label>
-                        <input type="date" id="endDate" class="px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500">
-                        <button id="fetchData" type="button" title="Compare Amber to your chosen competitor." class="ml-auto bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            Compare Costs
-                        </button>
-                    </div>
-                    <div class="mt-2 flex flex-wrap gap-2" id="datePresets">
-                        <button type="button" data-preset="7d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 7 days</button>
-                        <button type="button" data-preset="thisMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">This month</button>
-                        <button type="button" data-preset="lastMonth" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last month</button>
-                        <button type="button" data-preset="3m" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 3 months</button>
-                        <button type="button" data-preset="90d" class="text-xs px-3 py-1 rounded-full border border-gray-300 bg-white hover:bg-gray-50">Last 90 days</button>
-                    </div>
                 </div>
 
-                <div id="messageContainer" class="hidden text-center mt-6 mb-4 p-4 border rounded-lg bg-gray-50">
-                    <p id="message" class="text-lg"></p>
-                    <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
-                        <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600"></div>
+                <div id="resultsSection" class="hidden">
+                    <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
+                        <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                            <h2 class="text-xl sm:text-2xl font-bold text-gray-900" data-help="results">The answer</h2>
+                        </div>
+                        <div id="estimateBanner" class="hidden mb-3 p-3 rounded-md bg-sky-50 text-sky-900 text-sm"></div>
+                        <div id="qualityBanner" class="hidden mb-3 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
+                        <div id="results-table-container"></div>
+                        <p id="resultsDisclaimer" class="text-xs text-gray-500 mt-4"></p>
                     </div>
-                </div>
-            </div>
 
-            <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Bill Check</h2>
-                    <div class="flex items-center gap-3 flex-wrap">
-                        <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Upload Amber bill</label>
-                        <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
-                        <button id="billCheckLoad" type="button" class="hidden bg-indigo-600 text-white text-sm font-medium py-2 px-3 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Load bill period</button>
-                        <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
+                    <div id="allPlansSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="allPlans">Every plan for your area</h3>
+                        <p class="text-sm text-gray-500 mb-4">Your same usage priced on each plan, cheapest first. Tap a plan to see it in full above.</p>
+                        <div id="allPlansTable"></div>
                     </div>
-                </div>
-                <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
-                <div id="billCheckBody"></div>
-            </div>
 
-            <div id="resultsSection" class="hidden">
-                <div id="results-output" class="bg-white rounded-lg shadow-md p-6 overflow-x-auto mb-6">
-                    <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Comparison Results</h2>
-                        <div class="flex items-center">
-                            <div class="flex items-center space-x-2 mr-4">
-                                <span class="text-sm font-medium text-gray-700" id="gstLabel" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">inc GST</span>
-                                <label class="gst-switch" title="Rates are entered inc GST. On: dollar totals include GST. Off: dollar totals exclude GST. Feed-in credits are unchanged.">
-                                    <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
-                                    <span class="gst-switch-track" aria-hidden="true"></span>
-                                </label>
+                    <div id="monthlySection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="monthly">Month by month</h3>
+                        <p class="text-sm text-gray-500 mb-4">Every whole month saved in this browser, not just the dates above.</p>
+                        <div id="monthlyTable"></div>
+                    </div>
+
+                    <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="freeWindow">Free-power plans: what if you moved your use?</h3>
+                        <p class="text-sm text-gray-600 mb-4">Some plans make power free for a few hours in the middle of the day. If you have a battery, an electric car, a pool pump or a timer hot-water system, you could run them then. This shows each plan as you actually used power, and as if you'd moved some of it into the free hours.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 text-sm">
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftBudgets" class="block text-xs font-medium text-gray-600" data-help="shiftBudgets">kWh a day you could move</label>
+                                <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
-                            <div class="relative">
-                                <button id="downloadCsvButton" type="button" title="Export data options" disabled aria-label="Export" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
-                                    Export
-                                </button>
-                                <div id="csvDropdownMenu" class="hidden absolute right-0 mt-2 w-max bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-                                    <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Full Data</a>
-                                    <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Daily Summaries</a>
-                                    <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Export Results Table</a>
-                                </div>
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftBatteryKwh" class="block text-xs font-medium text-gray-600" data-help="shiftBattery">Home battery (kWh)</label>
+                                <input type="number" id="shiftBatteryKwh" step="0.5" min="0" placeholder="Auto" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600" data-help="shiftWindowKw">Max grid draw (kW)</label>
+                                <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftExportKw" class="block text-xs font-medium text-gray-600" data-help="shiftExportKw">Max export (kW)</label>
+                                <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                            </div>
+                            <div class="flex flex-col justify-between">
+                                <label for="shiftRte" class="block text-xs font-medium text-gray-600" data-help="shiftRte">Battery efficiency (%)</label>
+                                <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
                             </div>
                         </div>
-                    </div>
-                    <div id="qualityBanner" class="hidden mb-3 p-3 rounded-md bg-amber-50 text-amber-800 text-sm"></div>
-                    <div id="results-table-container"></div>
-                    <p id="resultsDisclaimer" class="text-xs text-gray-500 mt-4"></p>
-                </div>
-
-                <div id="allPlansSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">All plans in this state</h3>
-                    <p class="text-sm text-gray-500 mb-4">Same usage, ranked against Amber. Click a plan to use it for Comparison Results.</p>
-                    <div id="allPlansTable"></div>
-                </div>
-
-                <div id="monthlySection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Monthly Breakdown</h3>
-                    <p class="text-sm text-gray-500 mb-4">Each calendar month in the period, costed the same way as Comparison Results. Demand uses each month's own peak.</p>
-                    <div id="monthlyTable"></div>
-                </div>
-
-                <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Average 24-Hour Usage &amp; Price</h3>
-                        <button id="resetAverageZoomBtn" type="button" aria-label="Reset average graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
-                    </div>
-                    <p class="text-xs text-gray-500 mb-2">Drag horizontally to zoom. Hover a bar to see the competitor c/kWh at that time.</p>
-                    <div class="h-[38vh] md:h-[58vh] relative">
-                        <canvas id="usagePriceChart"></canvas>
+                        <p id="shiftBatteryNote" class="text-xs text-gray-600 mb-3 hidden"></p>
+                        <div id="batteryShiftTable"></div>
+                        <div id="batteryShiftMonthly" class="mt-6"></div>
                     </div>
                 </div>
+            </section>
 
+            <!-- ==================== My usage ==================== -->
+            <section id="panel-check" role="tabpanel" aria-labelledby="tab-check" data-panel="check" class="hidden">
+                <nav data-jump-nav class="hidden flex flex-wrap gap-2 mb-4" aria-label="On this tab">
+                    <button type="button" data-jump="dailyGraphSection" class="jump-link">One day</button>
+                    <button type="button" data-jump="averageGraphContainer" class="jump-link">Average day</button>
+                    <button type="button" data-jump="calendarSection" class="jump-link">Calendar</button>
+                    <button type="button" data-jump="moreStatsSection" class="jump-link">More numbers</button>
+                </nav>
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600"></div>
                 <div id="dailyGraphSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6">
                     <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Usage &amp; Price Graph</h3>
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900" data-help="dayGraph">One day up close</h3>
                         <div class="flex items-center space-x-2 sm:space-x-4">
                             <button id="prevDayBtn" type="button" aria-label="Previous day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&lt;</button>
-                            <select id="daySelector" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                            <select id="daySelector" aria-label="Day to show" class="w-full max-w-xs px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
                             <button id="nextDayBtn" type="button" aria-label="Next day" class="px-3 py-1 bg-gray-200 rounded hover:bg-gray-300 font-semibold">&gt;</button>
                             <button id="resetDailyZoomBtn" type="button" aria-label="Reset daily graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
                         </div>
                     </div>
+                    <p class="text-xs text-gray-500 mb-2">Bars: power you bought (above the line) and solar you sent out (below). Lines: Amber's price at the time.</p>
                     <div class="h-[50vh] md:h-[70vh] relative">
                         <canvas id="dailyChart"></canvas>
                     </div>
                 </div>
 
+                <div id="averageGraphContainer" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 h-[50vh] md:h-[70vh]">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900" data-help="avgGraph">Your average day</h3>
+                        <button id="resetAverageZoomBtn" type="button" aria-label="Reset average graph zoom" class="hidden bg-gray-200 text-gray-800 font-semibold py-1 px-3 rounded-md shadow-sm hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">Reset zoom</button>
+                    </div>
+                    <p class="text-xs text-gray-500 mb-2">Averaged over the dates you chose. Drag across to zoom; hover a bar to see the other plan's price at that time.</p>
+                    <div class="h-[38vh] md:h-[58vh] relative">
+                        <canvas id="usagePriceChart"></canvas>
+                    </div>
+                </div>
+
+                <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mb-6 hidden">
+                    <div class="flex justify-between items-center mb-2">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900" data-help="calendar">Calendar</h2>
+                    </div>
+                    <p class="text-sm text-gray-500 mb-3"><span class="text-blue-600">↓ kWh bought</span> · <span class="text-green-600">↑ kWh of solar sent out</span> · Amber cost that day. Tap a day to see its graph.</p>
+                    <div id="calendar-container" class="space-y-6"></div>
+                    <div class="mt-4 pt-4 border-t text-center">
+                        <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
+                    </div>
+                </div>
+
                 <div id="moreStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2">More Stats</h3>
-                    <p class="text-sm text-gray-500 mb-4">From Amber meter data for the selected period. Amber prices are wholesale-linked and include GST.</p>
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="moreStats">More numbers</h3>
+                    <p class="text-sm text-gray-500 mb-4">For the dates you chose, from your Amber meter readings. Amber's prices follow the wholesale market and include GST.</p>
                     <div id="moreStatsTable"></div>
                 </div>
-            </div>
+            </section>
 
-            <div id="calendarSection" class="bg-white rounded-lg shadow-md p-6 mt-6 hidden">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-xl sm:text-2xl font-bold text-gray-900">Daily Summary Calendar</h2>
+            <!-- ==================== Bill check ==================== -->
+            <section id="panel-bill" role="tabpanel" aria-labelledby="tab-bill" data-panel="bill" class="hidden">
+                <div id="billCheckSection" class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <div class="flex justify-between items-center mb-2 flex-wrap gap-2">
+                        <h2 class="text-xl sm:text-2xl font-bold text-gray-900" data-help="billCheck">Check an Amber bill</h2>
+                        <div class="flex items-center gap-3 flex-wrap">
+                            <label for="billCheckFile" class="cursor-pointer inline-flex items-center px-3 py-2 rounded-md border border-gray-300 text-sm font-medium text-gray-700 hover:bg-gray-50">Choose an Amber bill (PDF)</label>
+                            <input type="file" id="billCheckFile" class="sr-only" accept=".pdf,.txt,application/pdf,text/plain">
+                            <button id="billCheckClear" type="button" class="hidden text-sm text-indigo-600 hover:underline">Clear</button>
+                        </div>
+                    </div>
+                    <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
+                    <div id="billCheckBody"></div>
                 </div>
-                <p class="text-sm text-gray-500 mb-3">Click a day to open it on the daily graph. Days marked est still have estimated meter data.</p>
-                <div id="calendar-container" class="space-y-6"></div>
-                <div class="mt-4 pt-4 border-t text-center">
-                    <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
-                </div>
-            </div>
+            </section>
         </main>
+
+        <footer class="text-center text-sm text-gray-500 py-6">
+            Free to use. If it saved you money, you can <a href="https://ko-fi.com/rickapps" class="text-indigo-600 hover:underline">buy me a coffee</a>.
+        </footer>
     </div>
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.31"></script>
-    <script src="js/time.js?v=1.31"></script>
-    <script src="js/templates.js?v=1.31"></script>
-    <script src="js/storage.js?v=1.31"></script>
-    <script src="js/costs.js?v=1.31"></script>
-    <script src="js/api.js?v=1.31"></script>
-    <script src="js/bill.js?v=1.31"></script>
-    <script src="js/csv.js?v=1.31"></script>
-    <script src="js/charts.js?v=1.31"></script>
-    <script src="js/calendar.js?v=1.31"></script>
-    <script src="js/stats.js?v=1.31"></script>
-    <script src="js/monthly.js?v=1.31"></script>
-    <script src="js/app.js?v=1.31"></script>
+    <script src="js/constants.js?v=1.43"></script>
+    <script src="js/help.js?v=1.43"></script>
+    <script src="js/time.js?v=1.43"></script>
+    <script src="js/templates.js?v=1.43"></script>
+    <script src="js/storage.js?v=1.43"></script>
+    <script src="js/costs.js?v=1.43"></script>
+    <script src="js/api.js?v=1.43"></script>
+    <script src="js/bill.js?v=1.43"></script>
+    <script src="js/csv.js?v=1.43"></script>
+    <script src="js/charts.js?v=1.43"></script>
+    <script src="js/calendar.js?v=1.43"></script>
+    <script src="js/stats.js?v=1.43"></script>
+    <script src="js/monthly.js?v=1.43"></script>
+    <script src="js/redispatch.js?v=1.43"></script>
+    <script src="js/import.js?v=1.43"></script>
+    <script src="js/networks.js?v=1.43"></script>
+    <script src="js/estimate.js?v=1.43"></script>
+    <script src="js/app.js?v=1.43"></script>
 </body>
 </html>

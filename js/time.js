@@ -103,6 +103,37 @@
         return fmt;
     }
 
+    function zoneBag(timeZone, instant) {
+        const bag = {};
+        for (const part of formatterForZone(timeZone).formatToParts(instant)) {
+            if (part.type !== 'literal') bag[part.type] = part.value;
+        }
+        return bag;
+    }
+
+    function clockParts(year, month, day, hours, minutes, seconds, weekday) {
+        return {
+            year, month, day, hours, minutes, seconds, weekday,
+            dateStr: `${year}-${pad(month)}-${pad(day)}`,
+            timeValue: hours * 100 + minutes
+        };
+    }
+
+    // Zone UTC offset (ms) at the start of each UTC hour. Intl is slow, and a year of
+    // 5-minute data asks for the same hour twelve times per channel.
+    const zoneOffsets = Object.create(null);
+
+    function zoneOffsetAtHour(timeZone, hour) {
+        const cache = zoneOffsets[timeZone] || (zoneOffsets[timeZone] = Object.create(null));
+        let offset = cache[hour];
+        if (offset === undefined) {
+            const ms = hour * 3600000;
+            const b = zoneBag(timeZone, new Date(ms));
+            offset = cache[hour] = Date.UTC(+b.year, +b.month - 1, +b.day, +b.hour, +b.minute, +b.second) - ms;
+        }
+        return offset;
+    }
+
     /**
      * Clock used for TOU / demand windows.
      * - clock 'nem' or 'aest': hours from the NEM string (always UTC+10)
@@ -116,25 +147,21 @@
         }
 
         const instant = new Date(nemTimeStr);
-        if (Number.isNaN(instant.getTime())) return Amber.parseNemParts(nemTimeStr);
+        const ms = instant.getTime();
+        if (Number.isNaN(ms)) return Amber.parseNemParts(nemTimeStr);
 
-        const fmt = formatterForZone(opts.timeZone);
-        const bag = {};
-        for (const part of fmt.formatToParts(instant)) {
-            if (part.type !== 'literal') bag[part.type] = part.value;
+        // Same offset at both ends of the hour: no DST change inside it, so shift and read UTC.
+        const hour = Math.floor(ms / 3600000);
+        const offset = zoneOffsetAtHour(opts.timeZone, hour);
+        if (offset === zoneOffsetAtHour(opts.timeZone, hour + 1)) {
+            const local = new Date(ms + offset);
+            return clockParts(local.getUTCFullYear(), local.getUTCMonth() + 1, local.getUTCDate(),
+                local.getUTCHours(), local.getUTCMinutes(), local.getUTCSeconds(), local.getUTCDay());
         }
-        const hours = parseInt(bag.hour, 10);
-        const minutes = parseInt(bag.minute, 10);
-        const year = parseInt(bag.year, 10);
-        const month = parseInt(bag.month, 10);
-        const day = parseInt(bag.day, 10);
-        return {
-            year, month, day, hours, minutes,
-            seconds: parseInt(bag.second, 10) || 0,
-            weekday: weekdayFromName(bag.weekday),
-            dateStr: `${year}-${pad(month)}-${pad(day)}`,
-            timeValue: hours * 100 + minutes
-        };
+
+        const bag = zoneBag(opts.timeZone, instant);
+        return clockParts(parseInt(bag.year, 10), parseInt(bag.month, 10), parseInt(bag.day, 10),
+            parseInt(bag.hour, 10), parseInt(bag.minute, 10), parseInt(bag.second, 10) || 0, weekdayFromName(bag.weekday));
     };
 
     /** NEM (+10:00) ISO string for an instant in ms. */
@@ -178,10 +205,19 @@
         return { clock, timeZone };
     };
 
+    // "HH:MM" -> HHMM number, cached: window checks run for every interval of every plan.
+    const hhmmCache = Object.create(null);
+    function hhmmValue(value) {
+        const key = String(value);
+        let n = hhmmCache[key];
+        if (n === undefined) n = hhmmCache[key] = parseInt(key.replace(':', ''), 10);
+        return n;
+    }
+
     Amber.timeInWindow = function (parts, startHHMM, endHHMM) {
         if (!startHHMM || !endHHMM) return false;
-        const startTime = parseInt(String(startHHMM).replace(':', ''), 10);
-        const endTime = parseInt(String(endHHMM).replace(':', ''), 10);
+        const startTime = hhmmValue(startHHMM);
+        const endTime = hhmmValue(endHHMM);
         const time = parts.timeValue;
         if (startTime > endTime) return time >= startTime || time < endTime;
         return time >= startTime && time < endTime;
@@ -191,6 +227,9 @@
         if (!window || !window.start || !window.end) return false;
         const days = window.days || [];
         if (days.length && !days.includes(parts.weekday)) return false;
+        // Optional seasonal windows, e.g. Ausgrid peak Nov–Mar and Jun–Aug only.
+        const months = window.months || [];
+        if (months.length && !months.includes(parts.month)) return false;
         return Amber.timeInWindow(parts, window.start, window.end);
     };
 

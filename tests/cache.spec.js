@@ -29,6 +29,7 @@ test('cache reuses final days, remembers empty days and refetches estimates', as
     await page.addInitScript(() => {
         const key = 'amber-compare-export-secure-key';
         const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
         localStorage.setItem('amberApiKey', ob('fake'));
     });
     await page.route('**/sites', (r) => r.fulfill({
@@ -59,7 +60,7 @@ test('cache reuses final days, remembers empty days and refetches estimates', as
         await page.fill('#startDate', start);
         await page.fill('#endDate', yesterday);
         await page.click('#fetchData');
-        await page.waitForFunction(() => document.querySelector('#fetchData').textContent.includes('Compare Costs')
+        await page.waitForFunction(() => document.querySelector('#fetchData').textContent.includes('Compare costs')
             && !document.querySelector('#resultsSection').classList.contains('hidden'), null, { timeout: 60000 });
         return requestedDays.slice().sort();
     }

@@ -18,6 +18,7 @@ test('graphs use local time and the real interval length', async ({ page }) => {
     await page.addInitScript(() => {
         const key = 'amber-compare-export-secure-key';
         const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
         localStorage.setItem('amberApiKey', ob('fake'));
     });
     await page.route('**/sites', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 's', nmi: '1', network: 'Ausgrid', channels: [{ identifier: 'E1', type: 'general' }] }]) }));
@@ -28,9 +29,10 @@ test('graphs use local time and the real interval length', async ({ page }) => {
     await page.fill('#startDate', '2026-01-15');
     await page.fill('#endDate', '2026-01-15');
     await page.click('#fetchData');
+    await page.click('#tab-check');
     await page.waitForSelector('#dailyGraphSection:not(.hidden)');
     const r = await page.evaluate(() => {
-        const pick = (chart) => chart.data.datasets.find((x) => /^Usage/.test(x.label) || /Average Usage/.test(x.label));
+        const pick = (chart) => chart.data.datasets.find((x) => /^Bought from grid/.test(x.label));
         const daily = pick(Chart.getChart('dailyChart'));
         const avg = pick(Chart.getChart('usagePriceChart'));
         const dLabels = Chart.getChart('dailyChart').data.labels;
