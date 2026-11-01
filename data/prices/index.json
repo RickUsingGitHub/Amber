@@ -101,10 +101,14 @@
     "2026-10": {
      "intervals": 8928,
      "complete": true
+    },
+    "2026-11": {
+     "intervals": 288,
+     "complete": false
     }
    },
    "first": "2024-10",
-   "last": "2026-10"
+   "last": "2026-11"
   },
   "QLD1": {
    "months": {
@@ -207,10 +211,14 @@
     "2026-10": {
      "intervals": 8928,
      "complete": true
+    },
+    "2026-11": {
+     "intervals": 288,
+     "complete": false
     }
    },
    "first": "2024-10",
-   "last": "2026-10"
+   "last": "2026-11"
   },
   "SA1": {
    "months": {
@@ -313,10 +321,14 @@
     "2026-10": {
      "intervals": 8928,
      "complete": true
+    },
+    "2026-11": {
+     "intervals": 288,
+     "complete": false
     }
    },
    "first": "2024-10",
-   "last": "2026-10"
+   "last": "2026-11"
   },
   "VIC1": {
    "months": {
@@ -419,12 +431,16 @@
     "2026-10": {
      "intervals": 8928,
      "complete": true
+    },
+    "2026-11": {
+     "intervals": 288,
+     "complete": false
     }
    },
    "first": "2024-10",
-   "last": "2026-10"
+   "last": "2026-11"
   }
  },
- "updated": "2026-10-31T19:20:30.879Z",
+ "updated": "2026-11-01T19:44:30.676Z",
  "source": "AEMO aggregated price and demand data (5-minute RRP, $/MWh, interval end in NEM time)"
 }
