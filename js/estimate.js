@@ -24,8 +24,11 @@
      * Parse a NEM12 file. Some portals export only the data rows (200/300/400, no 100 header or
      * 900 end row), sometimes with spaces around fields; both are accepted. Returns { ok, error, nmis: { NMI: { nmi, channels: { suffix: { suffix,
      * uom, intervalLength, kind ('import' | 'export'), days: { 'YYYY-MM-DD': [kWh per interval] },
-     * kwh } } } }, nmi (the NMI with most data), skipped }.
+     * kwh } } } }, nmi (the NMI with most data), skipped }. Each NMI also gets incompleteDays: dates
+     * left out because a 300 row was missing readings.
      * Interval dates and times are NEM time (AEST); a later 300 row for the same day replaces an earlier one.
+     * Each 200 section sets its own interval length and unit, so a channel can switch from 30- to
+     * 5-minute readings part way through a file; a day's interval length is 1440 / its values.length.
      */
     Amber.parseNem12 = function (text) {
         const out = { ok: false, error: null, nmis: {}, nmi: null, skipped: 0 };
@@ -36,6 +39,7 @@
             return out;
         }
         let channel = null;
+        let section = null; // { nmi, length, scale } of the current 200 row
         src.split(/\r?\n/).forEach((raw) => {
             const line = raw.trim();
             if (!line) return;
@@ -52,23 +56,29 @@
                     out.skipped += 1;
                     return;
                 }
-                const n = out.nmis[nmi] || (out.nmis[nmi] = { nmi, channels: {} });
-                channel = n.channels[suffix] || (n.channels[suffix] = { suffix, uom, intervalLength: len, kind, days: {}, kwh: 0, scale: UOM_SCALE[uom] });
+                const n = out.nmis[nmi] || (out.nmis[nmi] = { nmi, channels: {}, incomplete: new Set() });
+                // intervalLength/uom: the channel's first section (a later section may differ).
+                channel = n.channels[suffix] || (n.channels[suffix] = { suffix, uom, intervalLength: len, kind, days: {}, kwh: 0 });
+                section = { nmi: n, length: len, scale: UOM_SCALE[uom] };
                 return;
             }
             if (rec === '300' && channel) {
                 const d = f[1] || '';
                 if (!/^\d{8}$/.test(d)) { out.skipped += 1; return; }
                 const date = `${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}`;
-                const n = 1440 / channel.intervalLength;
-                const values = [];
-                for (let i = 0; i < n; i++) {
-                    const v = parseFloat(f[2 + i]);
-                    values.push(Number.isFinite(v) ? Math.max(0, v) * channel.scale : 0);
+                const key = `${channel.suffix}|${date}`;
+                const n = 1440 / section.length;
+                const readings = f.slice(2, 2 + n).map((v) => (v === '' ? NaN : parseFloat(v)));
+                // Every interval needs a reading: a short or damaged row is left out, not filled with zeros.
+                if (readings.length < n || readings.some((v) => !Number.isFinite(v))) {
+                    if (!channel.days[date]) section.nmi.incomplete.add(key);
+                    return;
                 }
+                const values = readings.map((v) => Math.max(0, v) * section.scale);
                 if (channel.days[date]) channel.kwh -= channel.days[date].reduce((s, v) => s + v, 0);
                 channel.days[date] = values;
                 channel.kwh += values.reduce((s, v) => s + v, 0);
+                section.nmi.incomplete.delete(key);
             }
         });
         let best = null;
@@ -77,6 +87,8 @@
             const days = new Set();
             Object.values(n.channels).forEach((c) => Object.keys(c.days).forEach((d) => days.add(d)));
             n.days = Array.from(days).sort();
+            n.incompleteDays = Array.from(new Set(Array.from(n.incomplete).map((k) => k.split('|')[1]))).sort();
+            delete n.incomplete;
             n.firstDay = n.days[0] || null;
             n.lastDay = n.days[n.days.length - 1] || null;
             if (!best || n.days.length > out.nmis[best].days.length) best = nmi;
@@ -291,7 +303,7 @@
             channels.forEach((ch) => {
                 if (!ok) return;
                 const role = roles[ch.suffix];
-                const len = ch.intervalLength;
+                const len = 1440 / ch.days[date].length; // this day's interval length (a meter can change it)
                 let freeLeft = exp && exp.freeKwhPerDay ? exp.freeKwhPerDay : 0;
                 ch.days[date].forEach((kwh, i) => {
                     if (!ok) return;
