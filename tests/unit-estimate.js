@@ -111,6 +111,37 @@ const lf = Amber.NETWORKS.jemena.lossFactor;
 assert(near(jemFi[0].perKwh, -lf * 10), 'first kWh of the day is under the free export level');
 assert(near(jemFi[1].perKwh, -lf * 10 + 3.00), 'then the export charge applies');
 
+// ---- Meter changes and gaps ----
+// A meter that switches from 30-minute kWh to 5-minute Wh part way through the file.
+const switchedNmi = Amber.parseNem12([
+    '100,NEM12,202601010000,AUSGRID,RETAILER',
+    '200,4102000002,E1,E1,E1,N1,M1,kWh,30,',
+    `300,20260114,${day(flat(0.5))},A,,,20260115000000,`,
+    '200,4102000002,E1,E1,E1,N1,M1,Wh,5,',
+    `300,20260115,${day(flat(1000, 288))},A,,,20260116000000,`,
+    '900'
+].join('\n')).nmis['4102000002'];
+const switched = switchedNmi.channels.E1;
+assert(switched.days['2026-01-15'].length === 288 && near(switched.kwh, 24 + 288), `each section keeps its own interval length and unit (${switched.kwh} kWh)`);
+const switchedEst = Amber.estimateAmberUsage(switchedNmi, { networkKey: 'ausgrid', tariffCode: 'EA025', roles: { E1: 'general' }, prices });
+const fiveMin = switchedEst.days['2026-01-15'];
+assert(fiveMin.length === 288 && fiveMin.every((i) => i.duration === 5) && fiveMin[287].nemTime === '2026-01-16T00:00:00+10:00'
+    && switchedEst.days['2026-01-14'].length === 48, 'after the switch, days are priced as 5-minute intervals');
+
+// Rows missing readings are left out and listed, not filled with zeros; a later full row for the day replaces a bad one.
+const gappy = Amber.parseNem12([
+    '100,NEM12,202601010000,AUSGRID,RETAILER',
+    '200,4102000003,E1,E1,E1,N1,M1,kWh,30,',
+    `300,20260114,${day(flat(0.5))},A,,,20260115000000,`,
+    '300,20260115,0.5,0.5,A,,,20260116000000,',
+    `300,20260116,${day(flat(0.5).map((v, i) => (i === 7 ? '' : v)))},A,,,20260117000000,`,
+    `300,20260116,${day(flat(0.5))},A,,,20260118000000,`,
+    `300,20260117,${day(flat(0.5).map((v, i) => (i === 7 ? '' : v)))},A,,,20260118000000,`,
+    '900'
+].join('\n')).nmis['4102000003'];
+assert(gappy.days.join() === '2026-01-14,2026-01-16' && gappy.incompleteDays.join() === '2026-01-15,2026-01-17',
+    `rows with missing readings left out and listed (days ${gappy.days}; left out ${gappy.incompleteDays})`);
+
 // ---- Site and Amber charges ----
 const site = Amber.estimateSite(n, { networkKey: 'ausgrid', tariffCode: 'EA116', exportCode: 'EA029', clCode: 'EA030', roles });
 assert(site.local && site.id === 'nem12-4102000001' && site.network === 'Ausgrid', 'local site');

@@ -1912,9 +1912,14 @@
         if (!p) { box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
         const nmiData = p.parsed.nmis[p.parsed.nmi];
-        const lens = Array.from(new Set(Object.values(nmiData.channels).map((c) => c.intervalLength)));
+        // Every interval length in the file (a meter can switch from 30- to 5-minute readings).
+        const lens = Array.from(new Set([].concat(...Object.values(nmiData.channels).map((c) =>
+            Object.values(c.days).map((values) => 1440 / values.length))))).sort((a, b) => a - b);
         const others = Object.keys(p.parsed.nmis).length - 1;
-        $('nem12Summary').textContent = `NMI ${nmiData.nmi}: ${nmiData.days.length} days (${fmtDate(nmiData.firstDay)} – ${fmtDate(nmiData.lastDay)}) of ${lens.join('/')}-minute data.${others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file left out.` : ''}`;
+        const gaps = (nmiData.incompleteDays || []).length;
+        $('nem12Summary').textContent = `NMI ${nmiData.nmi}: ${nmiData.days.length} days (${fmtDate(nmiData.firstDay)} – ${fmtDate(nmiData.lastDay)}) of ${lens.join('/')}-minute data.`
+            + (gaps ? ` ${gaps} day${gaps === 1 ? '' : 's'} with missing readings left out.` : '')
+            + (others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file left out.` : '');
         fillSelect($('nem12Network'), [{ value: '', label: 'Choose the network…' }].concat(
             Object.keys(Amber.NETWORKS).map((k) => ({ value: k, label: `${Amber.NETWORKS[k].name} (${Amber.NETWORKS[k].state})` }))), p.networkKey || '');
         const net = Amber.NETWORKS[$('nem12Network').value];
