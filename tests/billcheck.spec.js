@@ -81,16 +81,22 @@ test('bill check and monthly breakdown', async ({ page }) => {
     const resultsTotal = await page.locator('#results-table-container tr:has-text("Total") td:nth-child(2)').last().textContent();
     expect(monthlyTotal.trim()).toBe(resultsTotal.trim());
 
-    // Whole months already cached show whatever period is selected; part months don't
+    // Only whole months within the chosen dates are listed. July is cached from the bill
+    // period, but it must not appear for August-only dates (otherwise "Last 12 months"
+    // lists the same month from two different years).
     const monthCells = page.locator('#monthlyTable tbody tr td:first-child');
     await page.fill('#startDate', '2025-08-01');
     await page.fill('#endDate', '2025-08-05');
     await page.click('#fetchData');
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(page.locator('#monthlySection')).toBeVisible();
-    await expect(monthCells).toHaveText([/Jul(y)? 2025/, 'Total']);
-    await expect(page.locator('#monthlyTable tbody tr:first-child td:nth-child(2)')).toHaveText('31');
+    await expect(page.locator('#monthlyTable')).toContainText('No whole calendar months in the dates above');
     await page.fill('#endDate', '2025-08-31');
+    await page.click('#fetchData');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
+    await expect(monthCells).toHaveText([/Aug(ust)? 2025/, 'Total']);
+    await expect(page.locator('#monthlyTable tbody tr:first-child td:nth-child(2)')).toHaveText('31');
+    await page.fill('#startDate', '2025-07-01');
     await page.click('#fetchData');
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, /Aug(ust)? 2025/, 'Total']);

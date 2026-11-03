@@ -98,3 +98,56 @@ test('Last 12 months preset picks the previous 12 whole months', async ({ page }
     await expect(page.locator('#endDate')).toHaveValue(expected[1]);
     expect(expected[0].endsWith('-01')).toBe(true);
 });
+
+test('Last 12 months lists each month once, even with the same month a year earlier cached', async ({ page }) => {
+    test.setTimeout(120000);
+    const nextDay = (d) => new Date(Date.parse(d + 'T00:00:00Z') + 86400000).toISOString().substring(0, 10);
+    // 0.5 kWh every half hour: a complete day of meter data.
+    const meterDay = (date) => Array.from({ length: 48 }, (_, k) => {
+        const i = k + 1;
+        const nemTime = i === 48 ? `${nextDay(date)}T00:00:00+10:00` : `${date}T${pad(Math.floor(i / 2))}:${i % 2 ? '30' : '00'}:00+10:00`;
+        return { type: 'Usage', nemTime, date, kwh: 0.5, perKwh: 22, duration: 30, channelIdentifier: 'E1', quality: 'billable', channelType: 'general' };
+    });
+    await page.addInitScript(() => {
+        const key = 'amber-compare-export-secure-key';
+        const ob = (str) => btoa(str.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
+        window.Amber = Object.assign(window.Amber || {}, { AUTO_COMPARE: false });
+        localStorage.setItem('amberApiKey', ob('fake-api-key'));
+    });
+    await page.route('**/sites', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'site1', nmi: '4102000000', network: 'Ausgrid', status: 'active', channels: [{ identifier: 'E1', type: 'general', tariff: 'EA116' }] }]) }));
+    await page.route('**/usage*', (r) => {
+        const u = new URL(r.request().url());
+        let out = [];
+        for (let d = u.searchParams.get('startDate'); d <= u.searchParams.get('endDate'); d = nextDay(d)) out = out.concat(meterDay(d));
+        return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(out) });
+    });
+    await page.goto('/');
+
+    // From the page's own clock: the preset's 12 month labels, and the month 13 months back,
+    // which is the same calendar month as the preset's last one (e.g. October twice).
+    const { labels, olderLabel, olderStart, olderEnd } = await page.evaluate(() => {
+        const y = window.Amber.localYesterday();
+        const fmt = window.Amber.formatForInput;
+        const label = (d) => d.toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
+        const firsts = [];
+        for (let k = 12; k >= 1; k--) firsts.push(new Date(y.getFullYear(), y.getMonth() - k, 1));
+        const older = new Date(y.getFullYear(), y.getMonth() - 13, 1);
+        return {
+            labels: firsts.map(label),
+            olderLabel: label(older),
+            olderStart: fmt(older),
+            olderEnd: fmt(new Date(y.getFullYear(), y.getMonth() - 12, 0))
+        };
+    });
+    const monthCells = page.locator('#monthlyTable tbody tr td:first-child');
+
+    // Cache the older month first.
+    await page.fill('#startDate', olderStart);
+    await page.fill('#endDate', olderEnd);
+    await page.click('#fetchData');
+    await expect(monthCells).toHaveText([olderLabel, 'Total'], { timeout: 30000 });
+
+    // Last 12 months shows exactly its 12 months; the cached older month stays out.
+    await page.click('[data-preset="12m"]');
+    await expect(monthCells).toHaveText(labels.concat(['Total']), { timeout: 90000 });
+});
