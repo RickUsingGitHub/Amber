@@ -1479,23 +1479,16 @@
     }
 
     /**
-     * Channel data for every whole calendar month of meter data: complete days cached by
-     * earlier fetches plus this fetch's period (which may still hold estimated days).
+     * Channel data for every whole calendar month inside the chosen dates [from, to].
+     * Months outside them are left out (even if cached), so "Last 12 months" lists exactly 12.
+     * rangeItems already holds every usable cached day in the range, so no other cache read is needed.
      */
-    async function loadMonthlyData(db, siteId, channels, rangeItems) {
-        let cache = { byDate: {} };
-        try {
-            cache = await Amber.loadAllSiteCache(db, siteId);
-        } catch (err) {
-            console.error(err);
-        }
+    function loadMonthlyData(channels, rangeItems, from, to) {
         const byDate = {};
         rangeItems.forEach((item) => {
             const dateStr = Amber.usageDateStr(item);
+            if (dateStr < from || dateStr > to) return;
             (byDate[dateStr] || (byDate[dateStr] = [])).push(item);
-        });
-        Object.keys(cache.byDate).forEach((dateStr) => {
-            if (!byDate[dateStr] && Amber.isCompleteDay(cache.byDate[dateStr])) byDate[dateStr] = cache.byDate[dateStr];
         });
         const months = Amber.fullMonths(Object.keys(byDate).filter((d) => Amber.coversWholeDay(byDate[d])));
         const wanted = new Set(months);
@@ -1514,7 +1507,7 @@
         if (!monthly) { section.classList.add('hidden'); renderBatteryShift(); return; }
         section.classList.remove('hidden');
         if (!monthly.months.length) {
-            $('monthlyTable').innerHTML = '<p class="text-sm text-gray-600">No whole calendar months of meter data yet. Compare a period that covers a full month (for example Last month) and it will show here.</p>';
+            $('monthlyTable').innerHTML = '<p class="text-sm text-gray-600">No whole calendar months in the dates above. Choose dates that cover a full month (for example Last month) and it will show here.</p>';
             renderBatteryShift();
             return;
         }
@@ -2513,10 +2506,10 @@
 
             await displayResults(channelTotalsSelectedPeriod, startDateValue, clampedEnd, numDays, demandTariffInfo, otherDemandInfo, false);
 
-            // Monthly Breakdown covers every whole month cached, so it loads after the main results.
+            // Month by month loads after the main results so they appear first.
             try {
                 await Amber.sleep(0);
-                state.monthly = await loadMonthlyData(db, site.id, channels, selectedUsageData);
+                state.monthly = loadMonthlyData(channels, selectedUsageData, startDateValue, clampedEnd);
                 renderMonthly();
             } catch (err) {
                 console.error(err);
