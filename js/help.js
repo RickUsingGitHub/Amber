@@ -73,7 +73,7 @@
         rowExportCharge: 'Some networks (such as Ausgrid) charge a small fee for solar sent out in the middle of the day above a free daily amount. Amber passes it on.',
         rowTotal: 'Everything added up for the period.',
         allPlans: 'Your exact usage priced on every plan we have for your network, cheapest first. Tap a plan to show it in full in the table above.',
-        monthly: 'The same comparison month by month, using every whole month of readings saved in this browser, so you can see summer against winter.',
+        monthly: 'The same comparison month by month, for each whole calendar month within the dates you chose. Pick Last 12 months to see summer against winter.',
         freeWindow: 'Free-power plans reward moving your use into their free hours. If you have a battery, an electric car, a pool pump or a timer hot-water system, this estimates what you\'d pay if you ran them in the free hours instead of when you did.',
         shiftBudgets: 'How many kWh a day you could move into the free hours (charging a battery or car, running the pool pump). Type a few numbers separated by commas; each becomes a column in the table.',
         shiftBattery: 'The usable size of your home battery in kWh (one Tesla Powerwall is 13.5). Leave blank and the app guesses from your readings; type 0 if you don\'t have one.',
