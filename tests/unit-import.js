@@ -140,6 +140,13 @@ const span =Amber.wholeMonthSpan(Array.from({ length: 31 }, (_, i) => `2025-10-$
 assert(span && span.start === '2025-10-01' && span.end === '2025-10-31', 'whole month span');
 assert(Amber.wholeMonthSpan(['2025-10-02']) === null, 'no whole months');
 
+// A day is whole only when every channel with readings covers 24 hours.
+const halfHours = (ch, count) => Array.from({ length: count }, () => ({ channelIdentifier: ch, duration: 30, quality: 'billable', kwh: 0.1 }));
+assert(Amber.isCompleteDay(halfHours('E1', 48)), 'a full day on the only channel is complete');
+assert(Amber.isCompleteDay(halfHours('E1', 48).concat(halfHours('B1', 48))), 'full general and solar days are complete');
+assert(!Amber.isCompleteDay(halfHours('E1', 48).concat(halfHours('B1', 1))), 'a full general day with one solar reading is not complete (so not cached)');
+assert(!Amber.coversWholeDay(halfHours('E1', 48).concat(halfHours('B1', 47))), 'nor is it a whole day for Month by month');
+
 if (failed) {
     console.error(`${failed} import test(s) failed`);
     process.exit(1);

@@ -105,7 +105,7 @@
 
     /**
      * A day is final (safe to cache and reuse) when it has no estimated intervals
-     * and at least one channel covers the full 24 hours (NEM time has no DST).
+     * and every channel with readings covers the full 24 hours (NEM time has no DST).
      */
     Amber.isCompleteDay = function (items) {
         if (!items || !items.length) return false;
@@ -113,7 +113,11 @@
         return Amber.coversWholeDay(items);
     };
 
-    /** At least one channel has readings for the full 24 hours (estimated or not). */
+    /**
+     * Every channel with readings that day has them for the full 24 hours (estimated or not).
+     * A channel with no readings at all (e.g. a retired meter) doesn't count; one with only part
+     * of the day does, so a day missing some solar readings isn't taken as whole and cached.
+     */
     Amber.coversWholeDay = function (items) {
         if (!items || !items.length) return false;
         const minutesByChannel = {};
@@ -121,7 +125,7 @@
             const ch = items[i].channelIdentifier || '?';
             minutesByChannel[ch] = (minutesByChannel[ch] || 0) + (parseFloat(items[i].duration) || 30);
         }
-        return Object.keys(minutesByChannel).some((ch) => minutesByChannel[ch] >= 1440);
+        return Object.keys(minutesByChannel).every((ch) => minutesByChannel[ch] >= 1440);
     };
 
     /** Days with no data this old are remembered as empty (e.g. before the account started). */
