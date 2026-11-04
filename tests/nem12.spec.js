@@ -76,6 +76,15 @@ test('NEM12 import rejects other files and asks for the network when the NMI is 
     await expect(page.locator('#nem12Build')).toBeEnabled();
 });
 
+test('NEM12 import says how many days were left out for missing readings', async ({ page }) => {
+    await page.goto('/');
+    // Cut both channels' rows for 2 May down to two readings each.
+    const file = nem12('4102123456', '2026-05-01', '2026-05-03').replace(/300,20260502,[^\n]*/g, '300,20260502,0.3,0.3,A,,,20260502235959,');
+    await page.setInputFiles('#nem12File', { name: 'meter.csv', mimeType: 'text/csv', buffer: Buffer.from(file) });
+    await expect(page.locator('#nem12Summary')).toContainText('NMI 4102123456: 2 days');
+    await expect(page.locator('#nem12Summary')).toContainText('1 day with missing readings left out.');
+});
+
 test('switching between an Amber site and an imported household swaps the Amber charges', async ({ page }) => {
     await page.addInitScript(() => {
         if (sessionStorage.getItem('seeded')) return;
