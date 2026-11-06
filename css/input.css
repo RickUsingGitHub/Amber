@@ -20,6 +20,13 @@
     .plan-input:focus {
         @apply outline-none ring-1 ring-indigo-500 border-indigo-500;
     }
+    /* A dropdown of tick boxes (companies and plans to consider). */
+    .plan-multi > summary {
+        list-style: none;
+    }
+    .plan-multi > summary::-webkit-details-marker {
+        display: none;
+    }
     .main-tab {
         padding: 0.5rem 0.75rem;
         border-radius: 0.375rem;

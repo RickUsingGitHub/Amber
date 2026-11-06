@@ -239,6 +239,15 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         const amberMonths = amberOne.months.reduce((s, m) => s + m.bill, 0);
         assert(Math.abs(amberMonths - amberOne.cost.total) < 0.02 * Math.abs(amberOne.cost.total), `Amber's months within 2 % of its year (export settlement is yearly): $${amberMonths.toFixed(2)} vs $${amberOne.cost.total.toFixed(2)}`);
 
+        const allowedOnly = await Amber.plannerSearch(Object.assign({}, ctx, { allowPlans: ['Flat', 'Amber'] }));
+        assert(allowedOnly.searchedPlans.sort().join() === 'Amber,Flat' && allowedOnly.rows.filter((r) => r.batteryKwh > 0).every((r) => r.plan !== free.name)
+            && allowedOnly.rows.filter((r) => r.batteryKwh === 0).length === 9,
+            'plans left out get no battery search, but keep their nothing-new rows');
+        const exCtx = Object.assign({}, ctx, { existing: { kwh: 5, kw: 2.5 }, allowPlans: ['Flat'], alsoPlans: ['Amber'], batterySizes: [0] });
+        const exRows = (await Amber.plannerSearch(exCtx)).rows;
+        assert(exRows.length === 6 && exRows.every((r) => r.plan === 'Flat' || r.plan === 'Amber'), 'with a battery already, only the plans used and the one to compare against are run');
+        assert(Amber.planCompany('OVO The Free 4 Plan (Ausgrid, TOU)') === 'OVO' && Amber.planCompany('Red Energy Living Energy Saver (Ausgrid, Flat)') === 'Red Energy'
+            && Amber.planCompany('2026-27 VDO (Jemena, TOU)') === 'Default offer (DMO / VDO)' && Amber.planCompany('My plan', true) === 'Your own plans', 'plans are grouped by company');
         const pinned = await Amber.plannerSearch(Object.assign({}, ctx, { batteryPlans: [free.name] }));
         assert(pinned.searchedPlans.join() === free.name && pinned.rows.filter((r) => r.batteryKwh > 0).every((r) => r.plan === free.name), 'a chosen plan: only it gets the battery search');
 

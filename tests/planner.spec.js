@@ -39,6 +39,25 @@ function nem12Battery(nmi, from, to) {
         '900'].join('\n');
 }
 
+// Under "Companies and plans to consider": untick everything, then tick the plans whose label passes keep.
+async function onlyPlans(page, keep) {
+    await page.click('#planRetailers summary');
+    await page.click('#planRetailersPanel [data-plan-all="0"]');
+    const boxes = page.locator('#planRetailersPanel input[data-plan]');
+    const n = await boxes.count();
+    for (let i = 0; i < n; i++) {
+        const text = (await boxes.nth(i).locator('xpath=..').textContent()).trim();
+        if (keep(text)) await boxes.nth(i).check();
+    }
+    await page.keyboard.press('Escape');
+}
+
+async function tickAll(page) {
+    await page.click('#planRetailers summary');
+    await page.click('#planRetailersPanel [data-plan-all="1"]');
+    await page.keyboard.press('Escape');
+}
+
 async function importYear(page, file) {
     await page.route('**/api.amber.com.au/**', (route) => route.abort());
     await page.goto('/');
@@ -129,15 +148,17 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await page.selectOption('#planBatteryMode', 'none');
     await expect(page.locator('#planBatteryKwh')).toBeHidden();
     await expect(page.locator('#planBatteryMax')).toBeHidden();
-    const plan = await page.locator('#planRetailer option').nth(2).getAttribute('value');
-    await page.selectOption('#planRetailer', plan);
+    const plan = (await page.locator('#planRetailersPanel input[data-plan]').nth(2).locator('xpath=..').textContent()).trim();
+    await onlyPlans(page, (t) => t === plan);
+    await expect(page.locator('#planRetailersSummary')).toHaveText(`Only ${plan}`);
+    await expect(page.locator('#planRetailersPanel')).toBeHidden();
     await page.click('#planRun');
     await expect(page.locator('#planResults')).toBeVisible({ timeout: 90000 });
 
     const rows = page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"])');
     await expect(rows).toHaveCount(1);
     await expect(rows.first().locator('td').nth(0)).toHaveText('6.6 kW solar');
-    await expect(rows.first().locator('td').nth(1)).toHaveText(await page.locator('#planRetailer option:checked').textContent());
+    await expect(rows.first().locator('td').nth(1)).toHaveText(plan);
     await expect(page.locator('#planRecommendation')).toContainText('6.6 kW of solar and no battery');
     await expect(page.locator('#planDetailBody thead')).toContainText('Solar made');
 
@@ -147,11 +168,11 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(page.locator('#planInputs')).toBeVisible();
     await expect(page.locator('#planSolarMode')).toHaveValue('fixed');
     await expect(page.locator('#planBatteryMode')).toHaveValue('none');
-    await expect(page.locator('#planRetailer')).toHaveValue(plan);
+    await expect(page.locator('#planRetailersSummary')).toHaveText(`Only ${plan}`);
     expect(errors).toEqual([]);
 });
 
-test('Solar & battery: fixing the retailer keeps the same yardstick, and the plan to compare against moves it', async ({ page }) => {
+test('Solar & battery: a chosen plan to compare against keeps the yardstick; "whatever\'s cheapest" follows the plans ticked', async ({ page }) => {
     test.setTimeout(150000);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -161,29 +182,79 @@ test('Solar & battery: fixing the retailer keeps the same yardstick, and the pla
     await page.fill('#planRoofKw', '6.6');
     await page.fill('#planBatteryMax', '13.5');
     const cells = async (tr) => (await tr.locator('td').allTextContents()).map((t) => t.trim());
-    await page.click('#planRun');
-    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
-    const best = await cells(page.locator('#planOptionsTable [data-plan-option="0"]'));
 
-    // Only that retailer: the same option has the same numbers.
-    const value = await page.evaluate((name) => Array.from(document.querySelectorAll('#planRetailer option')).find((o) => o.textContent.startsWith(name)).value, best[1]);
-    await page.selectOption('#planRetailer', value);
-    await page.click('#planRun');
-    await expect(page.locator('#planProgressText')).toContainText('options compared');
-    const same = page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"])').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^${best[0].replace(/[.+]/g, '\\$&')}$`) }) });
-    expect(await cells(same.first())).toEqual(best);
-
-    // Comparing against today's dear plan instead: that plan's row saves $0, and the cheapest plan's row appears.
-    await page.selectOption('#planRetailer', '');
+    // Against a chosen plan (today's dear one): that plan's row saves $0.
     const dear = await page.locator('#planCompareWith option').nth(2).getAttribute('value');
     await page.selectOption('#planCompareWith', dear);
     await page.click('#planRun');
-    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
     const against = await cells(page.locator('#planOptionsTable [data-plan-option="-1"]'));
     expect(against[0]).toBe('Nothing new');
     expect(against[4]).toBe('$0');
     await expect(page.locator('#planOptionsTable [data-plan-option="-1"]')).toContainText('what you compare against');
     await expect(page.locator('#planDetailBody')).toContainText('Compared with nothing new on');
+    const best = await cells(page.locator('#planOptionsTable [data-plan-option="0"]'));
+
+    // Only the best option's plan ticked: with the same plan to compare against, the same numbers.
+    const isBest = (t) => t === best[1] || t.startsWith(`${best[1]} (`);
+    await onlyPlans(page, isBest);
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const same = page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"])').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^${best[0].replace(/[.+]/g, '\\$&')}$`) }) });
+    expect(await cells(same.first())).toEqual(best);
+
+    // "Whatever's cheapest" only looks at the plans ticked: here, that one plan.
+    await page.selectOption('#planCompareWith', '');
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const cheapest = await cells(page.locator('#planOptionsTable [data-plan-option="-1"]'));
+    expect(isBest(cheapest[1].replace(/\s*\(cheapest with nothing new\)$/, ''))).toBe(true);
+    await expect(page.locator('#planRecommendation')).toContainText("the cheapest plan you'd use");
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: companies and plans left out are not searched or used for "whatever\'s cheapest"', async ({ page }) => {
+    test.setTimeout(120000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page);
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+    await expect(page.locator('#planRetailersSummary')).toHaveText('All companies');
+    await page.selectOption('#planSolarMode', 'none');
+    await page.selectOption('#planBatteryMode', 'none');
+    const planOf = async (i) => (await page.locator(`#planOptionsTable [data-plan-option="${i}"] td`).nth(1).textContent()).replace(/\s*\(.*?(nothing new|compare against)\)\s*$/, '').trim();
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 60000 });
+    const cheapest = await planOf(-1);
+
+    // Leave out that one plan: "whatever's cheapest" moves to the next one.
+    await page.click('#planRetailers summary');
+    await page.locator('#planRetailersPanel label', { hasText: cheapest }).first().locator('input').uncheck();
+    await page.keyboard.press('Escape');
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const next = await planOf(-1);
+    expect(next).not.toBe(cheapest);
+    const shown = await page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"]) td:nth-child(2)').allTextContents();
+    expect(shown.map((t) => t.trim())).not.toContain(cheapest);
+
+    // Leave out a whole company: none of its plans appear.
+    await page.click('#planRetailers summary');
+    await page.locator('#planRetailersPanel input[data-company="OVO"]').uncheck();
+    await expect(page.locator('#planRetailersPanel input[data-plan^="OVO"]:checked')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#planRetailersSummary')).toContainText('companies');
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const after = await page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"]) td:nth-child(2)').allTextContents();
+    expect(after.some((t) => t.trim().startsWith('OVO'))).toBe(false);
+
+    // Nothing ticked: it says so instead of running.
+    await onlyPlans(page, () => false);
+    await expect(page.locator('#planRetailersSummary')).toHaveText('None ticked');
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('Tick at least one company');
     expect(errors).toEqual([]);
 });
 
