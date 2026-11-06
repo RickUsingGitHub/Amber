@@ -158,7 +158,11 @@ test.describe('Amber UI flows', () => {
         await page.click('#tab-plan');
         await expect(page.locator('#planDataStatus')).toContainText('Using 12 months of readings for NMI 4102000000');
         await expect(page.locator('#planCompareWith')).toHaveValue('');
-        await page.selectOption('#planRetailer', 'Amber');
+        await page.click('#planRetailers summary');
+        await page.click('#planRetailersPanel [data-plan-all="0"]');
+        await page.locator('#planRetailersPanel input[data-company="Amber"]').check();
+        await page.keyboard.press('Escape');
+        await expect(page.locator('#planRetailersSummary')).toHaveText('Only Amber (wholesale prices)');
         await page.selectOption('#planSolarMode', 'none');
         await page.click('#planRun');
         await expect(page.locator('#planResults')).toBeVisible({ timeout: 60000 });

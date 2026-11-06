@@ -1140,7 +1140,9 @@
      * Try every combination of solar size, battery size and plan and price next year for each.
      * ctx (as plannerPrepare) plus: solarSizes, batterySizes, keepPlans (how many plans get the full
      * battery search, default 6: a probe battery ranks them), mustPlans (names always searched),
-     * batteryPlans (names: search only these with a battery, no probe).
+     * batteryPlans (names: search only these with a battery, no probe), allowPlans (names of the
+     * plans the household would use: only these get batteries; null = all), alsoPlans (names that
+     * need their nothing-new row even when not allowed, such as the plan to compare against).
      * Returns { rows: [{ solarKw, batteryKwh, plan, bill, cost, flow and battery stats }], prep, searchedPlans }.
      */
     Amber.plannerSearch = async function (ctx, onProgress) {
@@ -1162,15 +1164,17 @@
             });
         };
 
+        const pool = ctx.allowPlans ? plans.filter((p) => ctx.allowPlans.includes(p.name)) : plans;
         // No new battery: every solar size on every plan (fast unless the home already has one,
-        // which then runs afresh on each plan).
+        // which then runs afresh on each plan the household would use, and the one to compare against).
         if (prep.hasBattery(0)) {
-            const total = solarSizes.length * plans.length;
+            const base = plans.filter((p) => pool.includes(p) || (ctx.alsoPlans || []).includes(p.name));
+            const total = solarSizes.length * base.length;
             let done = 0;
             let last = Date.now();
             for (let si = 0; si < solarSizes.length; si++) {
-                for (let p = 0; p < plans.length; p++) {
-                    add(solarSizes[si], plans[p], 0, Amber.simulateBattery(year, prep.flowsFor(solarSizes[si]), prep.pricesOf(plans[p]), prep.batteryOf(0)));
+                for (let p = 0; p < base.length; p++) {
+                    add(solarSizes[si], base[p], 0, Amber.simulateBattery(year, prep.flowsFor(solarSizes[si]), prep.pricesOf(base[p]), prep.batteryOf(0)));
                     done += 1;
                     if (Date.now() - last > 40) {
                         if (onProgress) onProgress({ phase: 'existing', done, total });
@@ -1185,25 +1189,25 @@
         const batteries = (ctx.batterySizes || []).filter((b) => b > 0);
         if (!batteries.length) return { rows, prep, searchedPlans: [] };
 
-        let searched = plans;
+        let searched = pool;
         const keep = ctx.keepPlans || 6;
         if (ctx.batteryPlans) {
             searched = plans.filter((p) => ctx.batteryPlans.includes(p.name));
-        } else if (plans.length > keep) {
+        } else if (pool.length > keep) {
             // A probe battery on a middle solar size ranks the plans for the full battery search.
             const kw = solarSizes[Math.floor((solarSizes.length - 1) / 2)];
             const probe = prep.batteryOf(batteries[Math.floor((batteries.length - 1) / 2)]);
             const probed = [];
-            for (let p = 0; p < plans.length; p++) {
-                const sim = Amber.simulateBattery(year, prep.flowsFor(kw), prep.pricesOf(plans[p]), probe);
-                probed.push({ plan: plans[p], bill: prep.costOf(plans[p], sim.imp, sim.exp, prep.flowsFor(kw).cl).total });
-                if (onProgress) onProgress({ phase: 'probe', done: p + 1, total: plans.length });
+            for (let p = 0; p < pool.length; p++) {
+                const sim = Amber.simulateBattery(year, prep.flowsFor(kw), prep.pricesOf(pool[p]), probe);
+                probed.push({ plan: pool[p], bill: prep.costOf(pool[p], sim.imp, sim.exp, prep.flowsFor(kw).cl).total });
+                if (onProgress) onProgress({ phase: 'probe', done: p + 1, total: pool.length });
                 await pause();
             }
             probed.sort((a, b) => a.bill - b.bill);
             const names = new Set(probed.slice(0, keep).map((x) => x.plan.name));
-            (ctx.mustPlans || []).forEach((name) => names.add(name));
-            searched = plans.filter((p) => names.has(p.name));
+            (ctx.mustPlans || []).forEach((name) => { if (pool.some((p) => p.name === name)) names.add(name); });
+            searched = pool.filter((p) => names.has(p.name));
         }
         const total = solarSizes.length * batteries.length * searched.length;
         let done = 0;
