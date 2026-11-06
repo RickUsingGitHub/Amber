@@ -284,7 +284,7 @@
 
     // ---------- Tabs ----------
 
-    const TABS = ['setup', 'compare', 'check', 'bill'];
+    const TABS = ['setup', 'compare', 'check', 'bill', 'plan'];
     const ACTIVE_TAB_KEY = 'activeTab';
 
     function selectTab(name, opts) {
@@ -305,6 +305,15 @@
             if (chart) chart.resize();
         });
         if (tab === 'bill' && state.ready) ensureBillLoaded({ fromTab: true });
+        // The planner uses its own 12 months, so the dates bar and download tools step aside.
+        if (tab === 'plan') {
+            $('configSection').classList.add('hidden');
+            $('resultTools').classList.add('hidden');
+            if (Amber.plannerUi) Amber.plannerUi.show();
+        } else if (state.planTabShown) {
+            syncConnectedUi();
+        }
+        state.planTabShown = tab === 'plan';
     }
 
     function initialTab() {
@@ -2950,6 +2959,16 @@
     } else {
         init();
     }
+
+    // What the Solar & battery tab (planner-ui.js) reads from the rest of the app.
+    Amber.appApi = {
+        selectedSite,
+        currentStateCode,
+        readAmberRates,
+        templates: () => state.templates,
+        selectedPlanName: () => $('planSelector').value,
+        selectTab
+    };
 
     Amber._appState = state;
     if (typeof module === 'object' && module.exports) module.exports = Amber;
