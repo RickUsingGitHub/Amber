@@ -82,6 +82,10 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(page.locator('#planRecommendation')).toContainText('Best for you');
     await expect(page.locator('#planRecommendation')).toContainText("Next year's bill");
     await expect(page.locator('#planOptionsTable')).toContainText('what you have now');
+    // The money columns say what they count.
+    for (const heading of ['Saves a year', 'Pays back', "Worth in today's money (20 yrs)"]) {
+        await expect(page.locator('#planOptionsTable thead th', { hasText: heading }).locator('.help-btn')).toHaveCount(1);
+    }
 
     // The month table: 12 months and the year.
     const monthRows = page.locator('#planDetailBody tbody tr');
