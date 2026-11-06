@@ -157,7 +157,7 @@ test.describe('Amber UI flows', () => {
         await page.click('#tab-compare');
         await page.click('#tab-plan');
         await expect(page.locator('#planDataStatus')).toContainText('Using 12 months of readings for NMI 4102000000');
-        await expect(page.locator('#planBaseline')).toHaveValue('Amber');
+        await expect(page.locator('#planCompareWith')).toHaveValue('');
         await page.selectOption('#planRetailer', 'Amber');
         await page.selectOption('#planSolarMode', 'none');
         await page.click('#planRun');
