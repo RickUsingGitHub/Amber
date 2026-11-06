@@ -12,7 +12,7 @@
     // Compare "This month" when the page opens with a saved API key (a test can preset
     // window.Amber.AUTO_COMPARE = false to start idle).
     Amber.AUTO_COMPARE = Amber.AUTO_COMPARE !== false;
-    Amber.APP_VERSION = '1.49';
+    Amber.APP_VERSION = '1.50';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
@@ -81,6 +81,23 @@
             if (!kept.length) return '';
             return '(' + kept.join(', ') + ')';
         }).replace(/\s{2,}/g, ' ').trim();
+    };
+
+    // Retailers whose names start plan names (longest first where one name starts another).
+    const RETAILERS = ['1st Energy', 'ActewAGL', 'AGL', 'Alinta Energy', 'Amber', 'Aurora', 'CovaU', 'Diamond Energy', 'Dodo',
+        'Energy Locals', 'EnergyAustralia', 'Engie', 'Ergon', 'Flow Power', 'GloBird', 'Jacana Energy', 'Kogan', 'Localvolts',
+        'Lumo', 'Momentum', 'Nectr', 'Origin', 'OVO', 'Powerclub', 'Powershop', 'ReAmped', 'Red Energy', 'Simply Energy',
+        'Sumo', 'Synergy', 'Tango'].sort((a, b) => b.length - a.length);
+
+    /** The company a plan is from, for ruling companies in or out. custom: the plan was typed in. */
+    Amber.planCompany = function (planName, custom) {
+        const name = String(planName || '').trim();
+        if (/^\d{4}-\d{2} (DMO|VDO)\b/i.test(name)) return 'Default offer (DMO / VDO)';
+        if (/^Solar Sharer/i.test(name)) return 'Solar Sharer Offer';
+        const known = RETAILERS.find((r) => name.toLowerCase() === r.toLowerCase() || name.toLowerCase().startsWith(`${r.toLowerCase()} `));
+        if (known) return known;
+        if (custom) return 'Your own plans';
+        return name.split(/\s+/)[0] || name;
     };
 
     Amber.hintPlanForNetwork = function (siteNetwork) {
