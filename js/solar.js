@@ -95,9 +95,25 @@
     /**
      * Hourly AC output (kWh) of 1 kW of panels for a weather year: cell temperature from air
      * temperature and sunlight, −0.4 %/°C above 25 °C, then system losses (PVGIS's default 14 %).
-     * opts: { tilt, orientation (key of SOLAR_ORIENTATIONS), lossPct, shadingPct }.
+     * Calibrated to PVGIS: the town's file carries PVGIS's own yield for 1 kW facing north at 20°,
+     * and this model (which reads 0–8 % high: it skips PVGIS's low-light and spectral losses) is
+     * scaled to match it; the same scale applies to every direction and tilt.
+     * opts: { tilt, orientation (key of SOLAR_ORIENTATIONS), lossPct, shadingPct, calibrate (default true) }.
      */
     Amber.solarHourlyPerKw = function (weather, opts) {
+        const raw = rawHourlyPerKw(weather, opts);
+        if (!weather.pvcalc || (opts && opts.calibrate === false)) return raw;
+        if (weather._calibration == null) {
+            const ref = rawHourlyPerKw(weather, { tilt: weather.pvcalc.angle, orientation: 'north', lossPct: weather.pvcalc.loss });
+            let total = 0;
+            for (let h = 0; h < ref.length; h++) total += ref[h];
+            weather._calibration = total > 0 ? weather.pvcalc.kwhPerYear / total : 1;
+        }
+        for (let h = 0; h < raw.length; h++) raw[h] *= weather._calibration;
+        return raw;
+    };
+
+    function rawHourlyPerKw(weather, opts) {
         const o = opts || {};
         const faces = (Amber.SOLAR_ORIENTATIONS[o.orientation] || Amber.SOLAR_ORIENTATIONS.north).faces;
         const tilt = o.tilt != null ? o.tilt : 20;
@@ -117,7 +133,7 @@
             out[h] = Math.max(0, (poa / 1000) * (1 - 0.004 * (cell - 25)) * derate);
         }
         return out;
-    };
+    }
 
     function dayOfYearNoLeap(dateStr) {
         const m = parseInt(dateStr.substring(5, 7), 10);

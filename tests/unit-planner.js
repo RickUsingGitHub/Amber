@@ -213,8 +213,82 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         assert(fin.payback > 0 && fin.payback < 20 && Number.isFinite(fin.npv) && fin.irr > 0, `payback ${fin.payback.toFixed(1)} years, NPV $${fin.npv.toFixed(0)}, IRR ${(fin.irr * 100).toFixed(1)}%`);
         const never = Amber.plannerFinance(Object.assign({}, opt, { solarOnly: opt.planOnly, batteryBills: [] , solarKw: 6, batteryKwh: 0 }), f);
         assert(never.payback === null && never.npv < 0, 'no savings: never pays back');
+
+        // One option in full: its months add up to its year, and the search's bill for it.
+        const one = Amber.plannerEvaluate(res.prep, 'Flat', 6, 13.5);
+        const monthsTotal = one.months.reduce((s, m) => s + m.bill, 0);
+        assert(one.months.length === 12 && near(monthsTotal, one.cost.total, 1e-6) && near(one.cost.total, pick(6, 13.5, 'Flat'), 1e-6),
+            `an option's 12 months add up to its year ($${one.cost.total.toFixed(2)})`);
+        const amberOne = Amber.plannerEvaluate(res.prep, 'Amber', 6, 13.5);
+        const amberMonths = amberOne.months.reduce((s, m) => s + m.bill, 0);
+        assert(Math.abs(amberMonths - amberOne.cost.total) < 0.02 * Math.abs(amberOne.cost.total), `Amber's months within 2 % of its year (export settlement is yearly): $${amberMonths.toFixed(2)} vs $${amberOne.cost.total.toFixed(2)}`);
+
+        const pinned = await Amber.plannerSearch(Object.assign({}, ctx, { batteryPlans: [free.name] }));
+        assert(pinned.searchedPlans.join() === free.name && pinned.rows.filter((r) => r.batteryKwh > 0).every((r) => r.plan === free.name), 'a chosen plan: only it gets the battery search');
+
+        const wait = Amber.plannerWaitAYear(opt, f);
+        assert(wait.capexLater < wait.capexNow + 1e-9 || f.rebateStepDown > f.hardwareDecline, `wait a year: up-front $${wait.capexNow.toFixed(0)} now vs $${wait.capexLater.toFixed(0)} next year`);
+        assert(Number.isFinite(wait.change), `waiting changes the 20-year value by $${wait.change.toFixed(0)}`);
         finish();
     })();
+}
+
+// ---- Solar from a town's typical weather year (PVGIS) ----
+{
+    require('../js/solar.js');
+    const fs = require('fs');
+    const path = require('path');
+    const files = fs.readdirSync(path.join(__dirname, '..', 'data', 'solar')).filter((f) => f.endsWith('.json'));
+    assert(files.length === Amber.SOLAR_LOCATIONS.length && Amber.SOLAR_LOCATIONS.every((l) => files.includes(`${l.id}.json`)), `every planner town has its weather year (${files.length})`);
+    const weather = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'solar', 'sydney.json'), 'utf8'));
+    const yearOf = (o) => Amber.solarHourlyPerKw(weather, o).reduce((s, x) => s + x, 0);
+    const north = yearOf({ tilt: 20, orientation: 'north' });
+    assert(near(north, weather.pvcalc.kwhPerYear, 1e-6), `calibrated to PVGIS: 1 kW north at 20° makes ${north.toFixed(0)} kWh a year in Sydney`);
+    const raw = yearOf({ tilt: 20, orientation: 'north', calibrate: false });
+    assert(Math.abs(raw / weather.pvcalc.kwhPerYear - 1) < 0.08, `uncalibrated model within 8 % of PVGIS (${((raw / weather.pvcalc.kwhPerYear - 1) * 100).toFixed(1)} %)`);
+    const ratio = (o) => yearOf({ tilt: 20, orientation: o }) / north;
+    assert(ratio('east') < 1 && ratio('west') < 1 && ratio('northeast') > ratio('east') && ratio('eastwest') > ratio('west') && ratio('eastwest') < ratio('east'),
+        `directions rank sensibly (NE ${(ratio('northeast') * 100).toFixed(0)} %, E ${(ratio('east') * 100).toFixed(0)} %, W ${(ratio('west') * 100).toFixed(0)} %, E+W ${(ratio('eastwest') * 100).toFixed(0)} % of north)`);
+    assert(yearOf({ tilt: 20, orientation: 'north', shadingPct: 10 }) / north > 0.899 && yearOf({ tilt: 20, orientation: 'north', shadingPct: 10 }) / north < 0.901, 'shading takes its share off');
+
+    const year = Amber.planYear(amberYear('2026-09-30', 30), { channelTypes });
+    const slots = Amber.solarSlotsPerKw(year, weather, { tilt: 20, orientation: 'north' });
+    const total = slots.reduce((s, x) => s + x, 0);
+    assert(Math.abs(total / north - 1) < 0.01, `half hours keep the year's energy (${total.toFixed(0)} vs ${north.toFixed(0)} kWh)`);
+    const bySlot = new Float64Array(48);
+    for (let i = 0; i < year.n; i++) bySlot[i % 48] += slots[i];
+    const peak = bySlot.indexOf(Math.max(...bySlot));
+    assert(peak >= 22 && peak <= 25 && bySlot[0] === 0 && bySlot[47] === 0, `peaks around noon NEM time (slot ${peak}), nothing at night`);
+    const clipped = Amber.clipToInverter(slots.map((x) => x * 10), 5);
+    assert(clipped.every((x) => x <= 2.5 + 1e-12) && clipped.clipped > 0, `10 kW of panels on a 5 kW inverter loses ${clipped.clipped.toFixed(0)} kWh at the peaks`);
+}
+
+// ---- Future changes ----
+{
+    const year = Amber.planYear(amberYear('2026-09-30', 30), { channelTypes });
+    const total = (a) => a.reduce((s, x) => s + x, 0);
+    const ev = Amber.plannerExtraLoads(year, { ev: { kmPerYear: 12000, chargeAt: 'overnight' } }, 'Australia/Sydney');
+    const evDaily = (12000 / 365) * 0.17 * 1.1;
+    assert(near(ev.kwh.ev, evDaily * 365, 1e-6) && near(total(ev.extra), evDaily * 365, 1e-6), `EV: ${ev.kwh.ev.toFixed(0)} kWh a year`);
+    // June (AEST = NEM): overnight charging at 7 kW fills the first slots after midnight.
+    const june = year.dates.indexOf('2026-06-10') * 48;
+    assert(near(ev.extra[june], 3.5) && ev.extra[june + 1] > 0 && ev.extra[june + 2] === 0 && ev.extra[june + 20] === 0, 'EV charges at 7 kW from midnight until full');
+    const solarEv = Amber.plannerExtraLoads(year, { ev: { kmPerYear: 12000, chargeAt: 'solar' } }, 'Australia/Sydney');
+    assert(near(solarEv.extra[june + 24], evDaily / 10) && solarEv.extra[june + 18] === 0, 'daytime charging follows the sun, spread 10am–3pm');
+
+    const hw = Amber.plannerExtraLoads(year, { hotWater: { from: 'controlled', runAt: 'solar' } }, 'Australia/Sydney');
+    assert(hw.clScale === 0 && near(hw.kwh.hotWater, total(year.cl) / 3.5, 1e-6), `heat pump replaces the controlled-load heater: ${total(year.cl).toFixed(0)} → ${hw.kwh.hotWater.toFixed(0)} kWh`);
+    const flows = Amber.plannerFlows(year, { extra: hw.extra, clScale: hw.clScale });
+    assert(total(flows.cl) === 0 && near(total(flows.imp), total(year.imp) + hw.kwh.hotWater, 1e-6), 'its use moves onto the general meter');
+
+    const gas = Amber.plannerExtraLoads(year, { gas: { heatingMJ: 20000, cooking: true, allGone: true }, hotWater: { from: 'gas', people: 2 } }, 'Australia/Sydney');
+    const jan = year.dates.indexOf('2026-01-15') * 48;
+    const winter = year.dates.indexOf('2026-07-15') * 48;
+    let janHeat = 0;
+    let julHeat = 0;
+    for (let s = 34; s < 46; s++) { janHeat += gas.extra[jan + s]; julHeat += gas.extra[winter + s]; }
+    assert(near(gas.kwh.heating, 20000 * 0.75 / 3.6 / 4, 1e-6) && julHeat > 5 * janHeat, `gas heating becomes ${gas.kwh.heating.toFixed(0)} kWh of reverse-cycle, mostly winter evenings`);
+    assert(gas.gasSaving > 20000 * 0.045 + 365 * 0.8 && gas.kwh.cooking > 0 && gas.kwh.hotWater > 0, `no more gas bill: $${gas.gasSaving.toFixed(0)} a year`);
 }
 
 function finish() {
