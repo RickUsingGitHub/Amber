@@ -20,10 +20,29 @@ function nem12Year(nmi, from, to) {
         '900'].join('\n');
 }
 
-async function importYear(page) {
+// The same kind of home with panels and a battery: it charges in the morning, spills solar after
+// midday, covers the evening until about 10pm, and sells after dark one day a week.
+function nem12Battery(nmi, from, to) {
+    const general = [];
+    const exports = [];
+    let day = 0;
+    for (let d = from; d <= to; d = addDays(d, 1), day++) {
+        const ymd = d.replace(/-/g, '');
+        const g = Array.from({ length: 48 }, (_, i) => (i < 14 || i >= 44 ? 0.3 : i < 18 ? 0.6 : 0).toFixed(3));
+        const b = Array.from({ length: 48 }, (_, i) => (i >= 18 && i < 24 ? 0.2 : i >= 24 && i < 30 ? 1.5 : i === 41 && day % 7 === 0 ? 1.5 : 0).toFixed(3));
+        general.push(`300,${ymd},${g.join(',')},A,,,${ymd}235959,`);
+        exports.push(`300,${ymd},${b.join(',')},A,,,${ymd}235959,`);
+    }
+    return ['100,NEM12,202611010000,MDP,RETAILER',
+        `200,${nmi},E1B1,E1,E1,N1,M1,kWh,30,`, ...general,
+        `200,${nmi},E1B1,B1,B1,N2,M1,kWh,30,`, ...exports,
+        '900'].join('\n');
+}
+
+async function importYear(page, file) {
     await page.route('**/api.amber.com.au/**', (route) => route.abort());
     await page.goto('/');
-    await page.setInputFiles('#nem12File', { name: 'meter.csv', mimeType: 'text/csv', buffer: Buffer.from(nem12Year('4102123456', '2025-11-01', '2026-10-31')) });
+    await page.setInputFiles('#nem12File', { name: 'meter.csv', mimeType: 'text/csv', buffer: Buffer.from(file || nem12Year('4102123456', '2025-11-01', '2026-10-31')) });
     await expect(page.locator('#nem12Summary')).toContainText('NMI 4102123456: 365 days');
     await page.click('#nem12Build');
     await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 30000 });
@@ -124,6 +143,42 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(page.locator('#planSolarMode')).toHaveValue('fixed');
     await expect(page.locator('#planBatteryMode')).toHaveValue('none');
     await expect(page.locator('#planRetailer')).toHaveValue(plan);
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: a home that already has panels and a battery', async ({ page }) => {
+    test.setTimeout(150000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page, nem12Battery('4102123456', '2025-11-01', '2026-10-31'));
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+    // Spotted from the readings and filled in as a guess.
+    await expect(page.locator('#planExistingHint')).toContainText('after dark on 53 days');
+    await expect(page.locator('#planExistingBatteryKwh')).toHaveValue('10');
+    expect(parseFloat(await page.locator('#planExistingSolarKw').inputValue())).toBeGreaterThan(2);
+    await expect(page.locator('label[for="planRoofKw"], [data-plan-show="solar-best"]').first()).toContainText('Room left on the roof');
+
+    const started = Date.now();
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
+    console.log(`planner search with a battery already took ${((Date.now() - started) / 1000).toFixed(1)} s`);
+    const check = page.locator('#planExistingCheck');
+    await expect(check).toBeVisible();
+    await expect(check).toContainText('Your readings');
+    await expect(check).toContainText("Planner's battery");
+    await expect(check).toContainText('it saves you about');
+    await expect(page.locator('#planAssumptions')).toContainText('taken out of your readings');
+    // Every option runs the battery the home has, so "nothing new" isn't "no battery".
+    await page.click('#planOptionsTable [data-plan-option="-1"]');
+    await expect(page.locator('#planDetailTitle')).toContainText('no extra battery');
+    await expect(page.locator('#planDetailBody')).toContainText('Your 10 kWh battery cycles');
+
+    // Without one, the check goes away.
+    await page.fill('#planExistingBatteryKwh', '0');
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    await expect(check).toBeHidden();
     expect(errors).toEqual([]);
 });
 
