@@ -90,6 +90,31 @@
         // ---------- Bill check tab ----------
         billCheck: 'Choose the PDF bill Amber emailed you. The app reads it here in your browser, loads your meter readings for the same dates, and checks each line of the bill against them. Differences of a few cents are normal rounding.',
 
+        // ---------- Solar & battery tab ----------
+        planner: 'Uses your last 12 months of meter readings to try every mix of solar panels, home battery and retailer plan, half hour by half hour, and shows which pays for itself best. It works with Amber or with any retailer\'s NEM12 file. It\'s an estimate: get quotes before you buy.',
+        planBaseline: 'What you pay today. Every option is measured against this plan with nothing new installed. If you\'re not with Amber, pick your current retailer\'s plan (or type its prices on the Compare tab first and it appears here).',
+        planLocation: 'How much sun your panels get depends on where you live. The app uses a typical year of sunshine for this town from the European Commission\'s PVGIS service. Pick the closest one.',
+        planExportLimit: 'Most networks cap how fast a home can send solar to the grid, usually 5 kW (some allow 10 kW, and some only 1.5 kW without approval). Solar above the limit that you can\'t use or store is wasted. Your installer can tell you yours.',
+        planDecide: 'Leave everything on "Find the best" to let the app search. If you already have panels or a battery, or have a quote in mind, set "This size" and the app keeps it fixed. "None" leaves it out. You can also fix the retailer plan.',
+        planOrientation: 'The direction your panels would face. North gets the most sun over a year in Australia. East or west gets roughly 10 to 20% less, but makes more of its power in the morning or afternoon. "Half east, half west" splits the panels across both sides of the roof.',
+        planTilt: 'The slope of the panels in degrees. Most Australian roofs are 15 to 25 degrees. Flat panels are 0.',
+        planShading: 'Trees, chimneys or nearby buildings that shade the panels. 0% means no shade at all; 10% is a little afternoon shade; above 25% panels may not be worth it.',
+        planCosts: 'Typical installed prices in late 2026 including GST, and the federal rebates. Quotes vary a lot, so change these to match yours. The app also allows for parts wearing out and being replaced.',
+        planChanges: 'Things you\'re planning that change how much power you\'ll use, such as an electric car or swapping gas appliances for electric. The app adds this use to your readings before it searches, so the right size battery and solar are chosen for the home you\'ll have.',
+        planEv: 'How far the car is driven each year, and when it would charge. The app assumes 17 kWh per 100 km and a 7 kW home charger. "In the day" uses your own solar; "overnight" suits a cheap overnight rate.',
+        planHotWater: 'A heat-pump hot-water system uses about a third of the power of an ordinary electric one. Pick what it would replace: an electric system on a controlled load (your controlled load readings shrink) or a gas one (new electricity use, and your gas bill shrinks).',
+        planGasHeating: 'Your gas use for heating, in megajoules (MJ) a year, from your gas bill. The app works out the power a reverse-cycle air conditioner would need for the same warmth, mostly in winter. Leave at 0 if you don\'t heat with gas.',
+        planStc: 'The federal Small-scale Technology Certificates (STCs) that lower the price of solar, usually taken off the installer\'s quote. Roughly $280 per kW; the amount shrinks every year until the scheme ends in 2030.',
+        planBatteryRebate: 'The federal Cheaper Home Batteries rebate (started July 2025), paid per usable kWh and usually taken off the quote. It shrinks every year to 2030 and the rules for very large batteries have changed, so check the current figure with your installer. Some states add their own rebate.',
+        planRebateStepDown: 'How much smaller the rebates get each year. Used for the "wait a year" comparison and for buying a replacement battery later.',
+        planRte: 'A battery loses a little energy on the way in and out. 90% means 10 kWh in gives 9 kWh back out. Most lithium home batteries are 88 to 92%.',
+        planBatteryPower: 'How fast the battery can charge or discharge, compared with its size. 0.4 means a 13.5 kWh battery runs at about 5.4 kW. The app keeps this between 2.5 kW and 15 kW.',
+        planBatteryWear: 'Batteries slowly hold less. 2% a year means a 10 kWh battery holds about 8 kWh after 10 years. The app also replaces it at the end of its life.',
+        planEscalation: 'How fast electricity prices rise each year. Higher rises make solar and batteries pay back sooner. 3% is close to the long-run average.',
+        planDiscount: 'The return you\'d get if you left the money in the bank or paid off your mortgage instead. Future savings are worth less than money now by this much a year. It\'s used for the 20-year value (NPV).',
+        planOptions: 'Each row is one mix of solar, battery and plan, with its yearly bill and how quickly it pays for itself. The 20-year value is all the savings minus all the costs, in today\'s dollars. Tap a row to see its month-by-month year and payback.',
+        planPayback: 'The total you\'re ahead (or behind) each year after paying for the system, compared with staying on your current plan. Where the line crosses zero is the payback year. The dashed lines show power prices rising 20% faster or slower than you set.',
+
         // ---------- Glossary ----------
         g_kwh: 'Kilowatt-hour: the unit electricity is sold in. One kWh runs a 1,000-watt heater for an hour, or a fridge for about a day. A typical home uses 10 to 25 kWh a day.',
         g_kw: 'Kilowatt: how much power is flowing at one moment. A kettle is about 2 kW; an electric oven, 3 to 5 kW. kWh = kW × hours.',

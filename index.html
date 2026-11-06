@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.45</title>
+    <title>Amber Compare &amp; Export v1.46</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.45">
+    <link rel="stylesheet" href="css/app.css?v=1.46">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,7 +19,7 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.45.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.46.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -71,6 +71,7 @@
                     <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare</button>
                     <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Usage</span><span class="hidden sm:inline">My usage</span></button>
                     <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Bill</span><span class="hidden sm:inline">Bill check</span></button>
+                    <button type="button" role="tab" id="tab-plan" data-tab="plan" aria-controls="panel-plan" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Solar</span><span class="hidden sm:inline">Solar &amp; battery</span></button>
                 </div>
                 <div id="resultTools" class="ml-auto flex items-center">
                     <div class="flex items-center mr-3">
@@ -557,6 +558,179 @@
                     <div id="billCheckBody"></div>
                 </div>
             </section>
+
+            <!-- ==================== Solar & battery ==================== -->
+            <section id="panel-plan" role="tabpanel" aria-labelledby="tab-plan" data-panel="plan" class="hidden">
+                <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                    <h2 class="text-xl font-bold text-gray-900 mb-1" data-help="planner">Solar &amp; battery planner</h2>
+                    <p class="text-sm text-gray-600 mb-3">Finds the solar panels, home battery and electricity plan that would cost you least, from your last 12 months of meter readings and today's prices. It works for anyone: Amber customers, or anyone with a NEM12 file of their meter readings.</p>
+                    <p id="planDataStatus" class="text-sm text-gray-700">Loading your meter readings…</p>
+                </div>
+
+                <div id="planInputs" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 space-y-6">
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 mb-2">Your home</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div>
+                                <label for="planBaseline" class="block text-sm font-medium text-gray-700" data-help="planBaseline">The plan you're on now</label>
+                                <select id="planBaseline" class="plan-input"></select>
+                            </div>
+                            <div>
+                                <label for="planLocation" class="block text-sm font-medium text-gray-700" data-help="planLocation">Nearest town</label>
+                                <select id="planLocation" class="plan-input"></select>
+                            </div>
+                            <div>
+                                <label for="planExportLimit" class="block text-sm font-medium text-gray-700" data-help="planExportLimit">Export limit (kW)</label>
+                                <input type="number" id="planExportLimit" min="0" step="0.5" value="5" class="plan-input">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 class="text-sm font-semibold text-gray-800 mb-2" data-help="planDecide">What to work out</h3>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <fieldset class="space-y-2">
+                                <legend class="block text-sm font-medium text-gray-700">Solar panels</legend>
+                                <select id="planSolarMode" class="plan-input" aria-label="Solar panels">
+                                    <option value="best">Find the best size</option>
+                                    <option value="fixed">A size I choose</option>
+                                    <option value="none">No new panels</option>
+                                </select>
+                                <label class="block text-xs text-gray-600" data-plan-show="solar-fixed">Size (kW)<input type="number" id="planSolarKw" min="0.5" step="0.1" value="6.6" class="plan-input"></label>
+                                <label class="block text-xs text-gray-600" data-plan-show="solar-best">Most that fits on the roof (kW)<input type="number" id="planRoofKw" min="1" step="0.5" value="10" class="plan-input"></label>
+                            </fieldset>
+                            <fieldset class="space-y-2">
+                                <legend class="block text-sm font-medium text-gray-700">Home battery</legend>
+                                <select id="planBatteryMode" class="plan-input" aria-label="Home battery">
+                                    <option value="best">Find the best size</option>
+                                    <option value="fixed">A size I choose</option>
+                                    <option value="none">No battery</option>
+                                </select>
+                                <label class="block text-xs text-gray-600" data-plan-show="battery-fixed">Usable size (kWh)<input type="number" id="planBatteryKwh" min="1" step="0.5" value="13.5" class="plan-input"></label>
+                                <label class="block text-xs text-gray-600" data-plan-show="battery-best">Largest to consider (kWh)<input type="number" id="planBatteryMax" min="5" step="1" value="30" class="plan-input"></label>
+                            </fieldset>
+                            <fieldset class="space-y-2">
+                                <legend class="block text-sm font-medium text-gray-700">Electricity plan</legend>
+                                <select id="planRetailer" class="plan-input" aria-label="Electricity plan"></select>
+                            </fieldset>
+                        </div>
+                    </div>
+
+                    <details class="pt-4 border-t">
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-800">Roof and panels</summary>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+                            <div>
+                                <label for="planOrientation" class="block text-sm font-medium text-gray-700" data-help="planOrientation">Panels face</label>
+                                <select id="planOrientation" class="plan-input"></select>
+                            </div>
+                            <div>
+                                <label for="planTilt" class="block text-sm font-medium text-gray-700" data-help="planTilt">Roof pitch (degrees)</label>
+                                <input type="number" id="planTilt" min="0" max="60" step="1" value="20" class="plan-input">
+                            </div>
+                            <div>
+                                <label for="planShading" class="block text-sm font-medium text-gray-700" data-help="planShading">Shade (% of sunlight lost)</label>
+                                <input type="number" id="planShading" min="0" max="80" step="1" value="0" class="plan-input">
+                            </div>
+                        </div>
+                    </details>
+
+                    <details class="pt-4 border-t">
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-800"><span data-help="planCosts" data-help-label="Prices and rebates">Prices and rebates</span></summary>
+                        <p class="text-xs text-gray-600 mt-2">Rough guides, installed and including GST. Replace them with your quotes for the best answer.</p>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-3" id="planCostInputs"></div>
+                    </details>
+
+                    <details class="pt-4 border-t">
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-800"><span data-help="planChanges" data-help-label="Changes you're planning">Changes you're planning</span></summary>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-3">
+                            <div>
+                                <label for="planEvKm" class="block text-sm font-medium text-gray-700" data-help="planEv">Electric car (km a year)</label>
+                                <input type="number" id="planEvKm" min="0" step="1000" value="0" class="plan-input">
+                            </div>
+                            <div>
+                                <label for="planEvCharge" class="block text-sm font-medium text-gray-700">Car charges</label>
+                                <select id="planEvCharge" class="plan-input">
+                                    <option value="overnight">Overnight (midnight–6am)</option>
+                                    <option value="solar">In the day (10am–3pm)</option>
+                                    <option value="evening">In the evening (6–10pm)</option>
+                                </select>
+                            </div>
+                            <div></div>
+                            <div>
+                                <label for="planHotWater" class="block text-sm font-medium text-gray-700" data-help="planHotWater">Heat-pump hot water</label>
+                                <select id="planHotWater" class="plan-input">
+                                    <option value="">No change</option>
+                                    <option value="controlled">Replacing my electric hot water</option>
+                                    <option value="gas">Replacing my gas hot water</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="planPeople" class="block text-sm font-medium text-gray-700">People at home</label>
+                                <input type="number" id="planPeople" min="1" max="10" step="1" value="3" class="plan-input">
+                            </div>
+                            <div>
+                                <label for="planHotWaterRun" class="block text-sm font-medium text-gray-700">Heat pump runs</label>
+                                <select id="planHotWaterRun" class="plan-input">
+                                    <option value="solar">In the day (10am–3pm)</option>
+                                    <option value="overnight">Overnight (midnight–6am)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="planGasHeatingMJ" class="block text-sm font-medium text-gray-700" data-help="planGasHeating">Gas heating to air conditioning (MJ a year)</label>
+                                <input type="number" id="planGasHeatingMJ" min="0" step="1000" value="0" class="plan-input">
+                            </div>
+                            <div class="flex flex-col justify-end gap-2 text-sm text-gray-700">
+                                <label class="inline-flex items-center gap-2"><input type="checkbox" id="planGasCooking"> Gas cooktop to induction</label>
+                                <label class="inline-flex items-center gap-2"><input type="checkbox" id="planGasAllGone"> No gas left after this</label>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2">
+                                <label class="block text-xs text-gray-600">Gas (c/MJ)<input type="number" id="planGasCents" min="0" step="0.1" value="4.5" class="plan-input"></label>
+                                <label class="block text-xs text-gray-600">Gas supply (c/day)<input type="number" id="planGasSupply" min="0" step="1" value="80" class="plan-input"></label>
+                            </div>
+                        </div>
+                    </details>
+
+                    <div class="pt-4 border-t">
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button id="planRun" type="button" class="bg-indigo-600 text-white font-semibold py-2 px-4 rounded-md shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">Find my best setup</button>
+                            <span id="planProgressText" class="text-sm text-gray-600" aria-live="polite"></span>
+                        </div>
+                        <div id="planProgress" class="hidden w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div id="planProgressBar" class="bg-indigo-600 h-2 rounded-full w-0"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="planResults" class="hidden">
+                    <div id="planRecommendation" class="bg-white rounded-lg shadow-md p-6 mb-6"></div>
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                            <h3 class="text-xl font-bold text-gray-900" data-help="planOptions">Your options</h3>
+                            <label class="text-sm text-gray-700">Best first by
+                                <select id="planRankBy" class="ml-1 px-2 py-1 border border-gray-300 rounded-md text-sm">
+                                    <option value="npv">Most money saved overall</option>
+                                    <option value="payback">Quickest to pay back</option>
+                                    <option value="bill">Lowest yearly bill</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="planOptionsTable"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 id="planDetailTitle" class="text-xl font-bold text-gray-900 mb-1">Next year, month by month</h3>
+                        <div id="planDetailBody"></div>
+                    </div>
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <h3 class="text-xl font-bold text-gray-900 mb-1" data-help="planPayback">Paying it back</h3>
+                        <div class="relative h-64"><canvas id="planPaybackChart" aria-label="Money saved over the years, after paying for the system"></canvas></div>
+                        <div id="planPaybackNotes" class="text-sm text-gray-700 mt-3 space-y-1"></div>
+                    </div>
+                    <details class="bg-white rounded-lg shadow-md p-6 mb-6">
+                        <summary class="cursor-pointer text-sm font-semibold text-gray-800">How this is worked out</summary>
+                        <ul id="planAssumptions" class="list-disc pl-5 mt-3 space-y-1 text-sm text-gray-700"></ul>
+                    </details>
+                </div>
+            </section>
         </main>
 
         <footer class="text-center text-sm text-gray-500 py-6">
@@ -566,23 +740,26 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.45"></script>
-    <script src="js/help.js?v=1.45"></script>
-    <script src="js/time.js?v=1.45"></script>
-    <script src="js/templates.js?v=1.45"></script>
-    <script src="js/storage.js?v=1.45"></script>
-    <script src="js/costs.js?v=1.45"></script>
-    <script src="js/api.js?v=1.45"></script>
-    <script src="js/bill.js?v=1.45"></script>
-    <script src="js/csv.js?v=1.45"></script>
-    <script src="js/charts.js?v=1.45"></script>
-    <script src="js/calendar.js?v=1.45"></script>
-    <script src="js/stats.js?v=1.45"></script>
-    <script src="js/monthly.js?v=1.45"></script>
-    <script src="js/redispatch.js?v=1.45"></script>
-    <script src="js/import.js?v=1.45"></script>
-    <script src="js/networks.js?v=1.45"></script>
-    <script src="js/estimate.js?v=1.45"></script>
-    <script src="js/app.js?v=1.45"></script>
+    <script src="js/constants.js?v=1.46"></script>
+    <script src="js/help.js?v=1.46"></script>
+    <script src="js/time.js?v=1.46"></script>
+    <script src="js/templates.js?v=1.46"></script>
+    <script src="js/storage.js?v=1.46"></script>
+    <script src="js/costs.js?v=1.46"></script>
+    <script src="js/api.js?v=1.46"></script>
+    <script src="js/bill.js?v=1.46"></script>
+    <script src="js/csv.js?v=1.46"></script>
+    <script src="js/charts.js?v=1.46"></script>
+    <script src="js/calendar.js?v=1.46"></script>
+    <script src="js/stats.js?v=1.46"></script>
+    <script src="js/monthly.js?v=1.46"></script>
+    <script src="js/redispatch.js?v=1.46"></script>
+    <script src="js/import.js?v=1.46"></script>
+    <script src="js/networks.js?v=1.46"></script>
+    <script src="js/estimate.js?v=1.46"></script>
+    <script src="js/solar.js?v=1.46"></script>
+    <script src="js/planner.js?v=1.46"></script>
+    <script src="js/planner-ui.js?v=1.46"></script>
+    <script src="js/app.js?v=1.46"></script>
 </body>
 </html>

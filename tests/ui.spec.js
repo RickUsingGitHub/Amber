@@ -127,6 +127,49 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#clearCacheBtn')).toBeVisible();
     });
 
+    test('Solar & battery for an Amber customer: a saved year at Amber prices, Amber kept as the plan', async ({ page }) => {
+        test.setTimeout(90000);
+        const errors = [];
+        page.on('pageerror', (e) => errors.push(e.message));
+        await page.click('#tab-plan');
+        await expect(page.locator('#planDataStatus')).toContainText('only reaches back about 3 months');
+
+        // A year of Amber readings saved in this browser (as if imported): evening use, cheap middays, some spikes.
+        await page.evaluate(async () => {
+            const pad = (n) => String(n).padStart(2, '0');
+            const entries = [];
+            const start = Date.UTC(2025, 9, 1);
+            for (let d = 0; d < 365; d++) {
+                const date = new Date(start + d * 86400000).toISOString().substring(0, 10);
+                const items = [];
+                for (let s = 0; s < 48; s++) {
+                    const end = new Date(start + d * 86400000 + (s + 1) * 1800000);
+                    const nemTime = `${end.toISOString().substring(0, 19)}+10:00`;
+                    const evening = s >= 34 && s < 42;
+                    const price = s >= 20 && s < 30 ? 6 : evening ? (d % 10 === 0 && s === 37 ? 300 : 45) : 24;
+                    items.push({ type: 'Usage', nemTime, date, duration: 30, channelIdentifier: 'E1', channelType: 'general', quality: 'billable', kwh: evening ? 1.2 : 0.3, perKwh: price, spotPerKwh: price - 15 });
+                }
+                entries.push({ id: `site123_${date}`, data: items });
+            }
+            const db = await window.Amber.openDb();
+            await window.Amber.setUsageDataMany(db, entries);
+        });
+        await page.click('#tab-compare');
+        await page.click('#tab-plan');
+        await expect(page.locator('#planDataStatus')).toContainText('Using 12 months of readings for NMI 4102000000');
+        await expect(page.locator('#planBaseline')).toHaveValue('Amber');
+        await page.selectOption('#planRetailer', 'Amber');
+        await page.selectOption('#planSolarMode', 'none');
+        await page.click('#planRun');
+        await expect(page.locator('#planResults')).toBeVisible({ timeout: 60000 });
+        await expect(page.locator('#planRecommendation')).toContainText('on Amber');
+        const plans = await page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"]) td:nth-child(2)').allTextContents();
+        expect(plans.length).toBeGreaterThan(1);
+        expect(new Set(plans.map((t) => t.trim()))).toEqual(new Set(['Amber']));
+        await expect(page.locator('#planDetailBody tbody tr')).toHaveCount(13);
+        expect(errors).toEqual([]);
+    });
+
     test('tabs keep dates and Compare visible and remember the last tab', async ({ page }) => {
         await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
         await expect(page.locator('#planSelector')).toBeVisible();
@@ -156,15 +199,18 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#fetchData')).toBeVisible();
         await expect(page.locator('label[for="startDate"]')).toHaveText('From');
 
-        // Arrow keys move between tabs (Start, Compare, My usage, Bill check).
+        // Arrow keys move between tabs (Start, Compare, My usage, Bill check, Solar & battery).
         await page.focus('#tab-check');
         await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
         await expect(page.locator('#tab-bill')).toBeFocused();
         await page.keyboard.press('ArrowRight');
+        await expect(page.locator('#tab-plan')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#configSection')).toBeHidden();
+        await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
         await page.keyboard.press('End');
-        await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#tab-plan')).toHaveAttribute('aria-selected', 'true');
         await page.keyboard.press('Home');
         await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
 
