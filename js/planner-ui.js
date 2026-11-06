@@ -36,10 +36,10 @@
     ];
     const EXISTING = ['planExistingSolarKw', 'planExistingFacing', 'planExistingBatteryKwh', 'planExistingBatteryKw'];
     const FIELDS = EXISTING.concat(['planCompareWith', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
-        'planBatteryMax', 'planRetailer', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
+        'planBatteryMax', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
         'planHotWaterRun', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
 
-    const ui = { site: null, year: null, busy: false, results: null, selected: null, chart: null, built: false };
+    const ui = { site: null, year: null, busy: false, results: null, selected: null, chart: null, built: false, excluded: { companies: new Set(), plans: new Set() }, groups: null };
 
     const $ = (id) => document.getElementById(id);
     const app = () => Amber.appApi;
@@ -63,6 +63,9 @@
             if (!el) return;
             out[id] = el.type === 'checkbox' ? el.checked : el.value;
         });
+        out.planExcluded = { companies: Array.from(ui.excluded.companies), plans: Array.from(ui.excluded.plans) };
+        const before = loadSettings();
+        if (before.siteId) out.siteId = before.siteId;
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
     }
 
@@ -83,6 +86,114 @@
             const [what, mode] = el.getAttribute('data-plan-show').split('-');
             el.classList.toggle('hidden', (what === 'solar' ? solar : battery) !== mode);
         });
+    }
+
+    // ---------- Companies and plans to consider ----------
+
+    function customPlanNames() {
+        try {
+            const custom = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}') || {};
+            return new Set([].concat(...Object.values(custom).map((byName) => Object.keys(byName || {}))));
+        } catch (e) { return new Set(); }
+    }
+
+    // Companies in list order (Amber first; offers anyone can sell and your own plans last), each with its plans.
+    function companyGroups(plans) {
+        const custom = customPlanNames();
+        const groups = new Map();
+        plans.forEach((p) => {
+            const c = Amber.planCompany(p.name, custom.has(p.name));
+            if (!groups.has(c)) groups.set(c, []);
+            groups.get(c).push(p.name);
+        });
+        const last = ['Default offer (DMO / VDO)', 'Solar Sharer Offer', 'Your own plans'];
+        const rank = (c) => (c === 'Amber' ? -1 : last.indexOf(c));
+        return new Map(Array.from(groups.entries()).sort((a, b) => rank(a[0]) - rank(b[0]) || a[0].localeCompare(b[0])));
+    }
+
+    const companyOf = (name) => {
+        for (const [c, names] of ui.groups || []) if (names.includes(name)) return c;
+        return '';
+    };
+    const allowed = (name) => !ui.excluded.companies.has(companyOf(name)) && !ui.excluded.plans.has(name);
+    const allowedPlans = () => Array.from(ui.groups ? [].concat(...ui.groups.values()) : []).filter(allowed);
+
+    function buildRetailerPanel(plans) {
+        ui.groups = companyGroups(plans);
+        let html = '<div class="flex gap-2 mb-3"><button type="button" class="jump-link" data-plan-all="1">Tick all</button><button type="button" class="jump-link" data-plan-all="0">Untick all</button></div><ul class="space-y-2">';
+        ui.groups.forEach((names, company) => {
+            const single = names.length === 1;
+            html += `<li><label class="flex items-start gap-2 text-sm font-medium text-gray-800 cursor-pointer"><input type="checkbox" class="mt-0.5" data-company="${esc(company)}"${single ? ` data-plan="${esc(names[0])}"` : ''}> <span>${esc(single ? label(names[0]) : company)}</span></label>`;
+            if (!single) {
+                html += '<ul class="pl-6 mt-1 space-y-1">' + names.map((n) => `<li><label class="flex items-start gap-2 text-xs text-gray-700 cursor-pointer"><input type="checkbox" class="mt-0.5" data-plan="${esc(n)}"> <span>${esc(label(n))}</span></label></li>`).join('') + '</ul>';
+            }
+            html += '</li>';
+        });
+        $('planRetailersPanel').innerHTML = `${html}</ul>`;
+        syncRetailers();
+    }
+
+    function syncRetailers() {
+        if (!ui.groups) return;
+        // A company with every plan left out one by one is a company left out.
+        ui.groups.forEach((names, company) => {
+            if (names.every((n) => ui.excluded.plans.has(n))) {
+                ui.excluded.companies.add(company);
+                names.forEach((n) => ui.excluded.plans.delete(n));
+            }
+        });
+        const panel = $('planRetailersPanel');
+        panel.querySelectorAll('input[data-company]').forEach((box) => {
+            const names = ui.groups.get(box.getAttribute('data-company')) || [];
+            const n = names.filter(allowed).length;
+            box.checked = n > 0;
+            box.indeterminate = n > 0 && n < names.length;
+        });
+        panel.querySelectorAll('input[data-plan]:not([data-company])').forEach((box) => { box.checked = allowed(box.getAttribute('data-plan')); });
+        const total = Array.from(ui.groups.values()).reduce((a, names) => a + names.length, 0);
+        const ok = allowedPlans();
+        const companies = Array.from(ui.groups.entries()).filter(([, names]) => names.some(allowed));
+        let text;
+        if (ok.length === total) text = 'All companies';
+        else if (!ok.length) text = 'None ticked';
+        else if (ok.length === 1) text = `Only ${label(ok[0])}`;
+        else if (companies.length === 1) text = `Only ${companies[0][0]}${companies[0][1].every(allowed) ? '' : ` (${ok.length} plans)`}`;
+        else text = `${companies.length} of ${ui.groups.size} companies${companies.every(([, names]) => names.every(allowed)) ? '' : `, ${ok.length} plans`}`;
+        $('planRetailersSummary').textContent = text;
+    }
+
+    function retailerChange(e) {
+        const box = e.target.closest('input[type="checkbox"]');
+        if (!box) return;
+        const company = box.getAttribute('data-company') || companyOf(box.getAttribute('data-plan'));
+        const names = ui.groups.get(company) || [];
+        if (box.hasAttribute('data-company')) {
+            names.forEach((n) => ui.excluded.plans.delete(n));
+            if (box.checked) ui.excluded.companies.delete(company); else ui.excluded.companies.add(company);
+        } else {
+            const name = box.getAttribute('data-plan');
+            if (box.checked) {
+                // Ticking one plan of a company that was left out keeps the company's other plans out.
+                if (ui.excluded.companies.has(company)) {
+                    ui.excluded.companies.delete(company);
+                    names.forEach((n) => { if (n !== name) ui.excluded.plans.add(n); });
+                }
+                ui.excluded.plans.delete(name);
+            } else {
+                ui.excluded.plans.add(name);
+            }
+        }
+        syncRetailers();
+        saveSettings();
+    }
+
+    function retailerButtons(e) {
+        const btn = e.target.closest('[data-plan-all]');
+        if (!btn) return;
+        ui.excluded.plans.clear();
+        ui.excluded.companies = btn.getAttribute('data-plan-all') === '1' ? new Set() : new Set(ui.groups.keys());
+        syncRetailers();
+        saveSettings();
     }
 
     // ---------- The household's year ----------
@@ -161,6 +272,18 @@
         fillSelect($('planExistingFacing'), facings, 'north');
         fillSelect($('planLocation'), Amber.SOLAR_LOCATIONS.map((l) => ({ value: l.id, label: `${l.name} (${l.state})` })));
         ['planSolarMode', 'planBatteryMode'].forEach((id) => $(id).addEventListener('change', syncVisibility));
+        $('planRetailersPanel').addEventListener('change', retailerChange);
+        $('planRetailersPanel').addEventListener('click', retailerButtons);
+        document.addEventListener('click', (e) => {
+            const d = $('planRetailers');
+            if (d.open && !d.contains(e.target)) d.open = false;
+        });
+        $('planRetailers').addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && $('planRetailers').open) {
+                $('planRetailers').open = false;
+                $('planRetailers').querySelector('summary').focus();
+            }
+        });
         $('planInputs').addEventListener('change', saveSettings);
         $('planRun').addEventListener('click', run);
         $('planRankBy').addEventListener('change', () => { saveSettings(); if (ui.results) renderOptions(); });
@@ -213,7 +336,13 @@
         const saved = loadSettings();
         const options = plans.map((p) => ({ value: p.name, label: label(p.name) }));
         fillSelect($('planCompareWith'), [{ value: '', label: 'Whatever\'s cheapest' }].concat(options), '');
-        fillSelect($('planRetailer'), [{ value: '', label: 'Find the cheapest' }].concat(options), '');
+        const ex = saved.planExcluded || {};
+        ui.excluded = { companies: new Set(ex.companies || []), plans: new Set(ex.plans || []) };
+        if (!saved.planExcluded && saved.planRetailer) {
+            // Settings from before tick boxes: one plan chosen means every other plan left out.
+            plans.forEach((p) => { if (p.name !== saved.planRetailer) ui.excluded.plans.add(p.name); });
+        }
+        buildRetailerPanel(plans);
         const town = Amber.solarLocationFor(networkKeyOf(site));
         $('planLocation').value = town.id;
         if (!site.local || !year.hasFeedIn) $('planExportLimit').value = $('planExportLimit').value || 5;
@@ -263,6 +392,10 @@
 
     async function run() {
         if (ui.busy || !ui.year || !ui.year.ok) return;
+        if (!allowedPlans().length) {
+            progress('Tick at least one company or plan under "Companies and plans to consider".', null);
+            return;
+        }
         ui.busy = true;
         $('planRun').disabled = true;
         saveSettings();
@@ -291,7 +424,7 @@
         const comparePlan = app().selectedPlanName();
         // The plan the readings were made on, for checking an existing battery against them.
         const readingsPlan = !site.local ? 'Amber' : plans.some((p) => p.name === comparePlan) ? comparePlan : compareWith;
-        const retailer = $('planRetailer').value;
+        const allow = allowedPlans();
         const solarMode = $('planSolarMode').value;
         const batteryMode = $('planBatteryMode').value;
 
@@ -342,14 +475,14 @@
             existing: existing.kwh > 0 ? { kwh: existing.kwh, kw: existing.kw } : null,
             battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100 },
             exportLimitKw: num('planExportLimit'), extra: loads.extra, clScale: loads.clScale,
-            keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], batteryPlans: retailer ? [retailer] : null
+            keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], allowPlans: allow, alsoPlans: compareWith ? [compareWith] : []
         }, (p) => {
             const text = p.phase === 'existing' ? `Running your battery on every plan… ${p.done} of ${p.total}`
                 : p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
             const at = p.phase === 'existing' ? 0.04 + 0.11 * p.done / p.total : p.phase === 'probe' ? 0.15 + 0.1 * p.done / p.total : 0.25 + 0.75 * p.done / p.total;
             progress(text, at);
         });
-        ui.results = analyse(res, { f, compareWith, retailer, solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, seconds: (Date.now() - t0) / 1000 });
+        ui.results = analyse(res, { f, compareWith, allow: new Set(allow), solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, seconds: (Date.now() - t0) / 1000 });
         ui.results.readingsPlan = readingsPlan || ui.results.free.plan;
         ui.results.check = unwound ? Amber.plannerExistingCheck(res.prep, ui.results.readingsPlan, year) : null;
         progress(`Done: ${ui.results.options.length.toLocaleString('en-AU')} options compared.`, null);
@@ -374,7 +507,7 @@
     function analyse(res, o) {
         const rows = res.rows;
         const at = (s, b, p) => rows.find((x) => x.solarKw === s && x.batteryKwh === b && x.plan === p);
-        const free = rows.filter((x) => x.solarKw === 0 && x.batteryKwh === 0).reduce((a, b) => (b.bill < a.bill ? b : a));
+        const free = rows.filter((x) => x.solarKw === 0 && x.batteryKwh === 0 && o.allow.has(x.plan)).reduce((a, b) => (b.bill < a.bill ? b : a));
         // Every option is measured against one yardstick, whatever is fixed: nothing new on the plan
         // to compare against, or on whichever plan is cheapest with nothing new (switching is free).
         const compare = (o.compareWith && at(0, 0, o.compareWith)) || free;
@@ -385,7 +518,7 @@
             if (o.solarMode === 'fixed' && r.solarKw !== solarFixed) return false;
             if (o.batteryMode === 'none' && r.batteryKwh !== 0) return false;
             if (o.batteryMode === 'fixed' && r.batteryKwh !== o.fixedBattery) return false;
-            if (o.retailer && r.plan !== o.retailer) return false;
+            if (!o.allow.has(r.plan)) return false;
             return true;
         }).map((r) => {
             const opt = optionFor(rows, o.f, base, compare, r);
@@ -458,7 +591,7 @@
         const fin = best.fin;
         const hardware = best.solarKw > 0 || best.batteryKwh > 0;
         const lines = [];
-        lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.base)}</strong> with nothing new on ${esc(label(r.compare.plan))}${r.compareWith ? '' : ' (the cheapest plan for you as things are)'}: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
+        lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.base)}</strong> with nothing new on ${esc(label(r.compare.plan))}${r.compareWith ? '' : ` (the cheapest plan ${r.allow.size < r.plans.length ? 'you\'d use ' : ''}for you as things are)`}: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
         if (hardware) {
             lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)} % interest a year)` : ''}.</p>`);
         }
