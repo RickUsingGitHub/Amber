@@ -1,0 +1,138 @@
+const { test, expect } = require('@playwright/test');
+
+const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().substring(0, 10);
+
+// A year of 30-minute NEM12 readings for a household with no solar: a morning and a big evening.
+function nem12Year(nmi, from, to) {
+    const general = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) {
+        const ymd = d.replace(/-/g, '');
+        const month = parseInt(d.substring(5, 7), 10);
+        const winter = month >= 6 && month <= 8 ? 1.4 : 1;
+        const g = Array.from({ length: 48 }, (_, i) => {
+            const base = i >= 34 && i < 44 ? 1.3 : i >= 13 && i < 17 ? 0.7 : 0.25;
+            return (base * winter).toFixed(3);
+        });
+        general.push(`300,${ymd},${g.join(',')},A,,,${ymd}235959,`);
+    }
+    return ['100,NEM12,202611010000,MDP,RETAILER',
+        `200,${nmi},E1,E1,E1,N1,M1,kWh,30,`, ...general,
+        '900'].join('\n');
+}
+
+async function importYear(page) {
+    await page.route('**/api.amber.com.au/**', (route) => route.abort());
+    await page.goto('/');
+    await page.setInputFiles('#nem12File', { name: 'meter.csv', mimeType: 'text/csv', buffer: Buffer.from(nem12Year('4102123456', '2025-11-01', '2026-10-31')) });
+    await expect(page.locator('#nem12Summary')).toContainText('NMI 4102123456: 365 days');
+    await page.click('#nem12Build');
+    await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 30000 });
+}
+
+test('Solar & battery: a NEM12 household gets a best setup, its year month by month and its payback', async ({ page }) => {
+    test.setTimeout(150000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page);
+
+    await page.click('#tab-plan');
+    await expect(page.locator('#tab-plan')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#planDataStatus')).toContainText('Using 12 months of readings for NMI 4102123456');
+    await expect(page.locator('#planDataStatus')).toContainText('1 Nov 2025');
+    await expect(page.locator('#configSection')).toBeHidden();
+    await expect(page.locator('#planInputs')).toBeVisible();
+    // Not on Amber: today's plan is a retailer's, and the town follows the network.
+    await expect(page.locator('#planBaseline')).not.toHaveValue('Amber');
+    await expect(page.locator('#planLocation')).toHaveValue('sydney');
+    await expect(page.locator('#planCostInputs input')).toHaveCount(18);
+
+    // Every field on the tab has help nearby.
+    const missing = await page.evaluate(() => Array.from(document.querySelectorAll('#planInputs [data-help]'))
+        .filter((el) => el.offsetParent && !(el.parentElement.querySelector('.help-btn') || el.querySelector('.help-btn')))
+        .map((el) => el.getAttribute('data-help')));
+    expect(missing).toEqual([]);
+    const unknown = await page.evaluate(() => Array.from(document.querySelectorAll('#panel-plan [data-help]'))
+        .map((el) => el.getAttribute('data-help')).filter((k) => !window.Amber.HELP[k]));
+    expect(unknown).toEqual([]);
+
+    const started = Date.now();
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
+    console.log(`planner search took ${((Date.now() - started) / 1000).toFixed(1)} s`);
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    await expect(page.locator('#planRecommendation')).toContainText('Best for you');
+    await expect(page.locator('#planRecommendation')).toContainText("Next year's bill");
+    await expect(page.locator('#planOptionsTable')).toContainText('what you have now');
+
+    // The month table: 12 months and the year.
+    const monthRows = page.locator('#planDetailBody tbody tr');
+    await expect(monthRows).toHaveCount(13);
+    await expect(monthRows.last()).toContainText('Year');
+    await expect(page.locator('#planPaybackNotes')).toContainText('Paid');
+
+    // Tapping another option shows its year instead.
+    const second = page.locator('#planOptionsTable [data-plan-option="1"]');
+    const secondPlan = (await second.locator('td').nth(1).textContent()).trim();
+    await second.click();
+    await expect(page.locator('#planOptionsTable [data-plan-option="1"]')).toHaveClass(/bg-indigo-50/);
+    await expect(page.locator('#planDetailTitle')).toContainText(secondPlan);
+    await page.click('#planOptionsTable [data-plan-option="-1"]');
+    await expect(page.locator('#planDetailTitle')).toContainText('no new panels and no battery');
+    await expect(page.locator('#planPaybackNotes')).toContainText('Nothing to buy');
+
+    // Ranking by payback puts hardware first.
+    await page.selectOption('#planRankBy', 'payback');
+    await expect(page.locator('#planOptionsTable [data-plan-option="0"] td').nth(0)).not.toHaveText('Nothing new');
+
+    // Leaving the tab brings the dates bar back.
+    await page.click('#tab-compare');
+    await expect(page.locator('#configSection')).toBeVisible();
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: fixing the panels, the battery and the plan', async ({ page }) => {
+    test.setTimeout(120000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page);
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+
+    await page.selectOption('#planSolarMode', 'fixed');
+    await expect(page.locator('#planSolarKw')).toBeVisible();
+    await expect(page.locator('#planRoofKw')).toBeHidden();
+    await page.fill('#planSolarKw', '6.6');
+    await page.selectOption('#planBatteryMode', 'none');
+    await expect(page.locator('#planBatteryKwh')).toBeHidden();
+    await expect(page.locator('#planBatteryMax')).toBeHidden();
+    const plan = await page.locator('#planRetailer option').nth(2).getAttribute('value');
+    await page.selectOption('#planRetailer', plan);
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 90000 });
+
+    const rows = page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"])');
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first().locator('td').nth(0)).toHaveText('6.6 kW solar');
+    await expect(rows.first().locator('td').nth(1)).toHaveText(await page.locator('#planRetailer option:checked').textContent());
+    await expect(page.locator('#planRecommendation')).toContainText('6.6 kW of solar and no battery');
+    await expect(page.locator('#planDetailBody thead')).toContainText('Solar made');
+
+    // The choices are remembered after a reload.
+    await page.reload();
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+    await expect(page.locator('#planSolarMode')).toHaveValue('fixed');
+    await expect(page.locator('#planBatteryMode')).toHaveValue('none');
+    await expect(page.locator('#planRetailer')).toHaveValue(plan);
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: without a year of readings it says what to do', async ({ page }) => {
+    await page.route('**/api.amber.com.au/**', (route) => route.abort());
+    await page.goto('/');
+    await page.click('#tab-plan');
+    await expect(page.locator('#planDataStatus')).toContainText('No meter readings yet');
+    await expect(page.locator('#planInputs')).toBeHidden();
+    await page.click('#planDataStatus [data-plan-go="setup"]');
+    await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
+});

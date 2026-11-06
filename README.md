@@ -19,7 +19,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak), with optional daily kWh caps
 - Free-window plans: a free (or cheap) window with an optional daily kWh cap, a super off-peak / EV window, and seasonal peak windows. Templates for CovaU SolarMax, GloBird Four4Free, OVO The Free 4 Plan, and the Solar Sharer Offer for Ausgrid, Endeavour, Essential Energy, Energex and SA Power Networks
 - Written for everyday users: a welcome screen with two paths ("I'm with Amber" / "I'm thinking about Amber"), plain-English labels, a ? help bubble beside every input and table heading (hover, tap or keyboard; Escape closes), and a jargon buster on the Start tab
-- Four tabs: Start (welcome, Amber account, history import, non-Amber households, jargon buster), Compare (plan to compare with and its prices, the answer, every plan, month by month, free-power plans), My usage (one day, average day, calendar, more numbers) and Bill check. The dates bar appears once there's something to look at
+- Five tabs: Start (welcome, Amber account, history import, non-Amber households, jargon buster), Compare (plan to compare with and its prices, the answer, every plan, month by month, free-power plans), My usage (one day, average day, calendar, more numbers), Bill check, and Solar & battery. The dates bar appears once there's something to look at
 - Opens on This month and compares straight away when an API key is saved
 - Bill Check loads the bill period's meter data as soon as a bill is uploaded (and when you come back to the tab), then checks every line against your meter data: usage, peak demand and demand charges, daily supply, subscription, GST, charges total, solar exports and export credits
 - Import Amber's usage export (CSV) on Setup to go beyond the API's ~3 months: it fills the same cache as Compare (keeping days already fetched from the API and leaving the last week to the API), flags the network demand window (Ausgrid, Endeavour, Energex, Essential and Evoenergy demand tariffs; for other tariffs it is learned from the days Amber's API flagged), then compares the whole months imported. Last 12 months date preset
@@ -34,6 +34,7 @@ You need an Amber API key from [app.amber.com.au/developers](https://app.amber.c
 - Multi-site picker when your Amber account has more than one NMI
 - Editable Amber daily connection, subscription and demand rates for this financial year and last (days before 1 July 2026 use last year's); an uploaded bill fills the year it belongs to
 - More Stats: average import and feed-in prices, price-spike and negative-price exposure, evening import share, grid-free days
+- Solar & battery planner: from the last 12 months of meter readings (Amber's, an imported Amber CSV, or any household's NEM12), tries every mix of new solar size, battery size and plan for the network, half hour by half hour, and ranks them by 20-year value, payback or yearly bill. Any of the three can be fixed ("a size I choose", "none", or one plan). Shows next year's bill month by month against today's, a payback chart at today's prices and ±20%, IRR, a "wait a year" check, and what just switching plan would save. Each plan is priced exactly as on Compare (free windows and caps, capped and time-varying feed-in, demand, Amber's export charge); missing Amber feed-in prices are rebuilt from AEMO wholesale prices. The battery charges from spare solar and from free or cheap grid hours, covers the home when power is dear and sells into high feed-in prices, knowing each day's prices in the morning. Solar comes from a PVGIS 5.3 typical year (ERA5) for 22 towns (`data/solar`, fetched by `scripts/update-solar.js`), with sun position, tilt, facing, shade, temperature and inverter clipping, scaled to PVGIS's own yield. Allows for the federal solar (STC) and battery rebates shrinking each year, hardware getting cheaper, panel and battery wear, battery and inverter replacement, the export limit, and planned changes: an electric car, heat-pump hot water, gas heating and cooking to electric (with the gas bill saved)
 
 ## Privacy
 
@@ -52,7 +53,7 @@ npm test
 npm run serve
 ```
 
-`npm test` runs the unit checks (time and TOU, bill reading, More Stats, demand, Bill Check, re-scheduling, usage import, NEM12 estimate), then Playwright against a local static server. `npm run test:unit` runs only the unit checks.
+`npm test` runs the unit checks (time and TOU, bill reading, More Stats, demand, Bill Check, re-scheduling, usage import, NEM12 estimate, solar & battery planner), then Playwright against a local static server. `npm run test:unit` runs only the unit checks.
 
 ## Known limitations
 
@@ -64,6 +65,7 @@ npm run serve
 - The re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 - Sites with several general meters (E1 + E2) have demand worked out on their combined use.
 - The NEM12 estimate assumes the household keeps using power exactly as it did. With a battery on Amber, SmartShift would usually do better. Loss factors other than Ausgrid's are typical values, not measured; seasonal and monthly demand charges are spread by month; Evoenergy's off-peak demand charge is not modelled.
+- The planner uses last year's usage and today's plan prices (Amber: last year's interval prices) for every future year, scaled by the price rise you set. Its battery knows each day's prices in advance, so a real one may do a little worse; network tariff changes after installing, VPP payments and blackout backup aren't counted. West-facing solar may read slightly low because the typical-year weather has cloudier afternoons. Hardware and rebate defaults are rough late-2026 guides: use your quotes.
 - Bill Check reads the Amber bill layouts seen so far. If it can't read a bill, it shows the text it read so the reader can be fixed.
 
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.

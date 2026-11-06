@@ -276,20 +276,28 @@
     }
     Amber.plannerMonths = monthsOf;
 
+    // Whole days [from, to] of the year (default: all of it).
+    function rangeOf(year, range) {
+        return range ? { from: Math.max(0, range.from), to: Math.min(year.days - 1, range.to) } : { from: 0, to: year.days - 1 };
+    }
+
     /**
-     * A plan's cost ($, inc GST) for half-hourly import/export/controlled-load kWh. Matches
+     * A plan's cost ($, inc GST) for half-hourly import/export/controlled-load kWh, for the year or
+     * whole days range { from, to } (day indexes; demand counts whole months it touches). Matches
      * Amber.computePlanTotals on the same readings (one general and one feed-in channel).
      * Returns { total, usage, controlled, feedIn, daily, demand }.
      */
-    Amber.planCardCost = function (year, card, imp, exp, cl) {
-        const n = year.n;
+    Amber.planCardCost = function (year, card, imp, exp, cl, range) {
+        const r = rangeOf(year, range);
+        const lo = r.from * SLOTS;
+        const hi = (r.to + 1) * SLOTS;
         let usage = 0;
         if (!card.free) {
-            for (let i = 0; i < n; i++) usage += imp[i] * card.imp[i];
+            for (let i = lo; i < hi; i++) usage += imp[i] * card.imp[i];
         } else {
             let day = -1;
             let used = 0;
-            for (let i = 0; i < n; i++) {
+            for (let i = lo; i < hi; i++) {
                 if (!card.free[i]) { usage += imp[i] * card.imp[i]; continue; }
                 if (card.day[i] !== day) { day = card.day[i]; used = 0; }
                 const within = Math.max(0, Math.min(imp[i], card.freeCap - used));
@@ -299,10 +307,10 @@
         }
         let feedIn = 0;
         if (!card.expWin) {
-            for (let i = 0; i < n; i++) feedIn += exp[i] * card.exp[i];
+            for (let i = lo; i < hi; i++) feedIn += exp[i] * card.exp[i];
         } else {
             const used = Object.create(null);
-            for (let i = 0; i < n; i++) {
+            for (let i = lo; i < hi; i++) {
                 const w = card.expWin[i];
                 if (w < 0) { feedIn += exp[i] * card.exp[i]; continue; }
                 const win = card.expWindows[w];
@@ -314,10 +322,10 @@
             }
         }
         let controlled = 0;
-        if (cl) for (let i = 0; i < n; i++) controlled += cl[i] * card.clRate;
+        if (cl) for (let i = lo; i < hi; i++) controlled += cl[i] * card.clRate;
         let demand = 0;
         if (card.demandSlot) {
-            monthsOf(year).forEach((m) => {
+            monthsOf(year).filter((m) => m.endDay >= r.from && m.startDay <= r.to).forEach((m) => {
                 const blocks = Object.create(null);
                 let any = false;
                 for (let i = m.startDay * SLOTS; i < (m.endDay + 1) * SLOTS; i++) {
@@ -332,7 +340,7 @@
                 if (peak > 0) demand += peak * 2 * (card.demandRate / 100) * (card.demandDays[m.key] || 0);
             });
         }
-        const daily = card.daily * year.days / 100;
+        const daily = card.daily * (r.to - r.from + 1) / 100;
         const out = { usage: usage / 100, controlled: controlled / 100, feedIn: -feedIn / 100, daily, demand };
         out.total = out.usage + out.controlled + out.feedIn + out.daily + out.demand;
         return out;
@@ -362,13 +370,14 @@
      * monthly network demand and the daily charges. Matches Amber.periodTotals on the same readings.
      * Returns { total, usage, controlled, feedIn, exportCharge, demand, connection, subscription }.
      */
-    Amber.amberCardCost = function (year, model, imp, exp, cl) {
-        const n = year.n;
+    Amber.amberCardCost = function (year, model, imp, exp, cl, range) {
+        const r = rangeOf(year, range);
+        const days = r.to - r.from + 1;
         let usage = 0;
         let controlled = 0;
         let feedIn = 0;
         let midday = 0;
-        for (let i = 0; i < n; i++) {
+        for (let i = r.from * SLOTS; i < (r.to + 1) * SLOTS; i++) {
             usage += imp[i] * year.amberImp[i];
             if (cl) controlled += cl[i] * year.amberCl[i];
             feedIn += exp[i] * year.amberExp[i];
@@ -382,26 +391,26 @@
             const t = model.tariff;
             const exRate = t.chargeExGst != null ? t.chargeExGst : (t.chargeIncGst || 0) / 1.1;
             const rate = t.chargeIncGst != null ? t.chargeIncGst : exRate * 1.1;
-            const charged = Math.max(0, midday - (t.belKwhPerDay || 0) * year.days);
+            const charged = Math.max(0, midday - (t.belKwhPerDay || 0) * days);
             feedIn -= midday * exRate / 100;
             exportCharge = charged * rate / 100;
         }
         let demand = 0;
-        monthsOf(year).forEach((m) => {
+        monthsOf(year).filter((m) => m.endDay >= r.from && m.startDay <= r.to).forEach((m) => {
             let peak = 0;
-            const days = new Set();
+            const demandDays = new Set();
             for (let i = m.startDay * SLOTS; i < (m.endDay + 1) * SLOTS; i++) {
                 if (!year.demandFlag[i]) continue;
-                days.add(Math.floor(i / SLOTS));
+                demandDays.add(Math.floor(i / SLOTS));
                 if (imp[i] > peak) peak = imp[i];
             }
             if (peak > 0) {
                 const rate = Amber.demandCentsFor(model.rates, m.key);
-                const r = rate != null ? rate : Amber.DEFAULT_AMBER_DEMAND_CENTS;
-                demand += peak * 2 * (r / 100) * days.size;
+                const c = rate != null ? rate : Amber.DEFAULT_AMBER_DEMAND_CENTS;
+                demand += peak * 2 * (c / 100) * demandDays.size;
             }
         });
-        const fixed = Amber.amberFixedForPeriod(model.rates, year.first, year.last);
+        const fixed = Amber.amberFixedForPeriod(model.rates, year.dates[r.from], year.dates[r.to]);
         const out = { usage: usage + exportCharge, controlled, feedIn, exportCharge, demand, connection: fixed.connection, subscription: fixed.subscription };
         out.total = out.usage + out.controlled + out.feedIn + out.demand + out.connection + out.subscription;
         return out;
@@ -448,6 +457,120 @@
             }
         }
         return { imp, exp, cl, expCap, solarKwh, solarSelf, curtailed };
+    };
+
+    // ---------- Future changes: EV, heat-pump hot water, gas to electric ----------
+
+    // Local-time windows the new loads run in: [startHour, endHour) (end may pass midnight).
+    const LOAD_WINDOWS = {
+        overnight: [0, 6],
+        solar: [10, 15],
+        evening: [18, 22]
+    };
+
+    // Share of a year's gas heating in each month (southern winter).
+    const HEATING_MONTHS = { 1: 0, 2: 0, 3: 0, 4: 0.3, 5: 0.7, 6: 1, 7: 1, 8: 1, 9: 0.7, 10: 0.3, 11: 0, 12: 0 };
+
+    /**
+     * Extra half-hourly use from changes you're planning (applied to every option, including doing
+     * nothing, so they change which setup is best rather than counting as savings).
+     * opts: {
+     *   ev: { kmPerYear, kwhPer100km = 17, chargeAt: 'overnight' | 'solar' | 'evening', chargerKw = 7 },
+     *   hotWater: { from: 'controlled' | 'gas', people = 3, cop = 3.5, runAt: 'solar' | 'overnight' },
+     *   gas: { heatingMJ (per year), cooking (bool), cookingMJ = 1500, centsPerMJ = 4.5, supplyCentsPerDay = 80,
+     *          allGone (bool: no gas left, so the supply charge goes too), hotWaterMJ (if from gas) }
+     * }
+     * Returns { extra, clScale, kwh: { ev, hotWater, heating, cooking }, gasSaving ($/yr) }.
+     */
+    Amber.plannerExtraLoads = function (year, opts, timeZone) {
+        const o = opts || {};
+        const n = year.n;
+        const extra = new Float64Array(n);
+        const parts = slotParts(year, { clock: 'local', timeZone: timeZone || 'Australia/Sydney' });
+        const kwh = { ev: 0, hotWater: 0, heating: 0, cooking: 0 };
+        let clScale = 1;
+        let gasSaving = 0;
+
+        // Slots of day d whose local hour is in [from, to).
+        const daySlots = (d, from, to) => {
+            const out = [];
+            for (let i = d * SLOTS; i < (d + 1) * SLOTS; i++) {
+                const h = parts[i].hours + parts[i].minutes / 60;
+                if (from < to ? h >= from && h < to : h >= from || h < to) out.push(i);
+            }
+            return out;
+        };
+        // Spread energy over slots evenly, or at full power from the window's start.
+        const place = (slots, energy, maxPerSlot) => {
+            if (!slots.length || !(energy > 0)) return 0;
+            if (!maxPerSlot) {
+                slots.forEach((i) => { extra[i] += energy / slots.length; });
+                return energy;
+            }
+            let left = energy;
+            for (let k = 0; k < slots.length && left > 1e-9; k++) {
+                const e = Math.min(left, maxPerSlot);
+                extra[slots[k]] += e;
+                left -= e;
+            }
+            return energy - left;
+        };
+
+        const ev = o.ev;
+        if (ev && ev.kmPerYear > 0) {
+            const daily = (ev.kmPerYear / 365) * ((ev.kwhPer100km || 17) / 100) * 1.1; // + charging losses
+            const win = LOAD_WINDOWS[ev.chargeAt] || LOAD_WINDOWS.overnight;
+            const fast = ev.chargeAt === 'solar' ? 0 : (ev.chargerKw || 7) * 0.5;
+            for (let d = 0; d < year.days; d++) kwh.ev += place(daySlots(d, win[0], win[1]), daily, fast);
+        }
+
+        const hw = o.hotWater;
+        if (hw && hw.from) {
+            const cop = hw.cop || 3.5;
+            const win = LOAD_WINDOWS[hw.runAt] || LOAD_WINDOWS.solar;
+            if (hw.from === 'controlled' && year.hasCl) {
+                // The old resistive heater's own use, day by day, now made by a heat pump.
+                clScale = 0;
+                for (let d = 0; d < year.days; d++) {
+                    let old = 0;
+                    for (let i = d * SLOTS; i < (d + 1) * SLOTS; i++) old += year.cl[i];
+                    kwh.hotWater += place(daySlots(d, win[0], win[1]), old / cop, 0);
+                }
+            } else if (hw.from === 'gas') {
+                // About 3.5 kWh of hot water heat per person a day, more in winter.
+                const people = hw.people || 3;
+                for (let d = 0; d < year.days; d++) {
+                    const month = parseInt(year.dates[d].substring(5, 7), 10);
+                    const season = 1 + 0.25 * Math.cos((month - 7) * Math.PI / 6);
+                    kwh.hotWater += place(daySlots(d, win[0], win[1]), (people * 3.5 * season) / cop, 0);
+                }
+                const gas = o.gas || {};
+                const mj = gas.hotWaterMJ != null ? gas.hotWaterMJ : people * 3.5 * 365 * 3.6 / 0.75;
+                gasSaving += mj * (gas.centsPerMJ || 4.5) / 100;
+            }
+        }
+
+        const gas = o.gas || {};
+        if (gas.heatingMJ > 0) {
+            // Gas heater ~75 % efficient; reverse-cycle air conditioning COP ~4. Mornings and evenings.
+            const total = gas.heatingMJ * 0.75 / 3.6 / 4;
+            const weights = year.dates.map((date) => HEATING_MONTHS[parseInt(date.substring(5, 7), 10)]);
+            const sumW = weights.reduce((s, x) => s + x, 0) || 1;
+            for (let d = 0; d < year.days; d++) {
+                const day = total * weights[d] / sumW;
+                if (!(day > 0)) continue;
+                kwh.heating += place(daySlots(d, 6, 9), day * 0.4, 0) + place(daySlots(d, 17, 23), day * 0.6, 0);
+            }
+            gasSaving += gas.heatingMJ * (gas.centsPerMJ || 4.5) / 100;
+        }
+        if (gas.cooking) {
+            const mj = gas.cookingMJ || 1500;
+            const daily = mj * 0.4 / 3.6 / 0.85 / 365; // gas hob ~40 %, induction ~85 %
+            for (let d = 0; d < year.days; d++) kwh.cooking += place(daySlots(d, 17, 19), daily, 0);
+            gasSaving += mj * (gas.centsPerMJ || 4.5) / 100;
+        }
+        if (gas.allGone) gasSaving += (gas.supplyCentsPerDay != null ? gas.supplyCentsPerDay : 80) * 365 / 100;
+        return { extra, clScale, kwh, gasSaving };
     };
 
     // ---------- Battery ----------
@@ -643,69 +766,115 @@
     const pause = () => new Promise((resolve) => setTimeout(resolve, 0));
 
     /**
-     * Try every combination of solar size, battery size and plan (each can be fixed) and price
-     * next year for each.
+     * Everything a search and a single option share: each plan's rates and battery prices, the
+     * flows for each solar size (cached) and the battery for each size.
      * ctx: { year, plans: [{ name, config } | { name: 'Amber', amber: true }], state, amberModel,
-     *   solarPerKw (kWh per slot for 1 kW of panels, or null), solarSizes, batterySizes,
-     *   battery: { kwPerKwh, rte, wear }, exportLimitKw, extra, clScale, keepPlans (how many plans
-     *   get the full battery search, default 6), mustPlans (names always searched) }.
-     * Returns { rows: [{ solarKw, batteryKwh, plan, bill, cost, flows stats, battery stats }], plans }.
+     *   solarPerKw (kWh per slot for 1 kW of panels, or null), battery: { kwPerKwh, rte, wear },
+     *   exportLimitKw, extra, clScale }.
+     */
+    Amber.plannerPrepare = function (ctx) {
+        const year = ctx.year;
+        const plans = ctx.plans.map((p) => Object.assign({}, p, { card: p.amber ? null : Amber.planRateCard(year, p.config, ctx.state), prices: null }));
+        const byName = Object.create(null);
+        plans.forEach((p) => { byName[p.name] = p; });
+        const flowsCache = new Map();
+        const prep = {
+            ctx, year, plans, byName,
+            costOf(plan, imp, exp, cl, range) {
+                return plan.amber ? Amber.amberCardCost(year, ctx.amberModel, imp, exp, cl, range) : Amber.planCardCost(year, plan.card, imp, exp, cl, range);
+            },
+            pricesOf(plan) {
+                return plan.prices || (plan.prices = Amber.plannerBatteryPrices(year, plan, plan.card, ctx.amberModel));
+            },
+            flowsFor(kw) {
+                const key = ctx.solarPerKw ? kw : 0;
+                if (!flowsCache.has(key)) {
+                    let solar = null;
+                    if (key > 0) {
+                        solar = new Float64Array(year.n);
+                        for (let i = 0; i < year.n; i++) solar[i] = ctx.solarPerKw[i] * key;
+                    }
+                    flowsCache.set(key, Amber.plannerFlows(year, { solar, extra: ctx.extra, clScale: ctx.clScale, exportLimitKw: ctx.exportLimitKw }));
+                }
+                return flowsCache.get(key);
+            },
+            batteryOf(kwh) {
+                const b = ctx.battery || {};
+                return { kwh, kw: Math.min(15, Math.max(2.5, kwh * (b.kwPerKwh || 0.4))), rte: b.rte || 0.9, wear: b.wear != null ? b.wear : 2 };
+            }
+        };
+        return prep;
+    };
+
+    /**
+     * One option in full: its flows, battery run, half-hourly import/export, the year's cost and
+     * each month's. Returns null for an unknown plan.
+     */
+    Amber.plannerEvaluate = function (prep, planName, solarKw, batteryKwh) {
+        const plan = prep.byName[planName];
+        if (!plan) return null;
+        const flows = prep.flowsFor(solarKw);
+        const sim = batteryKwh > 0 ? Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(batteryKwh)) : null;
+        const imp = sim ? sim.imp : flows.imp;
+        const exp = sim ? sim.exp : flows.exp;
+        const months = monthsOf(prep.year).map((m) => {
+            const cost = prep.costOf(plan, imp, exp, flows.cl, { from: m.startDay, to: m.endDay });
+            let importKwh = 0;
+            let exportKwh = 0;
+            let solarKwh = 0;
+            for (let i = m.startDay * SLOTS; i < (m.endDay + 1) * SLOTS; i++) {
+                importKwh += imp[i] + flows.cl[i];
+                exportKwh += exp[i];
+                if (prep.ctx.solarPerKw && solarKw > 0) solarKwh += prep.ctx.solarPerKw[i] * solarKw;
+            }
+            return { key: m.key, days: m.endDay - m.startDay + 1, bill: cost.total, cost, importKwh, exportKwh, solarKwh };
+        });
+        return { plan, flows, sim, imp, exp, cl: flows.cl, cost: prep.costOf(plan, imp, exp, flows.cl), months };
+    };
+
+    /**
+     * Try every combination of solar size, battery size and plan and price next year for each.
+     * ctx (as plannerPrepare) plus: solarSizes, batterySizes, keepPlans (how many plans get the full
+     * battery search, default 6: a probe battery ranks them), mustPlans (names always searched),
+     * batteryPlans (names: search only these with a battery, no probe).
+     * Returns { rows: [{ solarKw, batteryKwh, plan, bill, cost, flow and battery stats }], prep, searchedPlans }.
      */
     Amber.plannerSearch = async function (ctx, onProgress) {
-        const year = ctx.year;
-        const plans = ctx.plans.map((p) => {
-            const card = p.amber ? null : Amber.planRateCard(year, p.config, ctx.state);
-            return Object.assign({}, p, { card, prices: null });
-        });
-        const costOf = (plan, imp, exp, cl) => (plan.amber
-            ? Amber.amberCardCost(year, ctx.amberModel, imp, exp, cl)
-            : Amber.planCardCost(year, plan.card, imp, exp, cl));
-        const pricesOf = (plan) => plan.prices || (plan.prices = Amber.plannerBatteryPrices(year, plan, plan.card, ctx.amberModel));
+        const prep = Amber.plannerPrepare(ctx);
+        const year = prep.year;
+        const plans = prep.plans;
         const solarSizes = ctx.solarPerKw ? ctx.solarSizes : [0];
-        const flowsBy = solarSizes.map((kw) => {
-            let solar = null;
-            if (kw > 0) {
-                solar = new Float64Array(year.n);
-                for (let i = 0; i < year.n; i++) solar[i] = ctx.solarPerKw[i] * kw;
-            }
-            return Amber.plannerFlows(year, { solar, extra: ctx.extra, clScale: ctx.clScale, exportLimitKw: ctx.exportLimitKw });
-        });
-        const batteryOf = (kwh) => ({
-            kwh, kw: Math.min(15, Math.max(2.5, kwh * ((ctx.battery && ctx.battery.kwPerKwh) || 0.4))),
-            rte: (ctx.battery && ctx.battery.rte) || 0.9,
-            wear: ctx.battery && ctx.battery.wear != null ? ctx.battery.wear : 2
-        });
         const rows = [];
-        const add = (si, plan, kwh, sim) => {
-            const f = flowsBy[si];
+        const add = (kw, plan, kwh, sim) => {
+            const f = prep.flowsFor(kw);
             const imp = sim ? sim.imp : f.imp;
             const exp = sim ? sim.exp : f.exp;
-            const cost = costOf(plan, imp, exp, f.cl);
-            const row = {
-                solarKw: solarSizes[si], batteryKwh: kwh, plan: plan.name, bill: cost.total, cost,
+            const cost = prep.costOf(plan, imp, exp, f.cl);
+            rows.push({
+                solarKw: kw, batteryKwh: kwh, plan: plan.name, bill: cost.total, cost,
                 importKwh: sum(imp), exportKwh: sum(exp), controlledKwh: sum(f.cl),
                 solarKwh: f.solarKwh, solarSelf: f.solarSelf, curtailed: f.curtailed + (sim ? sim.curtailed : 0),
                 battery: sim ? { charged: sim.charged, gridCharged: sim.gridCharged, discharged: sim.discharged, exported: sim.exported, cycles: sim.cycles } : null
-            };
-            rows.push(row);
-            return row;
+            });
         };
 
         // No battery: every solar size on every plan (fast).
-        flowsBy.forEach((f, si) => plans.forEach((plan) => add(si, plan, 0, null)));
+        solarSizes.forEach((kw) => plans.forEach((plan) => add(kw, plan, 0, null)));
         const batteries = (ctx.batterySizes || []).filter((b) => b > 0);
-        if (!batteries.length) return { rows, plans };
+        if (!batteries.length) return { rows, prep, searchedPlans: [] };
 
-        // Which plans get the full battery search: a probe battery on a middle solar size ranks them.
         let searched = plans;
         const keep = ctx.keepPlans || 6;
-        if (plans.length > keep) {
-            const si = Math.floor((solarSizes.length - 1) / 2);
-            const probe = batteryOf(batteries[Math.floor((batteries.length - 1) / 2)]);
+        if (ctx.batteryPlans) {
+            searched = plans.filter((p) => ctx.batteryPlans.includes(p.name));
+        } else if (plans.length > keep) {
+            // A probe battery on a middle solar size ranks the plans for the full battery search.
+            const kw = solarSizes[Math.floor((solarSizes.length - 1) / 2)];
+            const probe = prep.batteryOf(batteries[Math.floor((batteries.length - 1) / 2)]);
             const probed = [];
             for (let p = 0; p < plans.length; p++) {
-                const sim = Amber.simulateBattery(year, flowsBy[si], pricesOf(plans[p]), probe);
-                probed.push({ plan: plans[p], bill: costOf(plans[p], sim.imp, sim.exp, flowsBy[si].cl).total });
+                const sim = Amber.simulateBattery(year, prep.flowsFor(kw), prep.pricesOf(plans[p]), probe);
+                probed.push({ plan: plans[p], bill: prep.costOf(plans[p], sim.imp, sim.exp, prep.flowsFor(kw).cl).total });
                 if (onProgress) onProgress({ phase: 'probe', done: p + 1, total: plans.length });
                 await pause();
             }
@@ -720,8 +889,8 @@
         for (let si = 0; si < solarSizes.length; si++) {
             for (let bi = 0; bi < batteries.length; bi++) {
                 for (let p = 0; p < searched.length; p++) {
-                    const sim = Amber.simulateBattery(year, flowsBy[si], pricesOf(searched[p]), batteryOf(batteries[bi]));
-                    add(si, searched[p], batteries[bi], sim);
+                    const sim = Amber.simulateBattery(year, prep.flowsFor(solarSizes[si]), prep.pricesOf(searched[p]), prep.batteryOf(batteries[bi]));
+                    add(solarSizes[si], searched[p], batteries[bi], sim);
                     done += 1;
                     if (Date.now() - last > 40) {
                         if (onProgress) onProgress({ phase: 'search', done, total });
@@ -732,7 +901,7 @@
             }
         }
         if (onProgress) onProgress({ phase: 'search', done: total, total });
-        return { rows, plans, searchedPlans: searched.map((p) => p.name), batteryOf };
+        return { rows, prep, searchedPlans: searched.map((p) => p.name) };
     };
 
     function sum(arr) {
@@ -832,6 +1001,23 @@
         }
         return (lo + hi) / 2;
     }
+
+    /**
+     * Install now, or wait a year? Next year the hardware is f.hardwareDecline % cheaper but the
+     * rebates are f.rebateStepDown % smaller, and a year of savings is lost. Returns the change in
+     * NPV from waiting (positive = waiting is better) and next year's up-front cost.
+     */
+    Amber.plannerWaitAYear = function (opt, f) {
+        const now = Amber.plannerFinance(opt, f);
+        const later = Object.assign({}, f, {
+            solarPerKw: f.solarPerKw * (1 - f.hardwareDecline / 100),
+            batteryPerKwh: f.batteryPerKwh * (1 - f.hardwareDecline / 100),
+            stcPerKw: f.stcPerKw * (1 - f.rebateStepDown / 100),
+            batteryRebatePerKwh: f.batteryRebatePerKwh * (1 - f.rebateStepDown / 100)
+        });
+        const waited = Amber.plannerFinance(opt, later);
+        return { change: waited.npv / (1 + f.discount / 100) - now.npv, capexNow: now.capex.total, capexLater: waited.capex.total };
+    };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;
 })(typeof window !== 'undefined' ? window : globalThis);
