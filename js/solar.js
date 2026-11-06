@@ -171,6 +171,19 @@
         return out;
     };
 
+    /** The sun's cos(zenith) at the middle of each half hour of a planner year (negative = night). */
+    Amber.solarCosZenithSlots = function (year, lat, lon) {
+        const out = new Float64Array(year.n);
+        for (let d = 0; d < year.days; d++) {
+            const [y, m, day] = year.dates[d].split('-').map(Number);
+            const midnight = Date.UTC(y, m - 1, day) - 10 * 3600000; // NEM midnight
+            for (let s = 0; s < 48; s++) {
+                out[d * 48 + s] = Math.cos(Amber.sunPosition(midnight + (s * 30 + 15) * 60000, lat, lon).zenith * RAD);
+            }
+        }
+        return out;
+    };
+
     /** Clip a system's half-hourly output at its inverter's AC power (kW). */
     Amber.clipToInverter = function (slots, inverterKw) {
         if (!(inverterKw > 0)) return slots;

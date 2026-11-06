@@ -459,6 +459,303 @@
         return { imp, exp, cl, expCap, solarKwh, solarSelf, curtailed };
     };
 
+    // ---------- What the household already has: solar and a battery ----------
+
+    // kWh in a half hour that counts as "next to nothing bought" (a battery holding the home near 0).
+    const COVERED = 0.05;
+
+    /**
+     * Signs of existing panels and a battery in the readings. cosZ: the sun's cos(zenith) for each
+     * slot (Amber.solarCosZenithSlots). A battery shows as power sent out after dark, or as hours
+     * of the night with next to nothing bought (a home on its own uses more than that).
+     * Returns { exportDays, darkDays, quietNights, battery, reason ('dark' | 'quiet' | ''), solarKw }.
+     */
+    Amber.plannerDetectExisting = function (year, cosZ) {
+        let exportDays = 0;
+        let darkDays = 0;
+        let quietNights = 0;
+        const peaks = [];
+        for (let d = 0; d < year.days; d++) {
+            let dayExp = 0;
+            let darkExp = 0;
+            let run = 0;
+            let longest = 0;
+            for (let s = 0; s < SLOTS; s++) {
+                const i = d * SLOTS + s;
+                if (cosZ[i] < -0.05) {
+                    darkExp += year.exp[i];
+                    run = year.imp[i] < 0.03 ? run + 1 : 0;
+                    longest = Math.max(longest, run);
+                } else {
+                    run = 0;
+                    if (cosZ[i] > 0.05) {
+                        dayExp += year.exp[i];
+                        if (year.exp[i] > COVERED) peaks.push(year.exp[i]);
+                    }
+                }
+            }
+            if (dayExp > 0.5) exportDays += 1;
+            if (darkExp > 0.1) darkDays += 1;
+            if (longest >= 6) quietNights += 1;
+        }
+        const dark = darkDays >= 3 && darkDays >= year.days * 0.02;
+        const quiet = quietNights >= year.days * 0.15;
+        let solarKw = 0;
+        if (exportDays >= year.days * 0.1 && peaks.length) {
+            // The busiest half hours of sending out, plus what the home was using then: a rough size.
+            peaks.sort((a, b) => a - b);
+            const p98 = peaks[Math.min(peaks.length - 1, Math.floor(peaks.length * 0.98))];
+            solarKw = Math.max(1.5, Math.round((p98 * 2 / 0.8) * 2) / 2);
+        }
+        return { exportDays, darkDays, quietNights, battery: dark || quiet, reason: dark ? 'dark' : quiet ? 'quiet' : '', solarKw };
+    };
+
+    // Spread `need` over the slots in idx in proportion to weight, none above its room; returns what's left.
+    function spread(need, idx, weight, room, out) {
+        let active = idx.filter((i) => room[i] - out[i] > 1e-12 && weight[i] > 0);
+        for (let pass = 0; pass < 30 && need > 1e-9 && active.length; pass++) {
+            let total = 0;
+            active.forEach((i) => { total += weight[i]; });
+            let used = 0;
+            const next = [];
+            active.forEach((i) => {
+                const take = Math.min(need * weight[i] / total, room[i] - out[i]);
+                out[i] += take;
+                used += take;
+                if (room[i] - out[i] > 1e-12) next.push(i);
+            });
+            need -= used;
+            active = next;
+        }
+        return Math.max(0, need);
+    }
+
+    /**
+     * The readings as they'd have been without the household's existing battery, so the planner
+     * can run that battery (and any new one) afresh on every plan. The meter only shows what the
+     * battery left over, so this is an estimate, worked out a day at a time (09:00 to 09:00 NEM,
+     * so an evening and the night after it go with the day's charging):
+     *  - power sent out after dark, or more than the panels could make, was the battery selling;
+     *  - half hours with next to nothing bought, when the panels couldn't have covered the home,
+     *    were the battery covering the home's usual use then (learned from the half hours that
+     *    did buy power, the same month and time of day);
+     *  - what it gave out it first took in (÷ round trip): from solar that would otherwise have
+     *    been sent out, in daylight half hours that bought nothing, then from the grid in half
+     *    hours that bought more than usual, cheapest first; what neither could supply wasn't
+     *    given out either, so the estimate of what it covered is scaled back to match.
+     * o: { kwh, kw, rte, solarKw (existing panels), pv (their kWh per slot in a typical year, may
+     *      be null), cosZ (the sun's cos(zenith) per slot) }.
+     * Returns { year (a copy with imp/exp rebuilt), stats: { toHome, toGrid, fromSolar, fromGrid, scaledDays, cycles } }.
+     */
+    Amber.plannerUnwindBattery = function (year, o) {
+        const n = year.n;
+        const B = o.kwh;
+        const P = Math.max(0.1, o.kw || B * 0.4) * 0.5;
+        const rte = o.rte || 0.9;
+        const eta = Math.sqrt(rte);
+        const kw = o.solarKw > 0 && o.pv ? o.solarKw : 0;
+        const imp = year.imp;
+        const exp = year.exp;
+        const cosZ = o.cosZ;
+        const pv = new Float64Array(n);
+        const pvMax = new Float64Array(n);
+        if (kw > 0) {
+            for (let i = 0; i < n; i++) {
+                pv[i] = o.pv[i];
+                // A bright day's output (a typical day × 1.6), never more than the panels' size.
+                pvMax[i] = cosZ[i] > 0 ? Math.min(kw * 0.5, 1.6 * pv[i] + 0.05) : 0;
+            }
+        }
+        // Panels making under a tenth of their size can't cover the home: the battery may be.
+        const dimLevel = Math.max(0.05, kw * 0.05);
+        const dim = (i) => pv[i] < dimLevel;
+
+        // The home's usual use for each month and half hour, from the half hours that bought power.
+        const monthOf = new Uint8Array(year.days);
+        for (let d = 0; d < year.days; d++) monthOf[d] = parseInt(year.dates[d].substring(5, 7), 10) - 1;
+        const samples = Array.from({ length: 12 * SLOTS }, () => []);
+        const all = [];
+        for (let i = 0; i < n; i++) {
+            if (imp[i] >= COVERED && exp[i] < COVERED) {
+                samples[monthOf[Math.floor(i / SLOTS)] * SLOTS + (i % SLOTS)].push(imp[i]);
+                all.push(imp[i]);
+            }
+        }
+        const median = (arr) => {
+            if (!arr.length) return NaN;
+            const s = arr.slice().sort((a, b) => a - b);
+            return s[Math.floor(s.length / 2)];
+        };
+        const fallback = Number.isFinite(median(all)) ? median(all) : 0.3;
+        const bySlot = Array.from({ length: SLOTS }, (_, s) => median([].concat(...Array.from({ length: 12 }, (__, m) => samples[m * SLOTS + s]))));
+        const usualTable = new Float64Array(12 * SLOTS);
+        for (let m = 0; m < 12; m++) {
+            for (let s = 0; s < SLOTS; s++) {
+                let v = median(samples[m * SLOTS + s]);
+                for (let k = 1; k <= 6 && !Number.isFinite(v); k++) {
+                    const a = median(samples[m * SLOTS + ((s + k) % SLOTS)]);
+                    const b = median(samples[m * SLOTS + ((s - k + SLOTS) % SLOTS)]);
+                    v = Number.isFinite(a) && Number.isFinite(b) ? (a + b) / 2 : Number.isFinite(a) ? a : b;
+                }
+                if (!Number.isFinite(v)) v = Number.isFinite(bySlot[s]) ? bySlot[s] : fallback;
+                usualTable[m * SLOTS + s] = v;
+            }
+        }
+        const usual = (i) => usualTable[monthOf[Math.floor(i / SLOTS)] * SLOTS + (i % SLOTS)];
+
+        // What it gave out: sold to the grid (certain), and covered at home (hidden: the meter shows
+        // next to nothing while it does).
+        const toGrid = new Float64Array(n);
+        const covered = new Uint8Array(n);
+        for (let i = 0; i < n; i++) {
+            toGrid[i] = Math.min(P, Math.max(0, exp[i] - pvMax[i]));
+            if (dim(i) && imp[i] < COVERED && toGrid[i] < P) covered[i] = 1;
+        }
+        // A day at a time, 09:00 to 09:00 NEM: an evening and the night after go with the day's charging.
+        const starts = [0];
+        for (let d = 0; d < year.days; d++) if (d * SLOTS + 18 > 0 && d * SLOTS + 18 < n) starts.push(d * SLOTS + 18);
+        starts.push(n);
+        const days = [];
+        for (let k = 0; k + 1 < starts.length; k++) {
+            const a = starts[k];
+            const b = starts[k + 1];
+            let grid = 0;
+            let usualSum = 0;
+            let spilled = false;
+            let firstCovered = -1;
+            let ranOut = false;
+            for (let i = a; i < b; i++) {
+                grid += toGrid[i];
+                if (covered[i]) {
+                    usualSum += Math.min(P - toGrid[i], usual(i));
+                    if (firstCovered < 0) firstCovered = i;
+                } else if (firstCovered >= 0 && dim(i) && imp[i] >= COVERED && cosZ[i] < 0) {
+                    ranOut = true;
+                }
+                if (kw > 0 && cosZ[i] > 0.05 && exp[i] - toGrid[i] > COVERED) spilled = true;
+            }
+            days.push({ a, b, grid, usualSum, full: kw > 0 ? spilled : true, ranOut, month: monthOf[Math.min(year.days - 1, Math.floor(a / SLOTS))] });
+        }
+        // On days it filled up (solar spilling to the grid) and then ran flat (buying again at night),
+        // it gave out a whole battery: those days say how far the usual use understates the evenings
+        // it covers, month by month.
+        const ratios = Array.from({ length: 12 }, () => []);
+        const allRatios = [];
+        days.forEach((day) => {
+            if (day.full && day.ranOut && day.usualSum > 0.5) {
+                const r = Math.max(0, B * eta - day.grid) / day.usualSum;
+                ratios[day.month].push(r);
+                allRatios.push(r);
+            }
+        });
+        const yearRatio = Number.isFinite(median(allRatios)) ? median(allRatios) : 1;
+        const clampRatio = (r) => Math.min(4, Math.max(0.5, r));
+        const toHome = new Float64Array(n);
+        const homeRoom = new Float64Array(n);
+        const homeWeight = new Float64Array(n);
+        days.forEach((day) => {
+            const room = Math.max(0, B * eta - day.grid);
+            const ratio = clampRatio(Number.isFinite(median(ratios[day.month])) ? median(ratios[day.month]) : yearRatio);
+            day.home = day.full && day.ranOut ? room : Math.min(room, ratio * day.usualSum);
+            const idx = [];
+            for (let i = day.a; i < day.b; i++) {
+                if (covered[i]) {
+                    homeRoom[i] = P - toGrid[i];
+                    homeWeight[i] = Math.max(0.01, usual(i));
+                    idx.push(i);
+                }
+            }
+            spread(day.home, idx, homeWeight, homeRoom, toHome);
+        });
+
+        const fromSolar = new Float64Array(n);
+        const fromGrid = new Float64Array(n);
+        const solarRoom = new Float64Array(n);
+        const gridRoom = new Float64Array(n);
+        const stats = { toHome: 0, toGrid: 0, fromSolar: 0, fromGrid: 0, scaledDays: 0, cycles: 0 };
+        for (let k = 0; k < days.length; k++) {
+            const a = days[k].a;
+            const b = days[k].b;
+            let home = 0;
+            let grid = 0;
+            for (let i = a; i < b; i++) { home += toHome[i]; grid += toGrid[i]; }
+            // Never more than about one and a half fills in a day.
+            const most = 1.5 * B * eta;
+            if (home + grid > most) {
+                const keepGrid = Math.min(grid, most);
+                const kHome = home > 0 ? Math.max(0, most - keepGrid) / home : 0;
+                const kGrid = grid > 0 ? keepGrid / grid : 0;
+                for (let i = a; i < b; i++) { toHome[i] *= kHome; toGrid[i] *= kGrid; }
+                home *= kHome;
+                grid *= kGrid;
+            }
+            let need = (home + grid) / rte;
+            if (need <= 1e-9) continue;
+            // Solar that would otherwise have gone to the grid: daylight, nothing bought, not selling.
+            const sunny = [];
+            for (let i = a; i < b; i++) {
+                if (kw > 0 && pv[i] > 0 && imp[i] < COVERED && !toGrid[i] && !toHome[i]) {
+                    solarRoom[i] = Math.min(P, Math.max(0, pvMax[i] - exp[i]));
+                    sunny.push(i);
+                }
+            }
+            need = spread(need, sunny, pv, solarRoom, fromSolar);
+            // Then the grid: half hours that bought more than usual, cheapest first.
+            if (need > 1e-9) {
+                const extra = [];
+                for (let i = a; i < b; i++) {
+                    if (!toGrid[i] && !toHome[i] && imp[i] > usual(i) + COVERED) {
+                        gridRoom[i] = Math.min(P - fromSolar[i], imp[i] - usual(i));
+                        if (gridRoom[i] > 0) extra.push(i);
+                    }
+                }
+                extra.sort((x, y) => (year.amberImp[x] - year.amberImp[y]) || (x - y));
+                for (let j = 0; j < extra.length && need > 1e-9; j++) {
+                    const take = Math.min(need, gridRoom[extra[j]]);
+                    fromGrid[extra[j]] += take;
+                    need -= take;
+                }
+            }
+            // What couldn't have been charged wasn't given out: scale back, home first.
+            if (need > 1e-9) {
+                stats.scaledDays += 1;
+                let cut = need * rte;
+                const cutHome = Math.min(cut, home);
+                if (home > 0) for (let i = a; i < b; i++) toHome[i] *= (home - cutHome) / home;
+                cut -= cutHome;
+                if (cut > 1e-9 && grid > 0) for (let i = a; i < b; i++) toGrid[i] *= Math.max(0, grid - cut) / grid;
+            }
+        }
+
+        const imp0 = new Float64Array(n);
+        const exp0 = new Float64Array(n);
+        for (let i = 0; i < n; i++) {
+            imp0[i] = imp[i] + toHome[i] - fromGrid[i];
+            exp0[i] = exp[i] - toGrid[i] + fromSolar[i];
+            stats.toHome += toHome[i];
+            stats.toGrid += toGrid[i];
+            stats.fromSolar += fromSolar[i];
+            stats.fromGrid += fromGrid[i];
+        }
+        stats.cycles = B > 0 ? (stats.toHome + stats.toGrid) / (B * eta) : 0;
+        return { year: Object.assign({}, year, { imp: imp0, exp: exp0, unwound: true }), stats };
+    };
+
+    /**
+     * The planner's version of the existing battery against the real readings, on one plan, for
+     * the year as recorded (no new panels, no planned changes). prep is built on the unwound year
+     * with ctx.existing; original is the year as read.
+     * Returns { readings, modelled, without }, each { bill, importKwh, exportKwh }, and the run.
+     */
+    Amber.plannerExistingCheck = function (prep, planName, original) {
+        const plan = prep.byName[planName];
+        if (!plan) return null;
+        const flows = Amber.plannerFlows(prep.year, { exportLimitKw: prep.ctx.exportLimitKw });
+        const sim = Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(0));
+        const pack = (imp, exp, cl) => ({ bill: prep.costOf(plan, imp, exp, cl).total, importKwh: sum(imp) + sum(cl), exportKwh: sum(exp) });
+        return { readings: pack(original.imp, original.exp, original.cl), modelled: pack(sim.imp, sim.exp, flows.cl), without: pack(flows.imp, flows.exp, flows.cl), sim };
+    };
+
     // ---------- Future changes: EV, heat-pump hot water, gas to electric ----------
 
     // Local-time windows the new loads run in: [startHour, endHour) (end may pass midnight).
@@ -778,6 +1075,7 @@
         const byName = Object.create(null);
         plans.forEach((p) => { byName[p.name] = p; });
         const flowsCache = new Map();
+        const existing = !!(ctx.existing && ctx.existing.kwh > 0);
         const prep = {
             ctx, year, plans, byName,
             costOf(plan, imp, exp, cl, range) {
@@ -798,9 +1096,15 @@
                 }
                 return flowsCache.get(key);
             },
+            // A new battery of kwh, plus the one the home already has (ctx.existing: { kwh, kw }).
             batteryOf(kwh) {
                 const b = ctx.battery || {};
-                return { kwh, kw: Math.min(15, Math.max(2.5, kwh * (b.kwPerKwh || 0.4))), rte: b.rte || 0.9, wear: b.wear != null ? b.wear : 2 };
+                const ex = existing ? ctx.existing : { kwh: 0, kw: 0 };
+                const kw = kwh > 0 ? Math.min(15, Math.max(2.5, kwh * (b.kwPerKwh || 0.4))) : 0;
+                return { kwh: kwh + ex.kwh, kw: kw + ex.kw, rte: b.rte || 0.9, wear: b.wear != null ? b.wear : 2 };
+            },
+            hasBattery(kwh) {
+                return kwh > 0 || existing;
             }
         };
         return prep;
@@ -814,7 +1118,7 @@
         const plan = prep.byName[planName];
         if (!plan) return null;
         const flows = prep.flowsFor(solarKw);
-        const sim = batteryKwh > 0 ? Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(batteryKwh)) : null;
+        const sim = prep.hasBattery(batteryKwh) ? Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(batteryKwh)) : null;
         const imp = sim ? sim.imp : flows.imp;
         const exp = sim ? sim.exp : flows.exp;
         const months = monthsOf(prep.year).map((m) => {
@@ -858,8 +1162,26 @@
             });
         };
 
-        // No battery: every solar size on every plan (fast).
-        solarSizes.forEach((kw) => plans.forEach((plan) => add(kw, plan, 0, null)));
+        // No new battery: every solar size on every plan (fast unless the home already has one,
+        // which then runs afresh on each plan).
+        if (prep.hasBattery(0)) {
+            const total = solarSizes.length * plans.length;
+            let done = 0;
+            let last = Date.now();
+            for (let si = 0; si < solarSizes.length; si++) {
+                for (let p = 0; p < plans.length; p++) {
+                    add(solarSizes[si], plans[p], 0, Amber.simulateBattery(year, prep.flowsFor(solarSizes[si]), prep.pricesOf(plans[p]), prep.batteryOf(0)));
+                    done += 1;
+                    if (Date.now() - last > 40) {
+                        if (onProgress) onProgress({ phase: 'existing', done, total });
+                        await pause();
+                        last = Date.now();
+                    }
+                }
+            }
+        } else {
+            solarSizes.forEach((kw) => plans.forEach((plan) => add(kw, plan, 0, null)));
+        }
         const batteries = (ctx.batterySizes || []).filter((b) => b > 0);
         if (!batteries.length) return { rows, prep, searchedPlans: [] };
 

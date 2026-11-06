@@ -34,9 +34,10 @@
         { id: 'planDiscount', key: 'discount', label: 'Interest you\'d otherwise earn (%)', step: 0.5, help: 'planDiscount' },
         { id: 'planYears', key: 'years', label: 'Years to compare', step: 1 }
     ];
-    const FIELDS = ['planBaseline', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
+    const EXISTING = ['planExistingSolarKw', 'planExistingFacing', 'planExistingBatteryKwh', 'planExistingBatteryKw'];
+    const FIELDS = EXISTING.concat(['planBaseline', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
         'planBatteryMax', 'planRetailer', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
-        'planHotWaterRun', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy'].concat(COSTS.map((c) => c.id));
+        'planHotWaterRun', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
 
     const ui = { site: null, year: null, busy: false, results: null, selected: null, chart: null, built: false };
 
@@ -155,7 +156,9 @@
             return `<div><label for="${c.id}" class="block text-xs font-medium text-gray-700"${c.help ? ` data-help="${c.help}"` : ''}>${esc(c.label)}</label>`
                 + `<input type="number" id="${c.id}" step="${c.step}" min="0" value="${value}" class="plan-input"></div>`;
         }).join('');
-        fillSelect($('planOrientation'), Object.keys(Amber.SOLAR_ORIENTATIONS).map((k) => ({ value: k, label: Amber.SOLAR_ORIENTATIONS[k].label })), 'north');
+        const facings = Object.keys(Amber.SOLAR_ORIENTATIONS).map((k) => ({ value: k, label: Amber.SOLAR_ORIENTATIONS[k].label }));
+        fillSelect($('planOrientation'), facings, 'north');
+        fillSelect($('planExistingFacing'), facings, 'north');
         fillSelect($('planLocation'), Amber.SOLAR_LOCATIONS.map((l) => ({ value: l.id, label: `${l.name} (${l.state})` })));
         ['planSolarMode', 'planBatteryMode'].forEach((id) => $(id).addEventListener('change', syncVisibility));
         $('planInputs').addEventListener('change', saveSettings);
@@ -216,13 +219,31 @@
         const town = Amber.solarLocationFor(networkKeyOf(site));
         $('planLocation').value = town.id;
         if (!site.local || !year.hasFeedIn) $('planExportLimit').value = $('planExportLimit').value || 5;
+        const detected = Amber.plannerDetectExisting(year, Amber.solarCosZenithSlots(year, town.lat, town.lon));
+        ui.detected = detected;
         applySettings(saved);
-        // A household's own default town and plan win over another household's saved choice.
+        // A household's own defaults win over another household's saved choices.
         if (saved.siteId !== site.id) {
             $('planLocation').value = town.id;
             $('planBaseline').value = defaultBaseline;
+            $('planExistingSolarKw').value = detected.solarKw;
+            $('planExistingFacing').value = 'north';
+            $('planExistingBatteryKwh').value = detected.battery ? 10 : 0;
+            $('planExistingBatteryKw').value = 5;
         }
+        $('planExistingHint').textContent = existingHint(detected, year);
         $('planInputs').classList.remove('hidden');
+    }
+
+    function existingHint(d, year) {
+        const parts = [];
+        if (d.solarKw > 0) parts.push(`Your readings show solar sent to the grid on ${d.exportDays} of ${year.days} days, so you have panels: about ${d.solarKw} kW is a guess from how much you send out at the busiest times.`);
+        else parts.push('Your readings show little or no solar sent to the grid.');
+        if (d.reason === 'dark') parts.push(`Power went out to the grid after dark on ${d.darkDays} days, which means a battery. 10 kWh is a guess.`);
+        else if (d.reason === 'quiet') parts.push(`On ${d.quietNights} nights you bought next to nothing for hours, which usually means a battery. 10 kWh is a guess.`);
+        else parts.push('No sign of a battery.');
+        parts.push('Change these to match your system; new panels and batteries are added on top.');
+        return parts.join(' ');
     }
 
     // ---------- Running the search ----------
@@ -280,13 +301,28 @@
             gas: { heatingMJ: num('planGasHeatingMJ'), cooking: $('planGasCooking').checked, allGone: $('planGasAllGone').checked, centsPerMJ: num('planGasCents'), supplyCentsPerDay: num('planGasSupply') }
         }, timeZone);
 
+        const existing = { solarKw: num('planExistingSolarKw'), facing: $('planExistingFacing').value, kwh: num('planExistingBatteryKwh'), kw: num('planExistingBatteryKw') || 5 };
         let solarPerKw = null;
         let weather = null;
-        if (solarMode !== 'none') {
+        if (solarMode !== 'none' || existing.kwh > 0) {
             progress('Working out what panels would make on your roof…', 0.02);
             weather = await Amber.loadSolarWeather($('planLocation').value);
+        }
+        if (solarMode !== 'none') {
             const perKw = Amber.solarSlotsPerKw(year, weather, { tilt: num('planTilt'), orientation: $('planOrientation').value, shadingPct: num('planShading') });
             solarPerKw = Amber.clipToInverter(perKw, 1 / INVERTER_RATIO);
+        }
+        // A battery the home already has: take it out of the readings, then run it afresh on every plan.
+        let searchYear = year;
+        let unwound = null;
+        if (existing.kwh > 0) {
+            progress('Working out what your battery does now…', 0.03);
+            const pv = existing.solarKw > 0 ? Amber.solarSlotsPerKw(year, weather, { tilt: num('planTilt'), orientation: existing.facing }).map((x) => x * existing.solarKw) : null;
+            unwound = Amber.plannerUnwindBattery(year, {
+                kwh: existing.kwh, kw: existing.kw, rte: (num('planRte') || 90) / 100, solarKw: existing.solarKw, pv,
+                cosZ: Amber.solarCosZenithSlots(year, weather.lat, weather.lon)
+            });
+            searchYear = unwound.year;
         }
         const roof = Math.max(1, num('planRoofKw'));
         const solarSizes = solarMode === 'none' ? [0]
@@ -297,19 +333,23 @@
         const batterySizes = batteryMode === 'none' ? [0]
             : batteryMode === 'fixed' ? [0, fixedBattery * 0.6, fixedBattery * 0.8, fixedBattery]
                 : [0].concat(BATTERY_SIZES.filter((b) => b < maxBattery), [maxBattery]);
-        const amberModel = Amber.amberPlannerModel(year, site, app().readAmberRates());
+        const amberModel = Amber.amberPlannerModel(searchYear, site, app().readAmberRates());
 
         const t0 = Date.now();
         const res = await Amber.plannerSearch({
-            year, plans, state, amberModel, solarPerKw, solarSizes, batterySizes,
+            year: searchYear, plans, state, amberModel, solarPerKw, solarSizes, batterySizes,
+            existing: existing.kwh > 0 ? { kwh: existing.kwh, kw: existing.kw } : null,
             battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100 },
             exportLimitKw: num('planExportLimit'), extra: loads.extra, clScale: loads.clScale,
             keepPlans: 6, mustPlans: [baseline], batteryPlans: retailer ? [retailer] : null
         }, (p) => {
-            const text = p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
-            progress(text, p.phase === 'probe' ? 0.05 + 0.15 * p.done / p.total : 0.2 + 0.8 * p.done / p.total);
+            const text = p.phase === 'existing' ? `Running your battery on every plan… ${p.done} of ${p.total}`
+                : p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
+            const at = p.phase === 'existing' ? 0.04 + 0.11 * p.done / p.total : p.phase === 'probe' ? 0.15 + 0.1 * p.done / p.total : 0.25 + 0.75 * p.done / p.total;
+            progress(text, at);
         });
-        ui.results = analyse(res, { f, baseline, retailer, solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, seconds: (Date.now() - t0) / 1000 });
+        const check = unwound ? Amber.plannerExistingCheck(res.prep, baseline, year) : null;
+        ui.results = analyse(res, { f, baseline, retailer, solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, check, seconds: (Date.now() - t0) / 1000 });
         progress(`Done: ${ui.results.options.length.toLocaleString('en-AU')} options compared.`, null);
         ui.selected = null;
         renderAll();
@@ -367,14 +407,16 @@
     }
 
     function describe(x) {
+        const has = ui.results && ui.results.existing && ui.results.existing.kwh > 0;
         const parts = [];
-        parts.push(x.solarKw > 0 ? `${kw(x.solarKw)} of solar` : 'no new panels');
-        parts.push(x.batteryKwh > 0 ? `a ${kwh(x.batteryKwh)} battery` : 'no battery');
+        parts.push(x.solarKw > 0 ? `${kw(x.solarKw)} of ${has || (ui.results && ui.results.existing.solarKw > 0) ? 'new ' : ''}solar` : 'no new panels');
+        parts.push(x.batteryKwh > 0 ? `a ${kwh(x.batteryKwh)} ${has ? 'extra ' : ''}battery` : has ? 'no extra battery' : 'no battery');
         return parts.join(' and ');
     }
 
     function renderAll() {
         renderRecommendation();
+        renderExistingCheck();
         renderOptions();
         renderDetail();
         renderAssumptions();
@@ -443,6 +485,32 @@
     const th = (t, right) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${t}</th>`;
     const td = (t, cls) => `<td class="px-2 py-2 ${cls || 'text-right whitespace-nowrap'}">${t}</td>`;
 
+    function renderExistingCheck() {
+        const r = ui.results;
+        const box = $('planExistingCheck');
+        if (!r.check) { box.classList.add('hidden'); return; }
+        box.classList.remove('hidden');
+        const c = r.check;
+        const st = r.unwound.stats;
+        const k = (v) => Math.round(v).toLocaleString('en-AU');
+        const gap = c.readings.bill !== 0 ? (c.modelled.bill - c.readings.bill) / Math.abs(c.readings.bill) : 0;
+        const close = Math.abs(gap) <= 0.1;
+        const th = (t, right) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${t}</th>`;
+        const row = (name, f) => `<tr><td class="px-2 py-2">${name}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.readings)}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.modelled)}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.without)}</td></tr>`;
+        const sources = [];
+        if (st.fromSolar > 1) sources.push(`${k(st.fromSolar)} kWh of your solar`);
+        if (st.fromGrid > 1) sources.push(`${k(st.fromGrid)} kWh from the grid`);
+        $('planExistingCheckBody').innerHTML = `<p class="text-sm text-gray-700 mb-3">Worked out from your readings: over the year your ${esc(kwh(r.existing.kwh))} battery gave about ${k(st.toHome)} kWh to your home${st.toGrid > 1 ? ` and sold ${k(st.toGrid)} kWh to the grid` : ''}${sources.length ? `, charging from ${sources.join(' and ')}` : ''} (about ${(st.cycles / 365).toFixed(1)} cycles a day). The planner then takes it out of your readings and runs it again on every plan, the way it would behave on that plan.</p>`
+            + `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th(`The year on ${esc(label(r.baseline))}`)}${th('Your readings', 1)}${th('Planner\'s battery', 1)}${th('No battery', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`
+            + row('Bill', (x) => dollars(x.bill))
+            + row('Bought (kWh)', (x) => k(x.importKwh))
+            + row('Sent out (kWh)', (x) => k(x.exportKwh))
+            + '</tbody></table>'
+            + `<p class="text-sm mt-3 ${close ? 'text-gray-700' : 'text-amber-800'}">The planner's version of your battery comes to ${dollars(c.modelled.bill)}, ${Math.abs(gap) < 0.005 ? 'the same as' : `${(Math.abs(gap) * 100).toFixed(0)} % ${gap > 0 ? 'more than' : 'less than'}`} your real readings. `
+            + (close ? 'That\'s close, so the comparisons below are on firm ground.' : 'That\'s a sizeable gap: check the battery size and power above (take off any backup reserve), and treat the answers below as rougher than usual.')
+            + ` Every option is worked out the same way, so they compare fairly. Without the battery the same year would cost ${dollars(c.without.bill)}, so on this plan it saves you about <strong>${dollars(c.without.bill - c.modelled.bill)}</strong> a year.</p>`;
+    }
+
     function renderOptions() {
         const r = ui.results;
         const list = ranked();
@@ -510,7 +578,8 @@
             facts.push(`New panels make ${Math.round(f.solarKwh).toLocaleString('en-AU')} kWh a year: ${Math.round(f.solarSelf).toLocaleString('en-AU')} used straight away${viaBattery > 0 ? `, the battery stores up to ${Math.round(viaBattery).toLocaleString('en-AU')} of what would have been sent out` : ''}${f.curtailed > 1 ? `, and ${Math.round(f.curtailed).toLocaleString('en-AU')} kWh is lost to the ${num('planExportLimit')} kW export limit` : ''}.`);
         }
         if (ev.sim) {
-            facts.push(`The battery cycles about ${Math.round(ev.sim.cycles)} times a year (${(ev.sim.cycles / 365).toFixed(1)} a day)${ev.sim.gridCharged > 1 ? `, charging ${Math.round(ev.sim.gridCharged).toLocaleString('en-AU')} kWh from the grid when it's cheap or free` : ''}${ev.sim.exported > 1 ? ` and selling ${Math.round(ev.sim.exported).toLocaleString('en-AU')} kWh back when prices are high` : ''}.`);
+            const which = r.existing.kwh > 0 ? (x.batteryKwh > 0 ? `Your ${kwh(r.existing.kwh)} battery and the new one together` : `Your ${kwh(r.existing.kwh)} battery`) : 'The battery';
+            facts.push(`${which} cycle${r.existing.kwh > 0 && x.batteryKwh > 0 ? '' : 's'} about ${Math.round(ev.sim.cycles)} times a year (${(ev.sim.cycles / 365).toFixed(1)} a day)${ev.sim.gridCharged > 1 ? `, charging ${Math.round(ev.sim.gridCharged).toLocaleString('en-AU')} kWh from the grid when it's cheap or free` : ''}${ev.sim.exported > 1 ? ` and selling ${Math.round(ev.sim.exported).toLocaleString('en-AU')} kWh back when prices are high` : ''}.`);
         }
         html += `<ul class="list-disc pl-5 mt-3 space-y-1 text-sm text-gray-700">${facts.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
         $('planDetailBody').innerHTML = html;
@@ -565,7 +634,9 @@
             `Next year is your readings from ${fmtDate(y.first)} to ${fmtDate(y.last)} with the changes you entered, priced at today's plan rates (${r.plans.length - 1} plans for your network, prices as at ${fmtDate(Amber.TEMPLATES_AS_AT)}). Amber uses its prices over those same 12 months: a different year's wholesale prices could make it cheaper or dearer.`,
             'Each option is worked out half hour by half hour, with every plan\'s daily charges, free windows, caps and demand charges, the same way as the Compare tab.',
             r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')} % shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is sized at 75 % of the panels, as most installers do.` : 'No new panels.',
-            'New panels are added on top of your meter readings, so any panels or battery you already have keep doing what they did.',
+            r.existing.kwh > 0
+                ? `Your ${kwh(r.existing.kwh)} battery is taken out of your readings (an estimate: the meter can't see what it covers at home, so that comes from its size, the days it filled up and ran flat, and your use on nights it was empty), then run again on every plan, together with any new battery. Your panels stay in the readings; new ones are added on top.`
+                : 'New panels are added on top of your meter readings, so panels you already have keep doing what they did.',
             'The battery covers your home when power is dear, soaks up solar that would sell cheaply, charges from the grid in free or cheap hours, and sells when an export pays well. It knows each day\'s prices in the morning (as fixed plans and Amber\'s forecasts allow), so a real battery may do a little worse, especially on Amber\'s price spikes.',
             `Money: prices rise ${r.f.escalation} % a year; the battery loses ${r.f.batteryFade} % of its capacity a year and is replaced after ${r.f.batteryLife} years; the inverter after ${r.f.inverterLife}; panels lose ${r.f.solarDegradation} % a year. "Worth" is today's money at ${r.f.discount} % a year.`,
             'Not included: maintenance, any payments for joining a virtual power plant, the value of backup power in a blackout, or your network moving you to a different tariff after you install.'

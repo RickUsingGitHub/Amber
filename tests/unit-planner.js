@@ -12,6 +12,7 @@ require('../js/planner.js');
 const Amber = global.Amber;
 
 let failed = 0;
+const pending = [];
 function assert(cond, message) {
     if (!cond) { failed += 1; console.error('FAIL:', message); } else { console.log('ok:', message); }
 }
@@ -189,7 +190,7 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
     assert(flatMs < 400 && amberMs < 800, 'a year of battery simulation is quick enough to search');
 
     // Search: every combination, a plan's battery bills to read wear off, and the payback maths.
-    (async () => {
+    pending.push((async () => {
         const perKw = solar.map((x) => x / 3);
         const ctx = { year, plans: [flat, free, amberPlan], state: 'NSW', amberModel: model, solarPerKw: perKw, solarSizes: [0, 3, 6], batterySizes: [0, 5, 13.5], exportLimitKw: 5 };
         const res = await Amber.plannerSearch(Object.assign({}, ctx, { keepPlans: 3 }));
@@ -229,8 +230,7 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         const wait = Amber.plannerWaitAYear(opt, f);
         assert(wait.capexLater < wait.capexNow + 1e-9 || f.rebateStepDown > f.hardwareDecline, `wait a year: up-front $${wait.capexNow.toFixed(0)} now vs $${wait.capexLater.toFixed(0)} next year`);
         assert(Number.isFinite(wait.change), `waiting changes the 20-year value by $${wait.change.toFixed(0)}`);
-        finish();
-    })();
+    })());
 }
 
 // ---- Solar from a town's typical weather year (PVGIS) ----
@@ -290,6 +290,82 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
     assert(near(gas.kwh.heating, 20000 * 0.75 / 3.6 / 4, 1e-6) && julHeat > 5 * janHeat, `gas heating becomes ${gas.kwh.heating.toFixed(0)} kWh of reverse-cycle, mostly winter evenings`);
     assert(gas.gasSaving > 20000 * 0.045 + 365 * 0.8 && gas.kwh.cooking > 0 && gas.kwh.hotWater > 0, `no more gas bill: $${gas.gasSaving.toFixed(0)} a year`);
 }
+
+// ---- A battery the home already has ----
+{
+    require('../js/solar.js');
+    const year = Amber.planYear(amberYear('2026-09-30', 30), { channelTypes });
+    const model = Amber.amberPlannerModel(year, site, amberRates);
+    const cosZ = Amber.solarCosZenithSlots(year, -33.87, 151.21);
+    // amberYear's panels make 1.5–4 kWh a half hour from 9am to 3pm: a typical 2.75, about 8 kW.
+    const pv = new Float64Array(year.n);
+    for (let i = 0; i < year.n; i++) { const s = i % 48; if (s >= 18 && s < 30) pv[i] = 2.75; }
+    const total = (a) => a.reduce((x, v) => x + v, 0);
+    const flat = { name: 'Flat', config: { rateType: 'flat', flat: 30, feedIn: 5, daily: 100 } };
+    const amberPlan = { name: 'Amber', amber: true };
+    const flatCard = Amber.planRateCard(year, flat.config, 'NSW');
+    const battery = { kwh: 10, kw: 5, rte: 0.9, wear: 2 };
+    const truth = Amber.plannerFlows(year, {});
+    const flatPrices = Amber.plannerBatteryPrices(year, flat, flatCard, model);
+    const amberPrices = Amber.plannerBatteryPrices(year, amberPlan, null, model);
+    const flatCost = (imp, exp) => Amber.planCardCost(year, flatCard, imp, exp, year.cl).total;
+    const amberCost = (imp, exp) => Amber.amberCardCost(year, model, imp, exp, year.cl).total;
+
+    // What the meter would have shown with a battery: storing solar on a flat plan, or chasing Amber's prices.
+    const selfUse = Amber.simulateBattery(year, truth, flatPrices, battery);
+    const onAmber = Amber.simulateBattery(year, truth, amberPrices, battery);
+    const readings = (sim) => Object.assign({}, year, { imp: sim.imp, exp: sim.exp });
+    const none = Amber.plannerDetectExisting(year, cosZ);
+    const quiet = Amber.plannerDetectExisting(readings(selfUse), cosZ);
+    const dark = Amber.plannerDetectExisting(readings(onAmber), cosZ);
+    assert(!none.battery && none.solarKw >= 5 && none.solarKw <= 12, `no battery in plain readings; panels guessed at ${none.solarKw} kW`);
+    assert(quiet.battery && quiet.reason === 'quiet' && dark.battery && dark.reason === 'dark',
+        `a battery is spotted from quiet nights (${quiet.quietNights} nights) and from selling after dark (${dark.darkDays} days)`);
+
+    const opts = { kwh: 10, kw: 5, rte: 0.9, solarKw: 8, pv, cosZ };
+    const back = Amber.plannerUnwindBattery(readings(selfUse), opts);
+    const off = (a, b) => Math.abs(a / b - 1);
+    assert(off(total(back.year.imp), total(truth.imp)) < 0.1 && off(total(back.year.exp), total(truth.exp)) < 0.1,
+        `storing solar: readings without it rebuilt (bought ${total(back.year.imp).toFixed(0)} vs ${total(truth.imp).toFixed(0)} kWh, sent out ${total(back.year.exp).toFixed(0)} vs ${total(truth.exp).toFixed(0)})`);
+    const again = Amber.simulateBattery(back.year, Amber.plannerFlows(back.year, {}), Amber.plannerBatteryPrices(back.year, flat, flatCard, model), battery);
+    const real = flatCost(selfUse.imp, selfUse.exp);
+    const redone = flatCost(again.imp, again.exp);
+    assert(off(redone, real) < 0.05, `storing solar: run again on its plan, $${redone.toFixed(0)} vs $${real.toFixed(0)} from the readings`);
+
+    const backA = Amber.plannerUnwindBattery(readings(onAmber), opts);
+    let darkLeft = 0;
+    let visible = 0; // what it sold outside the panels' hours (at midday it looks just like solar)
+    for (let i = 0; i < year.n; i++) {
+        if (cosZ[i] < -0.05) darkLeft += backA.year.exp[i];
+        if (!pv[i]) visible += Math.max(0, onAmber.exp[i] - truth.exp[i]);
+    }
+    assert(darkLeft < 1 && backA.stats.toGrid > 0.9 * visible, `Amber battery: its selling outside the panels' hours is taken out (${backA.stats.toGrid.toFixed(0)} of ${visible.toFixed(0)} kWh found)`);
+    const againA = Amber.simulateBattery(backA.year, Amber.plannerFlows(backA.year, {}), Amber.plannerBatteryPrices(backA.year, amberPlan, null, model), battery);
+    const realA = amberCost(onAmber.imp, onAmber.exp);
+    const redoneA = amberCost(againA.imp, againA.exp);
+    assert(Math.abs(redoneA - realA) < Math.max(60, 0.1 * Math.abs(realA)), `Amber battery: run again on Amber, $${redoneA.toFixed(0)} vs $${realA.toFixed(0)} from the readings`);
+    // The point: on another plan the battery behaves differently. Replaying Amber's pattern on a flat
+    // plan overstates its bill; running the battery afresh gets close to what it would really do there.
+    const replay = flatCost(onAmber.imp, onAmber.exp);
+    const fresh = Amber.simulateBattery(backA.year, Amber.plannerFlows(backA.year, {}), Amber.plannerBatteryPrices(backA.year, flat, flatCard, model), battery);
+    const freshCost = flatCost(fresh.imp, fresh.exp);
+    assert(replay - freshCost > 50 && off(freshCost, real) < 0.08,
+        `Amber battery moved to a flat plan: replayed $${replay.toFixed(0)}, run afresh $${freshCost.toFixed(0)}, really about $${real.toFixed(0)}`);
+
+    pending.push((async () => {
+        const ctx = { year: back.year, plans: [flat, amberPlan], state: 'NSW', amberModel: model, solarSizes: [0], batterySizes: [0, 5], existing: { kwh: 10, kw: 5 }, battery: { rte: 0.9 } };
+        const res = await Amber.plannerSearch(ctx);
+        assert(res.rows.length === 4 && res.rows.every((r) => r.battery), `with a battery already: every option runs it, new or not (${res.rows.length} rows)`);
+        const now = res.rows.find((r) => r.plan === 'Flat' && r.batteryKwh === 0);
+        assert(near(now.bill, Amber.plannerEvaluate(res.prep, 'Flat', 0, 0).cost.total, 1e-6) && res.prep.batteryOf(5).kwh === 15 && res.prep.batteryOf(5).kw === 7.5,
+            'a new 5 kWh battery adds to the 10 kWh one (15 kWh, 7.5 kW)');
+        const check = Amber.plannerExistingCheck(res.prep, 'Flat', readings(selfUse));
+        assert(near(check.readings.bill, real, 1e-6) && off(check.modelled.bill, real) < 0.05 && check.without.bill > check.modelled.bill + 300,
+            `the check: readings $${check.readings.bill.toFixed(0)}, planner's battery $${check.modelled.bill.toFixed(0)}, without it $${check.without.bill.toFixed(0)}`);
+    })());
+}
+
+Promise.all(pending).then(finish, (err) => { console.error(err); failed += 1; finish(); });
 
 function finish() {
     if (failed) {
