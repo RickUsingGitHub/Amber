@@ -429,10 +429,20 @@
         });
     }
 
+    const yearsText = (v) => (v < 1 ? 'under a year' : `${v.toFixed(1)} years`);
+    // A replacement (battery or inverter) put it behind again after it was first back to $0.
+    const dipped = (fin) => fin.firstPayback != null && fin.capex.total > 0 && (fin.payback == null || fin.payback > fin.firstPayback + 0.05);
+
     function paybackText(fin) {
+        const years = ui.results.f.years;
         if (fin.capex.total <= 0) return 'nothing to pay back';
-        if (fin.payback == null) return `doesn't pay back within ${ui.results.f.years} years`;
-        return `pays back in ${fin.payback < 1 ? 'under a year' : `${fin.payback.toFixed(1)} years`}`;
+        if (fin.payback == null) {
+            return dipped(fin)
+                ? `is back to $0 after ${yearsText(fin.firstPayback)}, but replacing the battery puts it behind again and it isn't ahead for good within ${years} years`
+                : `doesn't pay back within ${years} years`;
+        }
+        if (dipped(fin)) return `pays back for good in ${yearsText(fin.payback)} (it's back to $0 after ${yearsText(fin.firstPayback)}, then replacing the battery puts it behind for a while)`;
+        return `pays back in ${yearsText(fin.payback)}`;
     }
 
     function renderRecommendation() {
@@ -482,7 +492,7 @@
     }
 
     const shortLabel = (name) => (name === 'Amber' ? 'Amber' : label(name));
-    const th = (t, right) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${t}</th>`;
+    const th = (t, right, help) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider"${help ? ` data-help="${help}" data-help-label="${t}"` : ''}>${t}</th>`;
     const td = (t, cls) => `<td class="px-2 py-2 ${cls || 'text-right whitespace-nowrap'}">${t}</td>`;
 
     function renderExistingCheck() {
@@ -516,11 +526,11 @@
         const list = ranked();
         const top = list.slice(0, 15);
         const doNothing = r.rows.find((x) => x.solarKw === 0 && x.batteryKwh === 0 && x.plan === r.baseline);
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th('Solar + battery')}${th('Plan')}${th('Up front', 1)}${th('Bill next year', 1)}${th('Saves a year', 1)}${th('Pays back', 1)}${th(`Worth (${r.f.years} yrs)`, 1)}</tr></thead><tbody class="divide-y divide-gray-200">`;
+        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th('Solar + battery')}${th('Plan')}${th('Up front', 1)}${th('Bill next year', 1)}${th('Saves a year', 1, 'planSavesYear')}${th('Pays back', 1, 'planPaysBack')}${th(`Worth in today's money (${r.f.years} yrs)`, 1, 'planWorth')}</tr></thead><tbody class="divide-y divide-gray-200">`;
         const row = (x, i, note) => {
             const fin = x.fin;
             const selected = ui.selected ? (ui.selected === x) : i === 0;
-            const pb = !fin ? '—' : fin.capex.total <= 0 ? '—' : fin.payback == null ? 'never' : `${fin.payback.toFixed(1)} yrs`;
+            const pb = !fin ? '—' : fin.capex.total <= 0 ? '—' : `${fin.payback == null ? 'never' : `${fin.payback.toFixed(1)} yrs`}${dipped(fin) ? '*' : ''}`;
             return `<tr class="cursor-pointer hover:bg-gray-50 ${selected ? 'bg-indigo-50 font-semibold' : ''}" data-plan-option="${i}" tabindex="0" role="button">`
                 + td(esc(system(x)), 'text-left whitespace-nowrap')
                 + td(`${esc(shortLabel(x.plan))}${note ? ` <span class="text-xs font-normal text-gray-500">(${note})</span>` : ''}`, 'text-left')
@@ -536,6 +546,7 @@
         html += row(doNothing, -1, 'what you have now');
         if (r.free.plan !== r.baseline) html += row(r.free, -2, 'just switch plan');
         html += '</tbody></table>';
+        if (top.some((x) => x.fin && dipped(x.fin))) html += '<p class="text-xs text-gray-500 mt-2">* Back to $0 sooner, then behind again for a while when the battery is replaced: "Pays back" is when it\'s ahead for good.</p>';
         html += `<p class="text-xs text-gray-500 mt-2">${r.options.length.toLocaleString('en-AU')} options compared${r.res.searchedPlans.length ? `; batteries tried on ${r.res.searchedPlans.length} plan${r.res.searchedPlans.length === 1 ? '' : 's'}` : ''}. Tap a row for its year month by month.</p>`;
         $('planOptionsTable').innerHTML = html;
         const pick = (tr) => {
@@ -621,7 +632,12 @@
                 }
             });
         }
-        const repl = x.batteryKwh > 0 ? ` The battery is replaced in year ${r.f.batteryLife + 1}${r.f.batteryLife + 1 <= r.f.years ? '' : ' (after this chart)'}, the inverter in year ${r.f.inverterLife + 1}: the dips.` : '';
+        let repl = x.batteryKwh > 0 ? ` The battery is replaced in year ${r.f.batteryLife + 1}${r.f.batteryLife + 1 <= r.f.years ? '' : ' (after this chart)'}, the inverter in year ${r.f.inverterLife + 1}: the dips.` : '';
+        const fin = x.fin;
+        if (fin.residual && fin.residual.total > 0 && fin.batteryBought) {
+            const left = r.f.batteryLife - (r.f.years - fin.batteryBought.year + 1);
+            repl += ` When the ${r.f.years} years are up, the replacement battery still has ${left} of its ${r.f.batteryLife} years to go, worth about ${dollars(fin.residual.total)} then (with the inverter's). That isn't on the chart, which is cash only, but it counts toward the worth in today's money.`;
+        }
         notes.innerHTML = `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20 % higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20 % lower).${repl}</p>`
             + `<p class="text-gray-600">Savings here are on top of ${r.reference === r.free ? 'just switching plan, since that needs nothing bought' : `staying on ${esc(label(r.retailer))} with nothing new`}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation} % a year.</p>`;
     }

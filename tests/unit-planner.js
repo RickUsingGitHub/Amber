@@ -215,6 +215,21 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         const never = Amber.plannerFinance(Object.assign({}, opt, { solarOnly: opt.planOnly, batteryBills: [] , solarKw: 6, batteryKwh: 0 }), f);
         assert(never.payback === null && never.npv < 0, 'no savings: never pays back');
 
+        // 10 kW + 30 kWh: back to $0 in year 11, behind again when the battery is replaced in year 13,
+        // ahead for good later. The replacement's 4 unused years count toward its worth.
+        const big = { solarKw: 10, batteryKwh: 30, today: 4000, free: 3200, planOnly: 3200, solarOnly: 2200, batteryBills: [{ kwh: 0, bill: 2200 }, { kwh: 30, bill: 900 }] };
+        const bigFin = Amber.plannerFinance(big, f);
+        assert(near(bigFin.capex.total, 28800) && bigFin.firstPayback > 9 && bigFin.firstPayback < 13 && bigFin.payback > 13 && bigFin.payback <= 20 && bigFin.flows[12].cumulative < 0,
+            `ahead for good: first back to $0 at ${bigFin.firstPayback.toFixed(1)} years, behind again after the year-13 replacement, ahead for good at ${bigFin.payback.toFixed(1)}`);
+        const replacement = 900 * 30 * Math.pow(0.96, 12);
+        assert(near(bigFin.residual.battery, replacement * 4 / 12, 1e-6) && near(bigFin.residual.inverter, 2000 * 4 / 12, 1e-6),
+            `what's left of the year-13 battery and inverter at year 20: $${bigFin.residual.battery.toFixed(0)} + $${bigFin.residual.inverter.toFixed(0)}`);
+        const cashOnly = bigFin.flows.reduce((sum, x) => sum + x.net / Math.pow(1.05, x.year), -bigFin.capex.total);
+        assert(near(bigFin.npv, cashOnly + bigFin.residual.total / Math.pow(1.05, 20), 1e-6) && bigFin.npv - cashOnly > 2200,
+            `worth in today's money counts it: $${cashOnly.toFixed(0)} → $${bigFin.npv.toFixed(0)}`);
+        const short = Amber.plannerFinance(big, Object.assign({}, f, { years: 12 }));
+        assert(short.residual.total === 0 && short.payback === short.firstPayback, 'nothing replaced within 12 years: no credit, one payback');
+
         // One option in full: its months add up to its year, and the search's bill for it.
         const one = Amber.plannerEvaluate(res.prep, 'Flat', 6, 13.5);
         const monthsTotal = one.months.reduce((s, m) => s + m.bill, 0);

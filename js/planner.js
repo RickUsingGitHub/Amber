@@ -1264,7 +1264,11 @@
      *   battery's savings are read off smaller sizes.
      * Hardware savings (vs the free switch) fade with panel degradation and battery capacity; the
      * battery is replaced at the end of its life and the inverter at its. Prices rise f.escalation.
-     * Returns yearly flows, payback (years, fractional; null = never), npv, net totals and irr.
+     * A replacement still part-way through its life when the years run out is credited with what's
+     * left of it (straight line), in the npv and irr; the cash flows and payback leave it out.
+     * Returns yearly flows, payback (years, fractional, to being ahead for good; null = not within
+     * f.years), firstPayback (first time back to $0, which a replacement can undo), npv, irr,
+     * residual { battery, inverter, total } (in the last year's dollars) and net totals.
      */
     Amber.plannerFinance = function (opt, f) {
         const capex = Amber.plannerCapex(opt.solarKw, opt.batteryKwh, f);
@@ -1283,7 +1287,10 @@
         const flows = [];
         let cum = -capex.total;
         let payback = capex.total <= 0 ? 0 : null;
+        let firstPayback = payback;
         let npv = -capex.total;
+        let batteryBought = null;
+        let inverterBought = null;
         const r = f.discount / 100;
         const switchSaving = opt.free - opt.planOnly;
         for (let k = 1; k <= f.years; k++) {
@@ -1296,19 +1303,37 @@
             const saving = (switchSaving + solarSaving + batterySaving) * esc;
             let spend = 0;
             if (opt.batteryKwh > 0 && k > 1 && (k - 1) % f.batteryLife === 0) {
-                spend += f.batteryPerKwh * opt.batteryKwh * Math.pow(1 - f.batteryCostDecline / 100, k - 1);
+                const cost = f.batteryPerKwh * opt.batteryKwh * Math.pow(1 - f.batteryCostDecline / 100, k - 1);
+                spend += cost;
+                batteryBought = { year: k, cost };
             }
-            if ((opt.solarKw > 0 || opt.batteryKwh > 0) && k > 1 && (k - 1) % f.inverterLife === 0) spend += f.inverterCost;
+            if ((opt.solarKw > 0 || opt.batteryKwh > 0) && k > 1 && (k - 1) % f.inverterLife === 0) {
+                spend += f.inverterCost;
+                inverterBought = { year: k, cost: f.inverterCost };
+            }
             const net = saving - spend;
             const before = cum;
             cum += net;
-            if (payback == null && cum >= 0 && net > 0) payback = k - 1 + (-before) / net;
+            if (before < 0 && cum >= 0 && net > 0) {
+                const at = k - 1 + (-before) / net;
+                if (firstPayback == null) firstPayback = at;
+                payback = at;
+            } else if (cum < 0) {
+                payback = null;
+            }
             npv += net / Math.pow(1 + r, k);
             flows.push({ year: k, saving, spend, net, cumulative: cum, capacity, panels });
         }
-        const irr = irrOf(-capex.total, flows.map((x) => x.net));
+        // What's left of a replacement when the years run out.
+        const left = (bought, life) => (bought ? bought.cost * Math.max(0, life - (f.years - bought.year + 1)) / life : 0);
+        const residual = { battery: left(batteryBought, f.batteryLife), inverter: left(inverterBought, f.inverterLife) };
+        residual.total = residual.battery + residual.inverter;
+        if (residual.total > 0) npv += residual.total / Math.pow(1 + r, f.years);
+        const nets = flows.map((x) => x.net);
+        if (nets.length) nets[nets.length - 1] += residual.total;
+        const irr = irrOf(-capex.total, nets);
         const net10 = flows.slice(0, 10).reduce((s, x) => s + x.net, 0) - capex.total;
-        return { capex, flows, payback, npv, irr, net10, netAll: cum, firstYearSaving: flows.length ? flows[0].saving : 0 };
+        return { capex, flows, payback, firstPayback, npv, irr, residual, batteryBought, net10, netAll: cum, firstYearSaving: flows.length ? flows[0].saving : 0 };
     };
 
     function irrOf(c0, nets) {
