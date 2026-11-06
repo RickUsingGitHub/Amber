@@ -61,7 +61,8 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(page.locator('#configSection')).toBeHidden();
     await expect(page.locator('#planInputs')).toBeVisible();
     // Not on Amber: today's plan is a retailer's, and the town follows the network.
-    await expect(page.locator('#planBaseline')).not.toHaveValue('Amber');
+    await expect(page.locator('#planCompareWith')).toHaveValue('');
+    await expect(page.locator('#planCompareWith option:checked')).toHaveText("Whatever's cheapest");
     await expect(page.locator('#planLocation')).toHaveValue('sydney');
     await expect(page.locator('#planCostInputs input')).toHaveCount(18);
 
@@ -81,7 +82,7 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(page.locator('#planProgressText')).toContainText('options compared');
     await expect(page.locator('#planRecommendation')).toContainText('Best for you');
     await expect(page.locator('#planRecommendation')).toContainText("Next year's bill");
-    await expect(page.locator('#planOptionsTable')).toContainText('what you have now');
+    await expect(page.locator('#planOptionsTable')).toContainText('cheapest with nothing new');
     // The money columns say what they count.
     for (const heading of ['Saves a year', 'Pays back', "Worth in today's money (20 yrs)"]) {
         await expect(page.locator('#planOptionsTable thead th', { hasText: heading }).locator('.help-btn')).toHaveCount(1);
@@ -147,6 +148,42 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(page.locator('#planSolarMode')).toHaveValue('fixed');
     await expect(page.locator('#planBatteryMode')).toHaveValue('none');
     await expect(page.locator('#planRetailer')).toHaveValue(plan);
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: fixing the retailer keeps the same yardstick, and the plan to compare against moves it', async ({ page }) => {
+    test.setTimeout(150000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page);
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+    await page.fill('#planRoofKw', '6.6');
+    await page.fill('#planBatteryMax', '13.5');
+    const cells = async (tr) => (await tr.locator('td').allTextContents()).map((t) => t.trim());
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
+    const best = await cells(page.locator('#planOptionsTable [data-plan-option="0"]'));
+
+    // Only that retailer: the same option has the same numbers.
+    const value = await page.evaluate((name) => Array.from(document.querySelectorAll('#planRetailer option')).find((o) => o.textContent.startsWith(name)).value, best[1]);
+    await page.selectOption('#planRetailer', value);
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const same = page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"])').filter({ has: page.locator('td:first-child', { hasText: new RegExp(`^${best[0].replace(/[.+]/g, '\\$&')}$`) }) });
+    expect(await cells(same.first())).toEqual(best);
+
+    // Comparing against today's dear plan instead: that plan's row saves $0, and the cheapest plan's row appears.
+    await page.selectOption('#planRetailer', '');
+    const dear = await page.locator('#planCompareWith option').nth(2).getAttribute('value');
+    await page.selectOption('#planCompareWith', dear);
+    await page.click('#planRun');
+    await expect(page.locator('#planProgressText')).toContainText('options compared');
+    const against = await cells(page.locator('#planOptionsTable [data-plan-option="-1"]'));
+    expect(against[0]).toBe('Nothing new');
+    expect(against[4]).toBe('$0');
+    await expect(page.locator('#planOptionsTable [data-plan-option="-1"]')).toContainText('what you compare against');
+    await expect(page.locator('#planDetailBody')).toContainText('Compared with nothing new on');
     expect(errors).toEqual([]);
 });
 

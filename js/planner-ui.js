@@ -35,7 +35,7 @@
         { id: 'planYears', key: 'years', label: 'Years to compare', step: 1 }
     ];
     const EXISTING = ['planExistingSolarKw', 'planExistingFacing', 'planExistingBatteryKwh', 'planExistingBatteryKw'];
-    const FIELDS = EXISTING.concat(['planBaseline', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
+    const FIELDS = EXISTING.concat(['planCompareWith', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
         'planBatteryMax', 'planRetailer', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
         'planHotWaterRun', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
 
@@ -212,9 +212,7 @@
         const plans = planList(site);
         const saved = loadSettings();
         const options = plans.map((p) => ({ value: p.name, label: label(p.name) }));
-        const compareChoice = app().selectedPlanName();
-        const defaultBaseline = !site.local ? 'Amber' : (plans.some((p) => p.name === compareChoice) ? compareChoice : (plans[1] || plans[0]).name);
-        fillSelect($('planBaseline'), options, defaultBaseline);
+        fillSelect($('planCompareWith'), [{ value: '', label: 'Whatever\'s cheapest' }].concat(options), '');
         fillSelect($('planRetailer'), [{ value: '', label: 'Find the cheapest' }].concat(options), '');
         const town = Amber.solarLocationFor(networkKeyOf(site));
         $('planLocation').value = town.id;
@@ -225,7 +223,7 @@
         // A household's own defaults win over another household's saved choices.
         if (saved.siteId !== site.id) {
             $('planLocation').value = town.id;
-            $('planBaseline').value = defaultBaseline;
+            $('planCompareWith').value = '';
             $('planExistingSolarKw').value = detected.solarKw;
             $('planExistingFacing').value = 'north';
             $('planExistingBatteryKwh').value = detected.battery ? 10 : 0;
@@ -289,7 +287,10 @@
         const timeZone = Amber.STATE_TIMEZONES[state] || 'Australia/Sydney';
         const f = readFinance();
         const plans = planList(site);
-        const baseline = $('planBaseline').value;
+        const compareWith = $('planCompareWith').value; // '' = whatever's cheapest with nothing new
+        const comparePlan = app().selectedPlanName();
+        // The plan the readings were made on, for checking an existing battery against them.
+        const readingsPlan = !site.local ? 'Amber' : plans.some((p) => p.name === comparePlan) ? comparePlan : compareWith;
         const retailer = $('planRetailer').value;
         const solarMode = $('planSolarMode').value;
         const batteryMode = $('planBatteryMode').value;
@@ -341,15 +342,16 @@
             existing: existing.kwh > 0 ? { kwh: existing.kwh, kw: existing.kw } : null,
             battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100 },
             exportLimitKw: num('planExportLimit'), extra: loads.extra, clScale: loads.clScale,
-            keepPlans: 6, mustPlans: [baseline], batteryPlans: retailer ? [retailer] : null
+            keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], batteryPlans: retailer ? [retailer] : null
         }, (p) => {
             const text = p.phase === 'existing' ? `Running your battery on every plan… ${p.done} of ${p.total}`
                 : p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
             const at = p.phase === 'existing' ? 0.04 + 0.11 * p.done / p.total : p.phase === 'probe' ? 0.15 + 0.1 * p.done / p.total : 0.25 + 0.75 * p.done / p.total;
             progress(text, at);
         });
-        const check = unwound ? Amber.plannerExistingCheck(res.prep, baseline, year) : null;
-        ui.results = analyse(res, { f, baseline, retailer, solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, check, seconds: (Date.now() - t0) / 1000 });
+        ui.results = analyse(res, { f, compareWith, retailer, solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, seconds: (Date.now() - t0) / 1000 });
+        ui.results.readingsPlan = readingsPlan || ui.results.free.plan;
+        ui.results.check = unwound ? Amber.plannerExistingCheck(res.prep, ui.results.readingsPlan, year) : null;
         progress(`Done: ${ui.results.options.length.toLocaleString('en-AU')} options compared.`, null);
         ui.selected = null;
         renderAll();
@@ -372,11 +374,11 @@
     function analyse(res, o) {
         const rows = res.rows;
         const at = (s, b, p) => rows.find((x) => x.solarKw === s && x.batteryKwh === b && x.plan === p);
-        const today = at(0, 0, o.baseline).bill;
         const free = rows.filter((x) => x.solarKw === 0 && x.batteryKwh === 0).reduce((a, b) => (b.bill < a.bill ? b : a));
-        // Payback is measured against the cheapest way to get there with nothing bought: the
-        // cheapest plan, or the chosen plan when it's fixed.
-        const reference = o.retailer ? at(0, 0, o.retailer) : free;
+        // Every option is measured against one yardstick, whatever is fixed: nothing new on the plan
+        // to compare against, or on whichever plan is cheapest with nothing new (switching is free).
+        const compare = (o.compareWith && at(0, 0, o.compareWith)) || free;
+        const base = compare.bill;
         const solarFixed = o.solarMode === 'fixed' ? o.solarSizes[1] : null;
         const options = rows.filter((r) => {
             if (o.solarMode === 'none' && r.solarKw !== 0) return false;
@@ -386,10 +388,10 @@
             if (o.retailer && r.plan !== o.retailer) return false;
             return true;
         }).map((r) => {
-            const opt = optionFor(rows, o.f, today, reference, r);
-            return Object.assign({}, r, { opt, fin: Amber.plannerFinance(opt, o.f), saving: today - r.bill });
+            const opt = optionFor(rows, o.f, base, compare, r);
+            return Object.assign({}, r, { opt, fin: Amber.plannerFinance(opt, o.f), saving: base - r.bill });
         });
-        return Object.assign({ res, rows, today, free, reference, options }, o);
+        return Object.assign({ res, rows, base, free, compare, options }, o);
     }
 
     function ranked() {
@@ -456,15 +458,13 @@
         const fin = best.fin;
         const hardware = best.solarKw > 0 || best.batteryKwh > 0;
         const lines = [];
-        lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.today)}</strong> on ${esc(label(r.baseline))} today: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
+        lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.base)}</strong> with nothing new on ${esc(label(r.compare.plan))}${r.compareWith ? '' : ' (the cheapest plan for you as things are)'}: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
         if (hardware) {
             lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)} % interest a year)` : ''}.</p>`);
         }
-        if (r.free.plan !== r.baseline && r.today - r.free.bill > 1) {
-            const onTop = r.reference === r.free
-                ? 'Payback above counts only what the system adds on top of that.'
-                : `You chose to stay on ${esc(label(r.retailer))}, so payback is measured against that plan with nothing new.`;
-            lines.push(`<p>${hardware ? 'Without buying anything, just' : 'Just'} switching to ${esc(label(r.free.plan))} would save <strong>${dollars(r.today - r.free.bill)}</strong> a year. ${hardware ? onTop : ''}</p>`);
+        if (r.free.plan !== r.compare.plan && r.base - r.free.bill > 1) {
+            const onTop = `Payback and worth here include that, because you're comparing against ${esc(label(r.compare.plan))}: pick "Whatever's cheapest" to count only what the panels and battery add.`;
+            lines.push(`<p>${hardware ? 'Without buying anything, just' : 'Just'} switching to ${esc(label(r.free.plan))} would save <strong>${dollars(r.base - r.free.bill)}</strong> a year. ${hardware ? onTop : ''}</p>`);
         }
         if (!hardware) {
             const bestKit = ranked().filter((x) => x.solarKw > 0 || x.batteryKwh > 0).sort((a, b) => b.fin.npv - a.fin.npv)[0];
@@ -511,7 +511,7 @@
         if (st.fromSolar > 1) sources.push(`${k(st.fromSolar)} kWh of your solar`);
         if (st.fromGrid > 1) sources.push(`${k(st.fromGrid)} kWh from the grid`);
         $('planExistingCheckBody').innerHTML = `<p class="text-sm text-gray-700 mb-3">Worked out from your readings: over the year your ${esc(kwh(r.existing.kwh))} battery gave about ${k(st.toHome)} kWh to your home${st.toGrid > 1 ? ` and sold ${k(st.toGrid)} kWh to the grid` : ''}${sources.length ? `, charging from ${sources.join(' and ')}` : ''} (about ${(st.cycles / 365).toFixed(1)} cycles a day). The planner then takes it out of your readings and runs it again on every plan, the way it would behave on that plan.</p>`
-            + `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th(`The year on ${esc(label(r.baseline))}`)}${th('Your readings', 1)}${th('Planner\'s battery', 1)}${th('No battery', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`
+            + `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th(`The year on ${esc(label(r.readingsPlan))}`)}${th('Your readings', 1)}${th('Planner\'s battery', 1)}${th('No battery', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`
             + row('Bill', (x) => dollars(x.bill))
             + row('Bought (kWh)', (x) => k(x.importKwh))
             + row('Sent out (kWh)', (x) => k(x.exportKwh))
@@ -525,7 +525,6 @@
         const r = ui.results;
         const list = ranked();
         const top = list.slice(0, 15);
-        const doNothing = r.rows.find((x) => x.solarKw === 0 && x.batteryKwh === 0 && x.plan === r.baseline);
         let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th('Solar + battery')}${th('Plan')}${th('Up front', 1)}${th('Bill next year', 1)}${th('Saves a year', 1, 'planSavesYear')}${th('Pays back', 1, 'planPaysBack')}${th(`Worth in today's money (${r.f.years} yrs)`, 1, 'planWorth')}</tr></thead><tbody class="divide-y divide-gray-200">`;
         const row = (x, i, note) => {
             const fin = x.fin;
@@ -536,22 +535,22 @@
                 + td(`${esc(shortLabel(x.plan))}${note ? ` <span class="text-xs font-normal text-gray-500">(${note})</span>` : ''}`, 'text-left')
                 + td(fin ? dollars(fin.capex.total) : '$0')
                 + td(dollars(x.bill))
-                + td(dollars(r.today - x.bill), `text-right whitespace-nowrap ${r.today - x.bill >= 0 ? 'text-green-700' : 'text-red-700'}`)
+                + td(dollars(r.base - x.bill), `text-right whitespace-nowrap ${r.base - x.bill >= 0 ? 'text-green-700' : 'text-red-700'}`)
                 + td(pb)
                 + td(fin ? dollars(fin.npv) : '—')
                 + '</tr>';
         };
         top.forEach((x, i) => { html += row(x, i); });
         html += '<tr class="bg-gray-50"><td colspan="7" class="px-2 py-1 text-xs text-gray-500">For comparison</td></tr>';
-        html += row(doNothing, -1, 'what you have now');
-        if (r.free.plan !== r.baseline) html += row(r.free, -2, 'just switch plan');
+        html += row(r.compare, -1, r.compareWith ? 'what you compare against' : 'cheapest with nothing new');
+        if (r.free.plan !== r.compare.plan) html += row(r.free, -2, 'cheapest with nothing new');
         html += '</tbody></table>';
         if (top.some((x) => x.fin && dipped(x.fin))) html += '<p class="text-xs text-gray-500 mt-2">* Back to $0 sooner, then behind again for a while when the battery is replaced: "Pays back" is when it\'s ahead for good.</p>';
         html += `<p class="text-xs text-gray-500 mt-2">${r.options.length.toLocaleString('en-AU')} options compared${r.res.searchedPlans.length ? `; batteries tried on ${r.res.searchedPlans.length} plan${r.res.searchedPlans.length === 1 ? '' : 's'}` : ''}. Tap a row for its year month by month.</p>`;
         $('planOptionsTable').innerHTML = html;
         const pick = (tr) => {
             const i = parseInt(tr.getAttribute('data-plan-option'), 10);
-            ui.selected = i >= 0 ? top[i] : (i === -1 ? doNothing : r.free);
+            ui.selected = i >= 0 ? top[i] : (i === -1 ? r.compare : r.free);
             renderOptions();
             renderDetail();
         };
@@ -567,9 +566,9 @@
         if (!x) return;
         const prep = r.res.prep;
         const ev = Amber.plannerEvaluate(prep, x.plan, x.solarKw, x.batteryKwh);
-        const now = Amber.plannerEvaluate(prep, r.baseline, 0, 0);
+        const now = Amber.plannerEvaluate(prep, r.compare.plan, 0, 0);
         $('planDetailTitle').textContent = `Next year, month by month: ${describe(x)} on ${label(x.plan)}`;
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th('Month')}${th('Bought (kWh)', 1)}${th('Sent out (kWh)', 1)}${x.solarKw > 0 ? th('Solar made (kWh)', 1) : ''}${th('Bill', 1)}${th('Today\'s bill', 1)}${th('Saves', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`;
+        let html = `<p class="text-sm text-gray-600 mb-2">Compared with nothing new on ${esc(label(r.compare.plan))}.</p><table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th('Month')}${th('Bought (kWh)', 1)}${th('Sent out (kWh)', 1)}${x.solarKw > 0 ? th('Solar made (kWh)', 1) : ''}${th('Bill', 1)}${th('Compared with', 1)}${th('Saves', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`;
         const tot = { imp: 0, exp: 0, solar: 0, bill: 0, now: 0 };
         ev.months.forEach((m, i) => {
             const n = now.months[i];
@@ -639,7 +638,7 @@
             repl += ` When the ${r.f.years} years are up, the replacement battery still has ${left} of its ${r.f.batteryLife} years to go, worth about ${dollars(fin.residual.total)} then (with the inverter's). That isn't on the chart, which is cash only, but it counts toward the worth in today's money.`;
         }
         notes.innerHTML = `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20 % higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20 % lower).${repl}</p>`
-            + `<p class="text-gray-600">Savings here are on top of ${r.reference === r.free ? 'just switching plan, since that needs nothing bought' : `staying on ${esc(label(r.retailer))} with nothing new`}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation} % a year.</p>`;
+            + `<p class="text-gray-600">Savings here are against nothing new on ${esc(label(r.compare.plan))}${r.compare === r.free ? ', the cheapest plan as things are, so they count only what the panels and battery add' : ', so they include anything gained just by switching plan'}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation} % a year.</p>`;
     }
 
     function renderAssumptions() {
