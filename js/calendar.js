@@ -331,7 +331,7 @@
                     dayHtml = `<div class="calendar-day has-data ${borderClass} bg-gray-50 rounded-md p-2 flex flex-col justify-center items-center" data-date="${dateStr}" role="button" tabindex="0" aria-label="Open ${dateStr} on the daily graph"><div class="font-bold text-gray-800">${day}</div><div class="text-xs mt-1 text-center text-gray-500 leading-tight">No power used</div></div>`;
                 }
             } else {
-                dayHtml = `<div class="bg-gray-100 border border-gray-200 rounded-md p-2 flex items-center justify-center"><span class="text-gray-400">${day}</span></div>`;
+                dayHtml = `<div class="bg-gray-100 border border-gray-200 rounded-md p-2 flex items-center justify-center"><span class="text-gray-400" aria-label="${dateStr}: no readings">${day}<small class="block">No readings</small></span></div>`;
             }
             monthGrid.insertAdjacentHTML('beforeend', dayHtml);
             date.setDate(date.getDate() + 1);
