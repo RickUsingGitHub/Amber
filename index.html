@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.50</title>
+    <title>Amber Compare &amp; Export v1.51</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.50">
+    <link rel="stylesheet" href="css/app.css?v=1.51">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,11 +19,11 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.50.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.51.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M11.49 3.17a1 1 0 00-2.98 0 7.97 7.97 0 00-2.1.88 1 1 0 00-1.37-.37 1 1 0 00-.37 1.37 7.97 7.97 0 00-.88 2.1 1 1 0 000 2.98 7.97 7.97 0 00.88 2.1 1 1 0 00.37 1.37 1 1 0 001.37-.37 7.97 7.97 0 002.1.88 1 1 0 002.98 0 7.97 7.97 0 002.1-.88 1 1 0 001.37.37 1 1 0 00.37-1.37 7.97 7.97 0 00.88-2.1 1 1 0 000-2.98 7.97 7.97 0 00-.88-2.1 1 1 0 00-.37-1.37 1 1 0 00-1.37.37 7.97 7.97 0 00-2.1-.88zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
+                        <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true"><path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path></svg>
                     </button>
                     <span data-help="settings" data-help-label="Settings"></span>
                     <div id="settingsMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200" role="menu"></div>
@@ -564,6 +564,7 @@
                 <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                     <h2 class="text-xl font-bold text-gray-900 mb-1" data-help="planner">Solar &amp; battery planner</h2>
                     <p class="text-sm text-gray-600 mb-3">Finds the solar panels, home battery and electricity plan that would cost you least, from your last 12 months of meter readings and today's prices. It works for anyone: Amber customers, or anyone with a NEM12 file of their meter readings.</p>
+                    <p id="planDisclaimer" class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-3 py-2 mb-3">Estimates only, not financial advice. Get written quotes and check the figures before you buy: see the disclaimer at the bottom of the page.</p>
                     <p id="planDataStatus" class="text-sm text-gray-700">Loading your meter readings…</p>
                 </div>
 
@@ -763,33 +764,43 @@
             </section>
         </main>
 
-        <footer class="text-center text-sm text-gray-500 py-6">
-            Free to use. If it saved you money, you can <a href="https://ko-fi.com/rickapps" class="text-indigo-600 hover:underline">buy me a coffee</a>.
+        <footer class="text-center text-sm text-gray-500 py-6 space-y-3">
+            <p id="disclaimerShort" class="max-w-2xl mx-auto">Estimates only: there's no guarantee anything here is right, and it isn't financial advice. Check for yourself before you switch plans or buy anything.</p>
+            <details id="disclaimer" class="max-w-2xl mx-auto text-left">
+                <summary class="cursor-pointer text-center text-indigo-600 hover:underline">Full disclaimer</summary>
+                <div class="mt-3 space-y-2 text-xs text-gray-600 bg-white rounded-md shadow-sm p-4">
+                    <p>This is a free tool, provided as is. There's no guarantee that anything it shows is correct, complete or up to date: plan prices, network charges, wholesale prices, rebates, and the solar, battery and payback figures are all estimates, and they can be wrong.</p>
+                    <p>Much of this app was written with the help of AI, which can make mistakes that look convincing. The tests catch many of them, but not all.</p>
+                    <p>It isn't financial, legal or energy advice. Before you switch plans or buy solar panels or a battery, check the numbers yourself: read the retailer's current fact sheet (on Energy Made Easy, or Victorian Energy Compare in Victoria), compare with your own bills, and get written quotes from installers.</p>
+                    <p>You use it at your own risk. To the extent the law allows, the author isn't responsible for any loss, cost or decision that comes from using it.</p>
+                </div>
+            </details>
+            <p>Free to use. If it saved you money, you can <a href="https://ko-fi.com/rickapps" class="text-indigo-600 hover:underline">buy me a coffee</a>.</p>
         </footer>
     </div>
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.50"></script>
-    <script src="js/help.js?v=1.50"></script>
-    <script src="js/time.js?v=1.50"></script>
-    <script src="js/templates.js?v=1.50"></script>
-    <script src="js/storage.js?v=1.50"></script>
-    <script src="js/costs.js?v=1.50"></script>
-    <script src="js/api.js?v=1.50"></script>
-    <script src="js/bill.js?v=1.50"></script>
-    <script src="js/csv.js?v=1.50"></script>
-    <script src="js/charts.js?v=1.50"></script>
-    <script src="js/calendar.js?v=1.50"></script>
-    <script src="js/stats.js?v=1.50"></script>
-    <script src="js/monthly.js?v=1.50"></script>
-    <script src="js/redispatch.js?v=1.50"></script>
-    <script src="js/import.js?v=1.50"></script>
-    <script src="js/networks.js?v=1.50"></script>
-    <script src="js/estimate.js?v=1.50"></script>
-    <script src="js/solar.js?v=1.50"></script>
-    <script src="js/planner.js?v=1.50"></script>
-    <script src="js/planner-ui.js?v=1.50"></script>
-    <script src="js/app.js?v=1.50"></script>
+    <script src="js/constants.js?v=1.51"></script>
+    <script src="js/help.js?v=1.51"></script>
+    <script src="js/time.js?v=1.51"></script>
+    <script src="js/templates.js?v=1.51"></script>
+    <script src="js/storage.js?v=1.51"></script>
+    <script src="js/costs.js?v=1.51"></script>
+    <script src="js/api.js?v=1.51"></script>
+    <script src="js/bill.js?v=1.51"></script>
+    <script src="js/csv.js?v=1.51"></script>
+    <script src="js/charts.js?v=1.51"></script>
+    <script src="js/calendar.js?v=1.51"></script>
+    <script src="js/stats.js?v=1.51"></script>
+    <script src="js/monthly.js?v=1.51"></script>
+    <script src="js/redispatch.js?v=1.51"></script>
+    <script src="js/import.js?v=1.51"></script>
+    <script src="js/networks.js?v=1.51"></script>
+    <script src="js/estimate.js?v=1.51"></script>
+    <script src="js/solar.js?v=1.51"></script>
+    <script src="js/planner.js?v=1.51"></script>
+    <script src="js/planner-ui.js?v=1.51"></script>
+    <script src="js/app.js?v=1.51"></script>
 </body>
 </html>

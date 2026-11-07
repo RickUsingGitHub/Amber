@@ -63,3 +63,17 @@ test('help bubbles: hover, tap to pin, Escape to close, and in generated tables 
         .map((l) => l.getAttribute('for')));
     expect(missing).toEqual([]);
 });
+
+test('a disclaimer is on every page, with the full text a tap away', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.locator('#disclaimerShort')).toBeVisible();
+    await expect(page.locator('#disclaimerShort')).toContainText("isn't financial advice");
+    await expect(page.locator('#disclaimer > div')).toBeHidden();
+    await page.click('#disclaimer summary');
+    await expect(page.locator('#disclaimer')).toContainText('written with the help of AI');
+    await expect(page.locator('#disclaimer')).toContainText('at your own risk');
+    // The planner says so too, before anyone sizes a system.
+    await page.click('#tab-plan');
+    await expect(page.locator('#planDisclaimer')).toBeVisible();
+    await expect(page.locator('#disclaimerShort')).toBeVisible();
+});
