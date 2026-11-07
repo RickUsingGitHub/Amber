@@ -68,4 +68,8 @@ npm run serve
 - The planner uses last year's usage and today's plan prices (Amber: last year's interval prices) for every future year, scaled by the price rise you set. Its battery knows each day's prices in advance, so a real one may do a little worse; network tariff changes after installing, VPP payments and blackout backup aren't counted. West-facing solar may read slightly low because the typical-year weather has cloudier afternoons. An existing battery's work at home can't be seen on the meter, so taking it out of the readings is an estimate; the check card shows how close it comes, but can't tell if the battery size entered is wrong (take off any backup reserve). Hardware and rebate defaults are rough late-2026 guides: use your quotes.
 - Bill Check reads the Amber bill layouts seen so far. If it can't read a bill, it shows the text it read so the reader can be fixed.
 
+## Disclaimer
+
+This is a free tool, provided as is, with no guarantee that anything it shows is correct, complete or up to date. Plan prices, network charges, wholesale prices, rebates, and the solar, battery and payback figures are estimates and can be wrong. Much of the app was written with the help of AI, which can make convincing mistakes. It isn't financial, legal or energy advice: check retailers' current fact sheets, your own bills and installers' written quotes before switching plans or buying anything. You use it at your own risk; to the extent the law allows, the author isn't responsible for any loss, cost or decision that comes from using it. The same disclaimer is at the bottom of the app.
+
 Built for Australian energy customers who want a transparent look at wholesale vs retailer pricing.
