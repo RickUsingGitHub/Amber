@@ -95,10 +95,10 @@
         };
     };
 
-    Amber.channelPeriodBreakdown = function (channel, planConfig, state) {
+    Amber.channelPeriodBreakdown = function (channel, planConfig, state, channelTotals) {
         const buckets = Object.create(null);
         const order = ['free', 'freeOverCap', 'superOffpeak', 'peak', 'shoulder', 'offpeak', 'anytime', 'controlledLoad', 'feedIn', 'feedInOverCap'];
-        const capped = Amber.cappedSplits(channel, planConfig, state);
+        const capped = channelTotals ? Amber.householdCappedSplits(channelTotals, planConfig, state)[channel.type] : Amber.cappedSplits(channel, planConfig, state);
         const add = (period, label, kwh, rate, amberCost) => {
             if (!buckets[period]) {
                 buckets[period] = { period, label, kwh: 0, amberCost: 0, otherCost: 0, rate };
@@ -117,12 +117,12 @@
             if (splits) {
                 splits.forEach((s) => {
                     const share = kwh > 0 ? s.kwh / kwh : 0;
-                    add(s.period, s.label, s.kwh, s.rate, (perKwh / 100) * kwh * share);
+                    add(s.period, s.label, s.kwh, s.rate, Amber.settledFeedInItemCost(channel, item) * share);
                 });
                 return;
             }
             const cls = Amber.classifyUsagePeriod(item, channel.type, planConfig, state);
-            add(cls.period, cls.label, kwh, cls.rate, (perKwh / 100) * kwh);
+            add(cls.period, cls.label, kwh, cls.rate, Amber.settledFeedInItemCost(channel, item));
         });
         const rows = order.filter((key) => buckets[key] && buckets[key].kwh > 0).map((key) => buckets[key]);
         if (channel.type === 'feedIn' && rows.length === 1 && Number.isFinite(channel.totalAmberCost)) {
@@ -295,10 +295,20 @@
         return Amber.getTouRate(Amber.clockPartsForItem(item, planConfig, state), planConfig.tou, fallback);
     };
 
+    // Daily allowances belong to the household, not to each meter register.
+    Amber.householdCappedSplits = function (channels, plan, state) {
+        const maps = {};
+        ['general', 'feedIn'].forEach((type) => {
+            maps[type] = Amber.cappedSplits(Amber.mergedChannelOfType(channels, type), plan, state);
+        });
+        return maps;
+    };
+
     Amber.calculateOtherSupplierCosts = function (channelTotals, planConfig, state) {
+        const caps = Amber.householdCappedSplits(channelTotals, planConfig, state);
         Object.values(channelTotals).forEach((channel) => {
             const sign = channel.type === 'feedIn' ? -1 : 1;
-            const capped = Amber.cappedSplits(channel, planConfig, state);
+            const capped = caps[channel.type];
             channel.totalOtherCost = (channel.usageData || []).reduce((total, item) =>
                 total + sign * Amber.otherItemCostCents(item, channel.type, planConfig, state, capped) / 100, 0);
         });
@@ -581,6 +591,7 @@
     };
 
     Amber.precalculateDailySummaries = function (channelData, planConfig, amberRates, state) {
+        const caps = Amber.householdCappedSplits(channelData, planConfig, state);
         const summaries = {};
         const monthlyDemandInfo = {};
         const allDatesWithData = new Set();
@@ -592,33 +603,25 @@
         });
 
         const sortedDates = [...allDatesWithData].sort();
-        if (sortedDates.length > 0) {
-            const start = new Date(sortedDates[0] + 'T00:00:00');
-            const end = new Date(sortedDates[sortedDates.length - 1] + 'T00:00:00');
-            let loopDate = new Date(start);
-            while (loopDate <= end) {
-                const dateStr = Amber.formatForInput(loopDate);
-                summaries[dateStr] = {
-                    totalInKwh: 0, totalOutKwh: 0,
-                    amberCost: 0, otherCost: 0,
-                    amberDemandCost: 0, otherDemandCost: 0,
-                    estimatedCount: 0, billableCount: 0,
-                    renewableWeighted: 0, renewableKwh: 0,
-                    channels: {}
-                };
-                loopDate.setDate(loopDate.getDate() + 1);
-            }
-        }
+        sortedDates.forEach((dateStr) => {
+            summaries[dateStr] = {
+                totalInKwh: 0, totalOutKwh: 0,
+                amberCost: 0, otherCost: 0,
+                amberDemandCost: 0, otherDemandCost: 0,
+                estimatedCount: 0, billableCount: 0,
+                renewableWeighted: 0, renewableKwh: 0, channels: {}
+            };
+        });
 
         Object.values(channelData).forEach((channel) => {
-            const capped = Amber.cappedSplits(channel, planConfig, state);
+            const capped = caps[channel.type];
             channel.usageData.forEach((item) => {
                 const dateStr = Amber.usageDateStr(item);
                 if (!summaries[dateStr]) return;
 
                 const kwh = Amber.absKwh(item.kwh);
                 const perKwh = parseFloat(item.perKwh) || 0;
-                const amberItemCost = (kwh * perKwh) / 100;
+                const amberItemCost = Amber.settledFeedInItemCost(channel, item);
                 const otherItemCost = Amber.otherItemCostCents(item, channel.type, planConfig, state, capped) / 100;
 
                 if (!summaries[dateStr].channels[channel.identifier]) {
@@ -648,6 +651,25 @@
                     summaries[dateStr].otherCost += otherItemCost;
                     summaries[dateStr].channels[channel.identifier].otherCost += otherItemCost;
                 }
+            });
+        });
+
+        // Allocate the period's export charge in proportion to midday exports.
+        // Keep it on general usage, just as the comparison and bill settlement do.
+        const general = Object.values(channelData).find((c) => c.type === 'general');
+        if (general) Object.values(channelData).forEach((channel) => {
+            const settled = channel.amberFeedInSettlement;
+            if (!settled || !settled.charge) return;
+            channel.usageData.forEach((item) => {
+                const share = Amber.exportSettlementShare(channel, item);
+                const day = summaries[Amber.usageDateStr(item)];
+                if (!share || !day) return;
+                const line = day.channels[general.identifier] || (day.channels[general.identifier] = {
+                    type: 'general', kwh: 0, amberCost: 0, otherCost: 0
+                });
+                const charge = settled.charge * share;
+                day.amberCost += charge;
+                line.amberCost += charge;
             });
         });
 
@@ -795,6 +817,7 @@
         const addBack = middayKwh * exRate / 100;
         const charge = chargedKwh * rate / 100;
         return {
+            tariff,
             cost: intervalCost - addBack,
             intervalCost,
             rewardKwh,
@@ -807,9 +830,24 @@
         };
     };
 
+    Amber.exportSettlementShare = function (channel, item) {
+        const s = channel.amberFeedInSettlement;
+        if (!s || !s.middayKwh) return 0;
+        const t = s.tariff;
+        const parts = Amber.itemClockParts(item, { clock: t.clock || 'local', timeZone: t.timeZone || 'Australia/Sydney' });
+        return Amber.intervalEndInWindow(parts, t.middayStart, t.middayEnd) ? Amber.absKwh(item.kwh) / s.middayKwh : 0;
+    };
+
+    Amber.settledFeedInItemCost = function (channel, item) {
+        const raw = Amber.absKwh(item.kwh) * (parseFloat(item.perKwh) || 0) / 100;
+        const s = channel.type === 'feedIn' && channel.amberFeedInSettlement;
+        return s ? raw - s.addBack * Amber.exportSettlementShare(channel, item) : raw;
+    };
+
     Amber.applyAmberFeedInSettlement = function (channelTotals, site, numDays) {
         Object.keys(channelTotals || {}).forEach((id) => {
             const channel = channelTotals[id];
+            delete channel.amberFeedInSettlement;
             if (channel.amberExportCharge) {
                 channel.totalAmberCost -= channel.amberExportCharge;
                 channel.amberExportCharge = 0;
@@ -828,8 +866,8 @@
                     .find((c) => c.type === 'general');
                 if (general) {
                     general.totalAmberCost += settled.charge;
-                    general.amberExportCharge = settled.charge;
-                    general.amberExportChargeKwh = settled.chargedKwh;
+                    general.amberExportCharge = (general.amberExportCharge || 0) + settled.charge;
+                    general.amberExportChargeKwh = (general.amberExportChargeKwh || 0) + settled.chargedKwh;
                     general.amberExportChargeRate = settled.chargeRate;
                 }
             }

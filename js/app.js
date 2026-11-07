@@ -1234,8 +1234,11 @@
         let adjustedOtherTotal = 0;
         let projectedMonthlyCostData = null;
         const comparePlan = createPlanObjectFromForm();
+        const daysWithReadings = new Set(Object.values(channelTotals).flatMap((c) => c.usageData.map(Amber.usageDateStr)));
+        const missingDays = Math.max(0, numDays - daysWithReadings.size);
+        const incompleteNotice = missingDays ? `<p role="status" class="text-sm text-amber-800 mb-4">Incomplete comparison: ${missingDays} of ${numDays} days have no readings. Usage costs omit those days; fixed charges and export allowances still cover the full selected period. Savings are provisional. Daily exports and calendar totals cover only days with readings.</p>` : '';
         let tableHTML = `
-            <p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>
+            <p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>${incompleteNotice}
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
@@ -1251,7 +1254,7 @@
         Object.values(channelTotals).forEach((c) => {
             if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) return;
             const isFeedIn = c.type === 'feedIn';
-            const rows = Amber.channelPeriodBreakdown(c, comparePlan, currentStateCode());
+            const rows = Amber.channelPeriodBreakdown(c, comparePlan, currentStateCode(), channelTotals);
             const periodRows = rows.length ? rows : [{
                 period: c.type === 'feedIn' ? 'feedIn' : (c.type === 'controlledLoad' ? 'controlledLoad' : 'anytime'),
                 label: c.type === 'feedIn' ? 'Feed-in' : (c.type === 'controlledLoad' ? 'Controlled load' : 'Anytime'),
@@ -1375,7 +1378,9 @@
 
         const savings = adjustedOtherTotal - adjustedAmberTotal;
         let savingsSummaryHTML = '<div class="mb-4 p-4 rounded-lg text-center ';
-        if (savings > 0) {
+        if (missingDays) {
+            savingsSummaryHTML += 'bg-amber-50"><p class="text-lg font-medium text-amber-800">Incomplete comparison — savings are provisional.</p>';
+        } else if (savings > 0) {
             const percent = adjustedOtherTotal > 0 ? ` (${((savings / adjustedOtherTotal) * 100).toFixed(1)}%)` : '';
             savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber was <span class="font-bold">$${savings.toFixed(2)}${percent}</span> cheaper than <span class="italic">${Amber.escapeHTML(planName)}</span> for these dates.</p>`;
         } else if (savings < 0) {
@@ -1849,7 +1854,8 @@
             if (plan.kept) notes.push(plan.kept === 1 ? '1 day already cached from Amber\'s API was kept.' : `${plan.kept} days already cached from Amber's API were kept.`);
             if (plan.recent) notes.push(plan.recent === 1 ? 'The last day is left for Amber\'s API.' : `The last ${plan.recent} days are left for Amber's API.`);
             if (plan.partial) notes.push(plan.partial === 1 ? '1 part day was skipped.' : `${plan.partial} part days were skipped.`);
-            if (plan.demandRule && plan.demandRule.learned) notes.push(`Demand window for ${plan.demandRule.tariff}, learned from the days Amber's API flagged: ${Amber.describeDemandWindow(plan.demandRule)}.`);
+            if (parsed.backup) notes.push('Original interval times, quality and demand flags restored from the backup.');
+            else if (plan.demandRule && plan.demandRule.learned) notes.push(`Demand window for ${plan.demandRule.tariff}, learned from the days Amber's API flagged: ${Amber.describeDemandWindow(plan.demandRule)}.`);
             else if (plan.demandRule) notes.push(`Demand window flagged for ${plan.demandRule.tariff}: ${Amber.describeDemandWindow(plan.demandRule)}.`);
             else notes.push('No demand window is known for this site\'s tariff (and none is flagged in the days cached from Amber\'s API), so imported days carry no demand charge.');
             notes.push(...plan.notes);
@@ -2513,7 +2519,7 @@
             if (chunkErrors.length) {
                 showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
             } else if (localMode && localMissing) {
-                showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so they are left out.`, true);
+                showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so this comparison is incomplete. Fixed charges still cover the full selected period.`, true);
             } else {
                 hideMessage();
             }

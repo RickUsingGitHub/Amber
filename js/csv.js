@@ -14,20 +14,27 @@
         URL.revokeObjectURL(url);
     };
 
-    Amber.generateFullIntervalCsv = function (cachedChannelData, startDate, endDate) {
-        let csvContent = 'nemTime,channelIdentifier,channelType,kWh,SpotPrice_cents_per_kWh,quality,renewables\n';
+    Amber.fullIntervalCsv = function (cachedChannelData) {
+        const quote = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const rows = ['NEM Time,NEM Day,Channel Type,Channel Identifier,Price,Usage,Cost,Duration,Quality,Renewables,Demand Window,Amber Compare CSV Version'];
         Object.values(cachedChannelData).forEach((channel) => {
-            if (!channel.usageData || !channel.usageData.length) return;
-            channel.usageData.forEach((item) => {
-                const nemTime = item.nemTime ? Amber.formatNemForCsv(item.nemTime) : '';
-                const kwh = item.kwh != null ? Amber.absKwh(item.kwh) : '';
-                const perKwh = item.perKwh != null ? item.perKwh : '';
-                const quality = item.quality || '';
-                const renewables = item.renewables != null ? item.renewables : '';
-                csvContent += `"${nemTime}",${channel.identifier},${channel.type},${kwh},${perKwh},${quality},${renewables}\n`;
+            (channel.usageData || []).forEach((item) => {
+                // processUsageData subtracts one second for bucketing. Export the original end.
+                const end = item.processedTime
+                    ? new Date(Date.parse(item.nemTime.substring(0, 19) + 'Z') + 1000).toISOString().substring(0, 19)
+                    : item.nemTime.substring(0, 19);
+                const kwh = Amber.absKwh(item.kwh);
+                rows.push([end.replace('T', ' '), Amber.usageDateStr(item), channel.type, channel.identifier,
+                    item.perKwh, kwh, item.cost != null ? item.cost : kwh * item.perKwh,
+                    item.duration || 30, item.quality || 'billable', item.renewables,
+                    !!(item.tariffInformation && item.tariffInformation.demandWindow), 1].map(quote).join(','));
             });
         });
-        Amber.downloadCSV(csvContent, `amber_full_interval_data_${startDate}_to_${endDate}.csv`);
+        return rows.join('\n') + '\n';
+    };
+
+    Amber.generateFullIntervalCsv = function (cachedChannelData, startDate, endDate) {
+        Amber.downloadCSV(Amber.fullIntervalCsv(cachedChannelData), `amber_full_interval_data_${startDate}_to_${endDate}.csv`);
     };
 
     Amber.generateDailySummariesCsv = function (dailySummaries, options) {

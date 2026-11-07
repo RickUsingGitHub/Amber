@@ -97,6 +97,11 @@
         const iCost = col('cost');
         const iStart = col('start time');
         const iEnd = col('end time');
+        out.backup = col('amber compare csv version') >= 0;
+        const iDuration = col('duration');
+        const iQuality = col('quality');
+        const iRenewables = col('renewables');
+        const iDemand = col('demand window');
         if ([iNem, iDay, iType, iId, iPrice, iUsage].some((i) => i < 0)) {
             out.error = 'This doesn\'t look like an Amber usage export. Expected columns: NEM Time, NEM Day, Channel Type, Channel Identifier, Price, Usage.';
             return out;
@@ -127,7 +132,8 @@
             const key = id + '|' + nem;
             if (seen.has(key)) { duplicates += 1; continue; }
             seen.add(key);
-            let duration = null;
+            let duration = out.backup ? Number(f[iDuration]) : null;
+            if (out.backup && (![5, 15, 30, 60].includes(duration) || f[col('amber compare csv version')] !== '1')) { skipped += 1; continue; }
             let localMonth = null;
             let localTime = null;
             let localDay = null;
@@ -155,6 +161,10 @@
                 cost: iCost >= 0 ? parseFloat(f[iCost]) : kwh * perKwh,
                 channelIdentifier: id,
                 channelType: type,
+                backup: out.backup,
+                quality: out.backup ? f[iQuality] || 'billable' : 'billable',
+                renewables: out.backup && f[iRenewables] !== '' && Number.isFinite(Number(f[iRenewables])) ? Number(f[iRenewables]) : null,
+                demandWindow: out.backup ? f[iDemand] === 'true' : null,
                 localMonth,
                 localTime,
                 localDay
@@ -306,12 +316,13 @@
                 cost: row.cost,
                 channelIdentifier: id,
                 channelType: row.channelType,
-                quality: 'billable'
+                quality: row.quality || 'billable'
             };
-            if (inDemandWindow(o.demandRule, row)) item.tariffInformation = DEMAND_FLAG;
+            if (row.renewables != null) item.renewables = row.renewables;
+            if (row.backup ? row.demandWindow : inDemandWindow(o.demandRule, row)) item.tariffInformation = DEMAND_FLAG;
             items.push(item);
         });
-        return Amber.isCompleteDay(items) ? items : null;
+        return (rows.every((r) => r.backup) ? Amber.coversWholeDay(items) : Amber.isCompleteDay(items)) ? items : null;
     };
 
     /**
@@ -324,7 +335,7 @@
         const recentCutoff = o.recentCutoff || null;
         const { map, notes } = Amber.mapImportChannels(parsed.channels, site.channels);
         // Leave out channels with no usage at all (e.g. an unused controlled load).
-        Object.keys(parsed.channels).forEach((id) => { if (!(parsed.channels[id].kwh > 0)) map[id] = null; });
+        Object.keys(parsed.channels).forEach((id) => { if (!parsed.backup && !(parsed.channels[id].kwh > 0)) map[id] = null; });
         let demandRule = Amber.demandWindowForSite(site);
         if (!demandRule && o.learnFrom) {
             const learned = Amber.learnDemandWindow(o.learnFrom, o.timeZone);
@@ -334,7 +345,7 @@
         if (demandRule) demandRule = Object.assign({ timeZone: o.timeZone }, demandRule);
         const result = { write: [], kept: 0, recent: 0, partial: 0, notes, demandRule, channelMap: map };
         parsed.days.forEach((date) => {
-            if (recentCutoff && date >= recentCutoff) { result.recent += 1; return; }
+            if (!parsed.backup && recentCutoff && date >= recentCutoff) { result.recent += 1; return; }
             const cached = cachedByDate && cachedByDate[date];
             if (!o.replace && cached && cached.length && Amber.isCompleteDay(cached) && !cached.some((i) => i.source === 'csv')) {
                 result.kept += 1;
