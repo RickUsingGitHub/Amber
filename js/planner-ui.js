@@ -469,6 +469,11 @@
                 : [0].concat(BATTERY_SIZES.filter((b) => b < maxBattery), [maxBattery]);
         const amberModel = Amber.amberPlannerModel(searchYear, site, app().readAmberRates());
 
+        const town = Amber.SOLAR_LOCATIONS.find((l) => l.id === $('planLocation').value);
+        const setup = {
+            town: town ? town.name : 'your area', facing: (Amber.SOLAR_ORIENTATIONS[$('planOrientation').value] || { label: 'North' }).label,
+            tilt: num('planTilt'), shading: num('planShading'), exportLimit: num('planExportLimit')
+        };
         const t0 = Date.now();
         const res = await Amber.plannerSearch({
             year: searchYear, plans, state, amberModel, solarPerKw, solarSizes, batterySizes,
@@ -483,7 +488,7 @@
             const at = p.phase === 'existing' ? 0.04 + 0.11 * p.done / p.total : p.phase === 'probe' ? 0.15 + 0.1 * p.done / p.total : 0.25 + 0.75 * p.done / p.total;
             progress(text, at);
         });
-        ui.results = analyse(res, { f, compareWith, allow: new Set(allow), solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, switchOff: $('planSwitchOff').checked, seconds: (Date.now() - t0) / 1000 });
+        ui.results = analyse(res, { f, compareWith, allow: new Set(allow), solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, setup, switchOff: $('planSwitchOff').checked, seconds: (Date.now() - t0) / 1000 });
         ui.results.readingsPlan = readingsPlan || ui.results.free.plan;
         ui.results.check = unwound ? Amber.plannerExistingCheck(res.prep, ui.results.readingsPlan, year) : null;
         progress(`Done: ${ui.results.options.length.toLocaleString('en-AU')} options compared.`, null);
@@ -542,10 +547,64 @@
         return list;
     }
 
+    // How many half hours of the year this plan's feed-in price is below zero (Amber's wholesale
+    // prices), and how many of them are from 10am to 3pm. Cached per plan.
+    function negativeFeedIn(planName) {
+        const r = ui.results;
+        r.negCache = r.negCache || {};
+        if (!r.negCache[planName]) {
+            const prep = r.res.prep;
+            const sell = prep.pricesOf(prep.byName[planName]).sell;
+            let all = 0;
+            let midday = 0;
+            for (let i = 0; i < sell.length; i++) {
+                if (!(sell[i] < 0)) continue;
+                all += 1;
+                const s = i % 48;
+                if (s >= 20 && s < 30) midday += 1;
+            }
+            r.negCache[planName] = { all, midday };
+        }
+        return r.negCache[planName];
+    }
+
+    // Panels on the roof already: entered, or solar sent out in the readings.
+    function solarNow() {
+        const r = ui.results;
+        if (r.solarNow == null) {
+            const y = r.res.prep.year;
+            const m = y.meterExp || y.exp;
+            let sent = 0;
+            for (let i = 0; i < m.length; i++) sent += m[i];
+            r.solarNow = r.existing.solarKw > 0 || sent > 10;
+        }
+        return r.solarNow;
+    }
+
+    // Switching the panels off when the feed-in price is below zero takes an inverter the retailer
+    // can switch off remotely: a "curtailable" one.
+    const needsCurtailable = (x) => ui.results.switchOff && negativeFeedIn(x.plan).all > 0;
+
+    function curtailNote(x) {
+        const r = ui.results;
+        const neg = negativeFeedIn(x.plan);
+        if (!neg.all || !(x.solarKw > 0 || solarNow())) return null;
+        const amber = r.res.prep.byName[x.plan].amber;
+        const who = amber ? 'Amber' : 'the retailer';
+        const when = `${amber ? 'On Amber' : 'On this plan'} the feed-in price goes below zero at times (${Math.round(neg.all / 2).toLocaleString('en-AU')} hours over your readings' year, mostly in the middle of sunny days)`;
+        if (!r.switchOff) {
+            return { lead: 'A "curtailable" inverter would help.', text: `${when}. You've said your panels can't switch off, so the planner counts what sending power out then costs you. A "curtailable" inverter, one ${who} can switch off remotely, would avoid that.` };
+        }
+        const yours = x.solarKw > 0
+            ? `Ask for a "curtailable" inverter: one ${who} can switch off remotely (check it's on ${who}'s list of supported inverters before you buy).${solarNow() ? ' The inverter for your current panels needs to be one too.' : ''}`
+            : `That needs your inverter to be "curtailable": one ${who} can switch off remotely (check ${who}'s list of supported inverters).`;
+        return { lead: 'Curtailable inverter needed.', text: `${when}, and the planner assumes your panels stop sending power out then. ${yours} If that's not possible, untick "Panels switch off when the feed-in price is negative" and run again.` };
+    }
+
     // What to ask installers for: the sizes the planner assumed for this option (new equipment only).
     function orderText(x) {
         const parts = [];
-        if (x.solarKw > 0) parts.push(`${kw(x.solarKw)} of panels with an inverter of about ${kw(x.solarKw / INVERTER_RATIO)}`);
+        if (x.solarKw > 0) parts.push(`${kw(x.solarKw)} of panels with ${needsCurtailable(x) ? 'a "curtailable" inverter' : 'an inverter'} of about ${kw(x.solarKw / INVERTER_RATIO)}`);
         if (x.batteryKwh > 0) {
             const b = ui.results.res.prep.ctx.battery || {};
             const power = Math.min(15, Math.max(2.5, x.batteryKwh * (b.kwPerKwh || 0.4)));
@@ -558,6 +617,7 @@
         const notes = ['These are the sizes the planner assumed.'];
         if (x.solarKw > 0) notes.push('A bigger inverter loses a little less on sunny middays.');
         if (x.solarKw > 0 && x.batteryKwh > 0) notes.push('The battery\'s power is treated as separate from the panels\' inverter: if one hybrid inverter will run both, ask for one that can handle both.');
+        if (x.batteryKwh > 0 && ui.results.res.prep.byName[x.plan].amber) notes.push('On Amber, choose a battery Amber\'s SmartShift can run (or one you can automate yourself), so it follows the prices the way the planner assumes.');
         return notes.join(' ');
     }
 
@@ -683,6 +743,8 @@
             lines.push(`<p>What to ask installers for: <strong>${esc(orderText(best))}</strong>. <span class="text-sm text-gray-600">${esc(orderNote(best))}</span></p>`);
             lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)} % interest a year)` : ''}.</p>`);
         }
+        const curtail = curtailNote(best);
+        if (curtail) lines.push(`<p class="text-sm text-gray-700" data-curtail><strong>${esc(curtail.lead)}</strong> ${esc(curtail.text)}</p>`);
         if (r.free.plan !== r.compare.plan && r.base - r.free.bill > 1) {
             const onTop = `Payback and worth here include that, because you're comparing against ${esc(label(r.compare.plan))}: pick "Whatever's cheapest" to count only what the panels and battery add.`;
             lines.push(`<p>${hardware ? 'Without buying anything, just' : 'Just'} switching to ${esc(label(r.free.plan))} would save <strong>${dollars(r.base - r.free.bill)}</strong> a year. ${hardware ? onTop : ''}</p>`);
@@ -874,6 +936,8 @@
         const nowImport = now.imp.reduce((s, v) => s + v, 0) + now.cl.reduce((s, v) => s + v, 0);
         const change = nowImport > 0 ? Math.round((tot.imp / nowImport - 1) * 100) : 0;
         if (x.solarKw > 0 || x.batteryKwh > 0) facts.push(`What to ask installers for: ${orderText(x)}. ${orderNote(x)}`);
+        const curtail = curtailNote(x);
+        if (curtail) facts.push(`${curtail.lead} ${curtail.text}`);
         facts.push(`Power bought from the grid: ${Math.round(nowImport).toLocaleString('en-AU')} → ${Math.round(tot.imp).toLocaleString('en-AU')} kWh a year${change ? ` (${Math.abs(change)} % ${change < 0 ? 'less' : 'more'})` : ''}.${change > 0 && ev.sim ? ' The battery buys extra when power is cheap, to use or sell when it\'s dear, and loses a little on the way.' : ''}`);
         if (x.solarKw > 0) {
             const f = ev.flows;
@@ -885,9 +949,155 @@
             facts.push(`${which} cycle${r.existing.kwh > 0 && x.batteryKwh > 0 ? '' : 's'} about ${Math.round(ev.sim.cycles)} times a year (${(ev.sim.cycles / 365).toFixed(1)} a day)${ev.sim.gridCharged > 1 ? `, charging ${Math.round(ev.sim.gridCharged).toLocaleString('en-AU')} kWh from the grid when it's cheap or free` : ''}${ev.sim.exported > 1 ? ` and selling ${Math.round(ev.sim.exported).toLocaleString('en-AU')} kWh back when prices are high` : ''}.`);
         }
         html += `<ul class="list-disc pl-5 mt-3 space-y-1 text-sm text-gray-700">${facts.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
-        html += breakdownHtml(x, ev, Amber.plannerEvaluate(prep, x.plan, 0, 0));
+        const base = Amber.plannerEvaluate(prep, x.plan, 0, 0);
+        html += breakdownHtml(x, ev, base);
         $('planDetailBody').innerHTML = html;
+        renderNumbers(x, ev, base, now);
         renderPayback(x);
+    }
+
+    // ---------- Check the numbers ----------
+    // Average prices, the prices through the day, per-kWh rules of thumb and the settings used for
+    // the option on show, to check against bills, price lists and installers' quotes.
+    const BANDS = [
+        { name: 'Night (9pm to 7am)', from: 42, to: 14 },
+        { name: 'Morning (7am to 10am)', from: 14, to: 20 },
+        { name: 'Middle of the day (10am to 3pm)', from: 20, to: 30 },
+        { name: 'Afternoon and evening (3pm to 9pm)', from: 30, to: 42 },
+        { name: 'All day', from: 0, to: 48 }
+    ];
+    const cents = (v) => `${v < -0.05 ? '−' : ''}${Math.abs(v).toFixed(1)} c`;
+
+    // A year's averages: c/kWh paid for power bought (energy only), c/kWh earned for power sent out
+    // (after any network export charge), daily charges per day.
+    function averagesOf(ev, days) {
+        const p = billParts(ev);
+        const earned = -p.sold - p.exportCharge;
+        return {
+            boughtKwh: p.boughtKwh, soldKwh: p.soldKwh,
+            buy: p.boughtKwh > 0.5 ? (p.bought / p.boughtKwh) * 100 : null,
+            sell: p.soldKwh > 0.5 ? (earned / p.soldKwh) * 100 : null,
+            perDay: p.fixed / days, demand: p.demand, total: p.total
+        };
+    }
+
+    // The plain average of each time of day's half-hourly prices over the year (c/kWh).
+    function bandPrices(planName) {
+        const prep = ui.results.res.prep;
+        const pr = prep.pricesOf(prep.byName[planName]);
+        return BANDS.map((b) => {
+            let buy = 0;
+            let sell = 0;
+            let n = 0;
+            let neg = 0;
+            for (let i = 0; i < pr.buy.length; i++) {
+                const s = i % 48;
+                if (b.from < b.to ? (s < b.from || s >= b.to) : (s < b.from && s >= b.to)) continue;
+                buy += pr.buy[i];
+                sell += pr.sell[i];
+                n += 1;
+                if (pr.sell[i] < 0) neg += 1;
+            }
+            return { name: b.name, buy: buy / n, sell: sell / n, neg: neg / n };
+        });
+    }
+
+    function capexText(x) {
+        const f = ui.results.f;
+        const parts = [];
+        if (x.solarKw > 0) parts.push(`panels ${dollars(f.solarFixed + f.solarPerKw * x.solarKw)} (${dollars(f.solarPerKw)} a kW plus ${dollars(f.solarFixed)}) less a ${dollars(f.stcPerKw * x.solarKw)} rebate`);
+        if (x.batteryKwh > 0) parts.push(`battery ${dollars(f.batteryFixed + f.batteryPerKwh * x.batteryKwh)} (${dollars(f.batteryPerKwh)} a kWh plus ${dollars(f.batteryFixed)}) less a ${dollars(f.batteryRebatePerKwh * x.batteryKwh)} rebate`);
+        return `${parts.join('; ')}: ${dollars(x.fin.capex.total)} in all`;
+    }
+
+    function renderNumbers(x, ev, base, now) {
+        const r = ui.results;
+        const prep = r.res.prep;
+        const f = r.f;
+        const s = r.setup;
+        const days = prep.year.days;
+        const k = (v) => Math.round(v).toLocaleString('en-AU');
+        const plan = prep.byName[x.plan];
+        const hardware = x.solarKw > 0 || x.batteryKwh > 0;
+
+        // The yardstick, this plan with nothing new, and the option.
+        const cols = [{ head: `Nothing new on ${shortLabel(r.compare.plan)}`, a: averagesOf(now, days) }];
+        if (x.plan !== r.compare.plan) cols.push({ head: `Nothing new on ${shortLabel(x.plan)}`, a: averagesOf(base, days) });
+        if (hardware) cols.push({ head: `${system(x)} on ${shortLabel(x.plan)}`, a: averagesOf(ev, days) });
+        const cell = (t) => `<td class="px-2 py-2 text-right whitespace-nowrap">${t}</td>`;
+        const row = (name, fn) => `<tr><td class="px-2 py-2">${name}</td>${cols.map((c) => cell(fn(c.a))).join('')}</tr>`;
+        let html = `<p class="text-sm text-gray-600 mb-2">The averages behind ${esc(describe(x))} on ${esc(label(x.plan))}, from the planner's half-hour-by-half-hour year, to check against your bills, the plan's price list and installers' quotes. Prices include GST.</p>`
+            + `<table class="min-w-full divide-y divide-gray-200 text-sm" data-numbers="averages"><thead class="bg-gray-50"><tr>${th('A year')}${cols.map((c) => th(esc(c.head), 1)).join('')}</tr></thead><tbody class="divide-y divide-gray-200">`
+            + row('Power bought (kWh)', (a) => k(a.boughtKwh))
+            + row('Average price per kWh bought', (a) => (a.buy == null ? '—' : cents(a.buy)))
+            + row('Power sent out (kWh)', (a) => k(a.soldKwh))
+            + row('Average earned per kWh sent out', (a) => (a.sell == null ? '—' : cents(a.sell)))
+            + row('Daily charges', (a) => `$${a.perDay.toFixed(2)} a day`)
+            + (cols.some((c) => c.a.demand > 0.5) ? row('Demand charges', (a) => dollars(a.demand)) : '')
+            + `<tr class="bg-gray-50 font-semibold"><td class="px-2 py-2">Bill</td>${cols.map((c) => cell(dollars(c.a.total))).join('')}</tr></tbody></table>`
+            + '<p class="text-xs text-gray-500 mt-1">Average price per kWh bought is the energy part of the bill over the kWh bought (daily and demand charges are separate). Average earned per kWh sent out is the feed-in credit, less any network export charge, over the kWh sent out.</p>';
+
+        // The plan's prices through the day.
+        const bands = bandPrices(x.plan);
+        const anyNeg = bands.some((b) => b.neg > 0);
+        html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">${esc(label(x.plan))}: prices through the day</h4>`
+            + `<p class="text-xs text-gray-600 mb-2">The plain average of every half hour in the year, per kWh${plan.amber ? ', from Amber\'s prices over your readings\' year' : `, at the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}. The averages above are weighted by when you actually buy and send out power. Times are the electricity market's clock (Brisbane time), so in daylight saving they're about an hour behind the clock on the wall.</p>`
+            + `<table class="min-w-full divide-y divide-gray-200 text-sm" data-numbers="bands"><thead class="bg-gray-50"><tr>${th('Time of day')}${th('Buy (c/kWh)', 1)}${th('Feed-in (c/kWh)', 1)}${anyNeg ? th('Feed-in below zero', 1) : ''}</tr></thead><tbody class="divide-y divide-gray-200">`
+            + bands.map((b, i) => `<tr${i === bands.length - 1 ? ' class="bg-gray-50 font-semibold"' : ''}><td class="px-2 py-2">${b.name}</td>${cell(cents(b.buy))}${cell(cents(b.sell))}${anyNeg ? cell(`${Math.round(b.neg * 100)} %`) : ''}</tr>`).join('')
+            + '</tbody></table>';
+
+        // Rules of thumb: what the new equipment makes and is worth per kWh, against what it costs.
+        const notes = [];
+        if (x.solarKw > 0) {
+            const clipped = (prep.ctx.solarPerKw && prep.ctx.solarPerKw.clipped || 0) * x.solarKw;
+            const made = ev.flows.solarKwh + clipped;
+            notes.push(`Panels: the new ${kw(x.solarKw)} make about ${(made / x.solarKw / days).toFixed(1)} kWh a day for each kW of panels (${k(made / x.solarKw)} a year), facing ${s.facing.toLowerCase()} at ${s.tilt}° with ${s.shading} % shade, in ${s.town}'s typical weather. For panels facing north, installers often quote about 3.5 (Hobart, Melbourne) to 4.4 (Perth, Darwin).`);
+            if (x.opt && made > 0) {
+                const worth = x.opt.planOnly - x.opt.solarOnly;
+                let lifeKwh = 0;
+                for (let y = 0; y < f.years; y++) lifeKwh += made * Math.pow(1 - f.solarDegradation / 100, y);
+                notes.push(`Each kWh the new panels make is worth about ${cents((worth / made) * 100)} to you in the first year: what's used at home saves the price of power, what's sent out earns the feed-in price, and some is lost (the export limit, switch-offs, the inverter). They cost ${dollars(x.fin.capex.solar)} after the rebate, about ${cents((x.fin.capex.solar / lifeKwh) * 100)} for each kWh they make over ${f.years} years (before interest and price rises). Worth more per kWh than they cost is a good sign.`);
+            }
+        }
+        if (x.batteryKwh > 0 && ev.sim && x.opt) {
+            const without = Amber.plannerEvaluate(prep, x.plan, x.solarKw, 0);
+            const delivered = ev.sim.discharged - (without.sim ? without.sim.discharged : 0);
+            if (delivered > 1) {
+                const worth = x.opt.solarOnly - x.bill;
+                let lifeKwh = 0;
+                for (let y = 0; y < f.batteryLife; y++) lifeKwh += delivered * Math.pow(1 - f.batteryFade / 100, y);
+                const rte = Math.round(((prep.ctx.battery && prep.ctx.battery.rte) || 0.9) * 100);
+                notes.push(`Battery: the new ${kwh(x.batteryKwh)} gives back about ${k(delivered)} kWh a year (about ${(delivered / x.batteryKwh / 365).toFixed(1)} full cycles a day)${r.existing.kwh > 0 ? ' on top of your current battery' : ''}. Each kWh it gives back saves about ${cents((worth / delivered) * 100)}: the gap between the price when it charges (or the feed-in it gives up) and the price when that power is used or sold, less what's lost on the way (${rte} % round trip). It costs ${dollars(x.fin.capex.battery)} after the rebate, about ${cents((x.fin.capex.battery / lifeKwh) * 100)} for each kWh it gives back over ${f.batteryLife} years (before interest). Saving more per kWh than it costs is a good sign.`);
+            }
+        }
+        const neg = negativeFeedIn(x.plan);
+        if (neg.all > 0) {
+            notes.push(`Feed-in below zero: on ${label(x.plan)} it was below zero for ${k(neg.all / 2)} hours of the year (${Math.round((neg.all / (days * 48)) * 100)} % of the time), ${Math.round((neg.midday / neg.all) * 100)} % of them between 10am and 3pm. `
+                + (r.switchOff ? 'The planner assumes the panels switch off then, so nothing is paid to send power out: that needs a "curtailable" inverter.' : 'You\'ve said the panels can\'t switch off, so power sent out then costs you.'));
+        }
+        const lk = r.loads.kwh;
+        if (!r.check && lk.ev + lk.hotWater + lk.heating + lk.cooking < 1 && r.readingsPlan && prep.byName[r.readingsPlan]) {
+            notes.push(`Your bills: with nothing new, the planner prices your readings' year on ${label(r.readingsPlan)} at ${dollars(Amber.plannerBill(prep, r.readingsPlan, 0, 0))}${prep.byName[r.readingsPlan].amber ? '' : ' (today\'s rates)'}. If you were on that plan, that should be close to what your bills came to; if it's far off, check the plan's prices on the Compare tab.`);
+        }
+        if (notes.length) html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">Rules of thumb</h4><ul class="list-disc pl-5 space-y-1 text-sm text-gray-700" data-numbers="thumb">${notes.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
+
+        // The settings this option was worked out with.
+        const facts = [];
+        if (x.solarKw > 0) facts.push(['New panels', `${kw(x.solarKw)} facing ${s.facing.toLowerCase()} at ${s.tilt}°, ${s.shading} % shade, losing ${f.solarDegradation} % a year, with ${needsCurtailable(x) ? 'a "curtailable" inverter' : 'an inverter'} of about ${kw(x.solarKw / INVERTER_RATIO)}`]);
+        if (x.batteryKwh > 0) {
+            const b = prep.batteryOf(x.batteryKwh);
+            const power = Math.min(15, Math.max(2.5, x.batteryKwh * ((prep.ctx.battery && prep.ctx.battery.kwPerKwh) || 0.4)));
+            facts.push(['New battery', `${kwh(x.batteryKwh)} usable, about ${kw(power)} in and out, ${Math.round(b.rte * 100)} % round trip, losing ${f.batteryFade} % of its capacity a year, replaced after ${f.batteryLife} years`]);
+        }
+        facts.push(['Export limit', `${s.exportLimit} kW`]);
+        facts.push(['Feed-in below zero', r.switchOff ? 'the panels switch off (a "curtailable" inverter); a battery soaks up what it can first' : 'the panels keep sending power out, and that costs you']);
+        if (x.fin && x.fin.capex.total > 0) facts.push(['Up front', capexText(x)]);
+        facts.push(['Power prices', `${plan.amber ? 'Amber\'s prices over your readings\' year' : `the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}, rising ${f.escalation} % a year`]);
+        facts.push(['Money', `worth is counted in today's money at ${f.discount} % a year over ${f.years} years${hardware ? `; the inverter is replaced every ${f.inverterLife} years for ${dollars(f.inverterCost)}` : ''}`]);
+        html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">What it assumes</h4>`
+            + `<dl class="grid grid-cols-1 sm:grid-cols-4 gap-x-4 gap-y-1 text-sm" data-numbers="assumes">${facts.map(([a, b]) => `<dt class="font-medium text-gray-800">${esc(a)}</dt><dd class="sm:col-span-3 text-gray-700 mb-1 sm:mb-0">${esc(b)}</dd>`).join('')}</dl>`
+            + '<p class="text-xs text-gray-500 mt-2">Change these under "Roof and panels", "Battery" and "Prices and rebates", then run again.</p>';
+        $('planNumbersBody').innerHTML = html;
     }
 
     function renderPayback(x) {
@@ -949,7 +1159,7 @@
             'The battery covers your home when power is dear, soaks up solar that would sell cheaply, charges from the grid in free or cheap hours, and sells when an export pays well. It knows each day\'s prices in the morning (as fixed plans and Amber\'s forecasts allow), so a real battery may do a little worse, especially on Amber\'s price spikes.',
             `Money: prices rise ${r.f.escalation} % a year; the battery loses ${r.f.batteryFade} % of its capacity a year and is replaced after ${r.f.batteryLife} years; the inverter after ${r.f.inverterLife}; panels lose ${r.f.solarDegradation} % a year. "Worth" is today's money at ${r.f.discount} % a year.`,
             r.switchOff
-                ? 'When a feed-in price is negative (on Amber it happens in the middle of sunny days), a battery soaks up what it can and the panels switch off for the rest, so nothing is paid to export. Untick "Panels switch off when the feed-in price is negative" if yours can\'t.'
+                ? 'When a feed-in price is negative (on Amber it happens in the middle of sunny days), a battery soaks up what it can and the panels switch off for the rest, so nothing is paid to export. That takes a "curtailable" inverter, one Amber can switch off remotely. Untick "Panels switch off when the feed-in price is negative" if yours can\'t.'
                 : 'Your panels can\'t switch off, so power sent out while the feed-in price is negative costs you (a battery soaks up what it can first).',
             'How keen to be also checks what happens if feed-in prices from 10am to 3pm halve, as more rooftop solar pushes them down; it uses last year\'s prices otherwise.',
             'Not included: maintenance, any payments for joining a virtual power plant, the value of backup power in a blackout, or your network moving you to a different tariff after you install.'
