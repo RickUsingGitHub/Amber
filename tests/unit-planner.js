@@ -257,6 +257,30 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         assert(exRows.length === 6 && exRows.every((r) => r.plan === 'Flat' || r.plan === 'Amber'), 'with a battery already, only the plans used and the one to compare against are run');
         assert(Amber.planCompany('OVO The Free 4 Plan (Ausgrid, TOU)') === 'OVO' && Amber.planCompany('Red Energy Living Energy Saver (Ausgrid, Flat)') === 'Red Energy'
             && Amber.planCompany('2026-27 VDO (Jemena, TOU)') === 'Default offer (DMO / VDO)' && Amber.planCompany('My plan', true) === 'Your own plans', 'plans are grouped by company');
+        // Negative feed-in prices: by default the panels switch off rather than pay to export, with or
+        // without a battery; told they can't, the exports go out and cost money.
+        const prepOn = Amber.plannerPrepare(ctx);
+        const prepOff = Amber.plannerPrepare(Object.assign({}, ctx, { switchOffNegative: false }));
+        const on = Amber.plannerEvaluate(prepOn, 'Amber', 6, 0);
+        const off = Amber.plannerEvaluate(prepOff, 'Amber', 6, 0);
+        const sell = prepOn.pricesOf(prepOn.byName.Amber).sell;
+        let negOn = 0;
+        let negOff = 0;
+        for (let i = 0; i < year.n; i++) if (sell[i] < 0) { negOn += on.exp[i]; negOff += off.exp[i]; }
+        assert(on.switchedOff > 0 && negOn === 0 && negOff > 0 && on.cost.total < off.cost.total && off.switchedOff === 0,
+            `negative feed-in: panels switch off (${on.switchedOff.toFixed(0)} kWh not sent), or pay to export when they can't ($${(off.cost.total - on.cost.total).toFixed(2)} more)`);
+        assert(Amber.plannerBill(prepOn, 'Amber', 6, 13.5) <= Amber.plannerBill(prepOff, 'Amber', 6, 13.5) + 1e-6 && near(Amber.plannerBill(prepOn, 'Amber', 6, 0), on.cost.total, 1e-6),
+            'the same rule with a battery, and plannerBill matches plannerEvaluate');
+
+        // What if feed-in from 10am to 3pm halves: dearer, and more so with more panels.
+        const prepDay = Amber.plannerPrepare(Object.assign({}, ctx, { dayFeedInScale: 0.5 }));
+        const lift = (p, kw) => Amber.plannerBill(prepDay, p, kw, 0) - Amber.plannerBill(prepOn, p, kw, 0);
+        assert(lift('Flat', 6) > lift('Flat', 0) + 10 && lift('Amber', 6) > lift('Amber', 0) && lift('Flat', 0) >= 0,
+            `middle-of-the-day feed-in halving costs 6 kW of panels $${(lift('Flat', 6) - lift('Flat', 0)).toFixed(0)} a year more on the flat plan`);
+        assert(Amber.plannerKeenLevel({ npv: 11932, capex: 17010, payback: 7, lowNpv: 6000, dayNpv: -200 }) === 2
+            && Amber.plannerKeenLevel({ npv: 11932, capex: 17010, payback: 7, lowNpv: 6000, dayNpv: 3000 }) === 3,
+            'how keen to be drops to Modest if halving middle-of-the-day feed-in would sink it');
+
         const pinned = await Amber.plannerSearch(Object.assign({}, ctx, { batteryPlans: [free.name] }));
         assert(pinned.searchedPlans.join() === free.name && pinned.rows.filter((r) => r.batteryKwh > 0).every((r) => r.plan === free.name), 'a chosen plan: only it gets the battery search');
 
