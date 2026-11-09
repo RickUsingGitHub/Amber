@@ -1,6 +1,13 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Built-in plans to compare with, by state: default offers (DMO, VDO), market offers, free-window
+     * plans and the Solar Sharer Offer, each with the date its prices are as at. The shape of a plan
+     * is in docs/ARCHITECTURE.md (Plan configs). Prices are typed in by hand from published fact
+     * sheets: update each 1 July (default offers) and when retailers change their offers.
+     */
+
     const ALL_DAYS = [1, 2, 3, 4, 5, 6, 0];
     const WEEKDAYS = [1, 2, 3, 4, 5];
     const AS_AT = '2026-07-01';

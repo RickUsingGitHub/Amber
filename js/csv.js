@@ -1,6 +1,11 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * CSV downloads: every meter reading (a versioned file that the Amber CSV import on Start can
+     * restore as a backup), one row per day, or the comparison table as shown.
+     */
+
     Amber.downloadCSV = function (csvContent, fileName) {
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const link = document.createElement('a');

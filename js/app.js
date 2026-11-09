@@ -1,6 +1,16 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * The page controller for everything except the Solar+? tab (planner-ui.js): start-up (init),
+     * tabs, the Start tab (API key, sites, Amber's fixed charges, Amber CSV and NEM12 imports), the
+     * dates bar, Compare (the plan form, fetchAndCompare, the answer, every plan, month by month),
+     * Usage (charts, calendar, More Stats), Bill?, Free? (the re-scheduling estimate), downloads and
+     * the settings menu. Pricing lives in costs.js / monthly.js; this file reads inputs, calls it
+     * and renders the results. Module state is in `state` (exposed as Amber._appState for tests);
+     * Amber.appApi is what planner-ui.js may use. See docs/ARCHITECTURE.md.
+     */
+
     const state = {
         templates: Amber.cloneTemplates(),
         originalTemplates: Amber.cloneTemplates(),

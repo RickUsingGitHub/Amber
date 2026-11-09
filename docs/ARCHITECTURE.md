@@ -1,0 +1,228 @@
+# Architecture
+
+How Amber Compare & Export is put together, for contributors and reviewers. User-facing features are in the [README](../README.md); the UI contract for a redesign is in [FRONTEND.md](FRONTEND.md); review notes are in [REVIEW.md](REVIEW.md).
+
+## At a glance
+
+- **A static site** (GitHub Pages) with one page, `index.html`. There is no server, no backend and no account. Network traffic is limited to Amber's API (`https://api.amber.com.au/v1`) and the site's own files (`data/…`), enforced by a Content Security Policy in `index.html`.
+- **Plain JavaScript, no framework and no bundler.** Each file in `js/` is an IIFE that adds to a single global namespace, `window.Amber` (or `globalThis.Amber` under Node). The files are classic `<script>` tags loaded in a fixed order, so `file://` works.
+- **Logic and UI are mostly separate.** Calculation modules (`costs`, `monthly`, `estimate`, `redispatch`, `planner`, `solar`, `stats`, `bill`, `import`, `time`, `templates`, `networks`) don't touch the DOM and are unit-tested in Node. DOM code lives in `app.js` (everything except the planner), `planner-ui.js` (the Solar+? tab), `charts.js`, `calendar.js`, `help.js` and parts of `csv.js` and `storage.js`.
+- **Styling** is Tailwind CSS 3, prebuilt by the Tailwind CLI from `css/input.css` into `css/app.css` (committed). There's no runtime CSS-in-JS and no inline `<style>`.
+- **Vendored libraries** in the repository root: Chart.js 4.4.2 (`chart.umd.min.js`), chartjs-plugin-zoom (`chartjs-plugin-zoom.min.js`) and pdf.js (`pdf.min.js`, `pdf.worker.min.js`, loaded on demand for bill PDFs).
+- **Storage**: IndexedDB for meter readings (a per-site, per-day cache), localStorage for settings, saved plans, imported households and the last bill check.
+
+## Repository layout
+
+```
+index.html               The whole page: header, dates bar, tab bar, six tab panels, footer, script tags
+css/input.css            Tailwind source (base layer + a few component classes)
+css/app.css              Built CSS (npm run build:css), committed
+js/                      Application code (see the module map)
+data/prices/<REGION>/    AEMO 5-minute wholesale prices, one JSON per month (NSW1, QLD1, SA1, VIC1)
+data/solar/<town>.json   PVGIS typical-year hourly weather for 22 towns
+scripts/static-server.js Tiny static server for development and Playwright (port 4173)
+scripts/update-prices.js Downloads AEMO prices into data/prices (run daily by a GitHub Action)
+scripts/update-solar.js  Downloads PVGIS weather into data/solar (run by hand)
+tests/unit-*.js          Node unit checks (no framework: assert + console)
+tests/*.spec.js          Playwright end-to-end tests (Chromium)
+.github/workflows/       test.yml (tests on PRs and main), update-prices.yml (daily price refresh)
+chart.umd.min.js, chartjs-plugin-zoom.min.js, pdf.min.js, pdf.worker.min.js   Vendored libraries
+```
+
+## Script load order and the `Amber` namespace
+
+`index.html` loads, in order:
+
+```
+chart.umd.min.js, chartjs-plugin-zoom.min.js
+js/constants.js   js/help.js      js/time.js      js/templates.js   js/storage.js
+js/costs.js       js/api.js       js/bill.js      js/csv.js         js/charts.js
+js/calendar.js    js/stats.js     js/monthly.js   js/redispatch.js  js/import.js
+js/networks.js    js/estimate.js  js/solar.js     js/planner.js     js/planner-ui.js
+js/app.js
+```
+
+Every file starts with `const Amber = root.Amber = root.Amber || {};` and attaches functions and constants as `Amber.something`. Later files may use anything earlier files define. `app.js` is last and starts the page (`init()` on `DOMContentLoaded`). Every script URL carries `?v=<version>` to bust caches.
+
+Under Node (unit tests), files are `require`d in the same order and attach to `global.Amber`; DOM-free modules work unchanged.
+
+There are two cross-module UI hooks:
+
+- `Amber.appApi` (set in `app.js`) gives `planner-ui.js` what it needs from the main app: `selectedSite`, `currentStateCode`, `readAmberRates`, `templates()`, `selectedPlanName()` and `selectTab`. The planner reads the meter cache itself through `storage.js`.
+- `Amber.plannerUi = { show, run }` (set in `planner-ui.js`) is called by `app.js` when the Solar+? tab opens.
+
+`Amber._appState` exposes `app.js`'s internal state for tests and debugging.
+
+## Module map
+
+| File | Lines | Owns |
+|---|---|---|
+| `constants.js` | ~130 | API URL and fetch limits, app version, Amber's default fixed charges (this year and last), state time zones, network names and plan-to-network matching, plan company names (`planCompany`) |
+| `help.js` | ~310 | `Amber.HELP` (every help text, keyed) and the help-bubble behaviour for any `[data-help]` element |
+| `time.js` | ~250 | Dates and times: NEM time (UTC+10) vs local wall clock, interval end times, TOU window matching, day arithmetic |
+| `templates.js` | ~570 | Built-in retailer plans per state (`supplierTemplates`), with "as at" dates |
+| `storage.js` | ~220 | IndexedDB cache (`AmberDataCacheDB` → `dailyUsage`, key `<siteId>_<YYYY-MM-DD>`), cache freshness rules, API key storage (obfuscated), `escapeHTML` |
+| `costs.js` | ~910 | Pricing a period: per-channel totals from usage items, TOU periods, other plans' costs (flat/TOU, controlled load, feed-in windows and caps, free windows), demand tariffs (Amber and other plans), Amber fixed charges, Ausgrid export settlement, `computePlanTotals` |
+| `api.js` | ~230 | Amber API client: sites, usage in date chunks, timeouts, retries with backoff, a small promise pool |
+| `bill.js` | ~360 | Reading an Amber bill (PDF via pdf.js, or text): rates, period, line items; `compareBill` checks it against meter data |
+| `csv.js` | ~85 | CSV downloads: every reading (a versioned, restorable backup), daily totals, the results table |
+| `charts.js` | ~440 | Usage tab charts (24-hour average, daily) with Chart.js plugins |
+| `calendar.js` | ~360 | Usage tab calendar and its day tooltips |
+| `stats.js` | ~60 | More Stats figures (price spikes, negative prices, evening share, grid-free days) |
+| `monthly.js` | ~130 | `periodTotals` / `monthlyBreakdown`: Amber vs another plan per calendar month, worked out the same way as Compare |
+| `redispatch.js` | ~350 | Free? tab: re-timing real interval data into a plan's free and feed-in windows under daily shift budgets |
+| `import.js` | ~380 | Amber usage CSV import into the cache (API-shaped items, demand window flags) |
+| `networks.js` | ~280 | Network tariffs and Amber's charges for all 11 networks Amber serves (FY2026-27), for the NEM12 estimate |
+| `estimate.js` | ~400 | NEM12 parsing and the rebuild of Amber's interval prices from wholesale prices, as a local "site" |
+| `solar.js` | ~220 | Towns, PVGIS weather loading, sun position, panel output per half hour (tilt, facing, shade, temperature, inverter clipping) |
+| `planner.js` | ~1,480 | Solar+? engine: the half-hourly year, plan rate cards, exact costing, flows, existing-battery detection and unwinding, battery simulation, the search, finance and ratings |
+| `planner-ui.js` | ~1,180 | Solar+? tab UI: inputs and settings, running the search, every results card |
+| `app.js` | ~3,010 | Everything else in the UI: tabs, Start, Compare (plan form, results, all plans, month by month), Usage, Bill?, Free?, imports, settings menu, `init()` |
+
+## Data model
+
+### Sites and channels
+
+A site is either Amber's (from `GET /sites`) or local, an imported NEM12 household (`{ id, local: true, nmi, network, channels, … }`, kept in localStorage `localSites`). Channels have `identifier` and `type` (`general`, `controlledLoad`, `feedIn`) and a `tariff` code.
+
+### Usage items
+
+The unit of meter data is the Amber API's usage item, one per channel per interval:
+
+```
+{ channelIdentifier, channelType, nemTime (interval end, NEM time), startTime, endTime, duration (min),
+  date (NEM date), kwh, perKwh (c/kWh inc GST; feed-in negative = credit), cost, quality,
+  spikeStatus, renewables, tariffInformation: { demandWindow, … } }
+```
+
+Imports (Amber CSV, NEM12 estimate) produce the same shape, so every feature works on any source.
+
+### The cache
+
+IndexedDB `AmberDataCacheDB`, store `dailyUsage`, one record per site and NEM date (`id = "<siteId>_<date>"`). Compare reads the cache first and fetches only missing or stale days, in 7-day chunks, 3 at a time (`Amber.FETCH_CHUNK_DAYS`, `FETCH_CONCURRENCY`). Final whole days are cached. Old days with no data are remembered as empty (`emptyDayCutoff`). Estimated readings stay eligible for refetch (`cachedDayUsable`).
+
+### Channel totals
+
+`Amber.processUsageData(items, channelTotals)` turns items into per-channel totals plus the per-interval detail the cost functions need. `Amber.emptyChannel(c)` creates one entry per channel. Everything on Compare, Usage and Bill? is computed from these.
+
+### Plan configs
+
+A plan (built-in template or saved custom plan):
+
+```
+{ rateType: 'flat' | 'tou', flat, daily (c/day), feedIn, cl (controlled load c/kWh), clock: 'local' | 'nem',
+  tou: { free: { rate, capKwh, windows }, superOffpeak, peak: { rate, windows: [{ start, end, days }] },
+         shoulder, offpeak: { rate } },
+  feedInWindows: [{ rate, start, end, days, capKwh, overRate }],
+  demand: { e (enabled), … window and rate fields }, asAt }
+```
+
+TOU period names and labels are in `Amber.PERIOD_LABELS`. Days are 0 = Sunday. Rates in templates are GST-inclusive c/kWh and c/day; feed-in is the published rate. `templates.js` has the full set; `app.js` `createPlanObjectFromForm` builds one from the plan form.
+
+### The planner's year
+
+`Amber.planYear(byDate)` turns the cache into a 365-day, half-hourly year (`n = 365 × 48` slots, NEM time):
+
+```
+{ ok, dates[365], n, days, imp, exp, cl (kWh per slot), amberImp, amberCl, amberExp (c/kWh, negative = credit),
+  demandFlag, filled, first, last, meterExp (after an existing battery is unwound), … }
+```
+
+Missing days (up to 31) are filled from the nearest whole day on the same weekday. Every plan's rate windows start on the hour or half hour, so half-hourly pricing equals pricing the 5-minute readings: the planner's cost of the unchanged year matches Compare exactly. `tests/unit-planner.js` checks this.
+
+## How each tab works
+
+### Start (`app.js`: `setupStartTab`, imports, sites)
+
+- API key: `Amber.setApiKey` stores an obfuscated key in localStorage (or sessionStorage); `Amber.fetchSites` lists sites.
+- Amber's fixed charges: `loadAmberChargeFields` / `readAmberRates`. The two years' connection, subscription and demand rates are split at `Amber.AMBER_RATES_CHANGE_DATE` (1 July 2026). Uploading a bill (`handleAmberBillFile` → `bill.js`) fills the year it belongs to.
+- Amber CSV import: `handleUsageCsvFile` → `import.js` → `setUsageDataMany`.
+- NEM12: `handleNem12File` → `estimate.js` parses the file and rebuilds Amber's interval prices from `data/prices` and `networks.js`. The result becomes a local site whose days are written to the cache.
+
+### Compare (`app.js`: `fetchAndCompare`, `displayResults`, `renderAllPlansTable`, `renderMonthly`)
+
+1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back.
+2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement).
+3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
+4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
+
+### Usage (`charts.js`, `calendar.js`, `stats.js`)
+
+Uses the same channel totals and daily summaries. Charts use the interval's local time and real interval length.
+
+### Bill? (`bill.js`, `app.js` bill check section)
+
+Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The last result is kept in localStorage `amberBillCheck`.
+
+### Free? (`redispatch.js`, `app.js` battery re-scheduling section)
+
+For each free-window plan, re-times each day's real readings. Grid use moves into the free window (dearest first) within a daily shift budget, the window's cap and an import limit. Battery exports move into the best feed-in window when a battery is present. The result is priced with the same cost functions as Compare.
+
+### Solar+? (`planner.js`, `solar.js`, `planner-ui.js`)
+
+```
+cache ──planYear──▶ year ──(existing battery?)──plannerUnwindBattery──▶ year without it
+                                                       │
+solar.js: town weather → solarSlotsPerKw → clipToInverter (panels/1.33)
+plannerExtraLoads: EV, heat-pump hot water, gas to electric
+                                                       ▼
+plannerSearch(ctx) ── plannerPrepare (rate cards, prices, flows cache)
+   for each solar size × plan: plannerFlows (import/export after solar, export limit)
+   for battery sizes on the best few plans: simulateBattery
+   ▼ rows { solarKw, batteryKwh, plan, bill, … }
+planner-ui analyse(): yardstick, options, plannerFinance (NPV, IRR, payback), plannerKeenLevel
+```
+
+Key pieces:
+
+- **Rate cards** (`planRateCard`): each plan's buy, sell and controlled-load price per slot, plus free windows, feed-in windows and caps, and demand. `planCardCost` and `amberCardCost` price any import/export arrays for the year or a month; `plannerMonths` gives month ranges.
+- **Flows** (`plannerFlows`): adds new solar and extra loads to the readings, then applies the export limit. The limit is `max(limit, what the meter already sent)`, and `expRaw` keeps what would have gone out before the limit.
+- **Negative feed-in**: by default (`switchOffNegative`), exports at a negative sell price are dropped (`exportsFor`, or `curtailNegative` in the battery run). The UI says this needs a curtailable inverter.
+- **Battery** (`simulateBattery`): one day at a time with that day's prices known (perfect daily foresight). It searches a charge threshold and a discharge threshold per day. It charges from solar over the export cap first, then from cheap or free grid; it discharges into dear use and high feed-in. Charge and discharge share the power limit, and a small wear cost per kWh stops pointless cycling. `limited` counts what's thrown away at the export limit.
+- **Existing battery**: `plannerDetectExisting` guesses panels and battery from the readings. `plannerUnwindBattery` removes the battery's effect (grid sales are seen directly; what it covered at home is estimated), and the search re-runs it on every plan with any new battery. `plannerExistingCheck` compares the planner's version with the real readings.
+- **Search** (`plannerSearch`): every solar size on every plan without a battery. A probe battery ranks plans, then the full battery search runs on the best `keepPlans` (6) plus any that must be included. `allowPlans` limits the plans considered to those ticked.
+- **Money** (`plannerCapex`, `plannerFinance`): the up-front cost after rebates. Then year by year: savings grow with price rises and shrink with panel and battery wear, the battery and inverter are replaced, and a battery replaced inside the period is credited with its remaining life. The results are NPV, IRR, payback "ahead for good" (and the first time it reaches $0), and `plannerWaitAYear`.
+- **Ratings** (`plannerKeenLevel`): the value per $1 up front (≥1.75 Strong, ≥1.4 Good, ≥1.15 Modest). Strong and Good also need the result to hold with prices 20% lower and with 10am–3pm feed-in halved (`dayFeedInScale`), and payback within 8 years.
+- **UI** (`planner-ui.js`): `search()` gathers inputs, `analyse()` builds options against the yardstick, and the `render*` functions build each card as HTML strings (escaped with `esc`).
+
+## Storage keys
+
+| Where | Key | What |
+|---|---|---|
+| IndexedDB | `AmberDataCacheDB` / `dailyUsage` | Meter readings per site and day |
+| localStorage | `amberApiKey` (or sessionStorage) | Obfuscated API key |
+| localStorage | `selectedSiteId`, `startDate`, `endDate`, `activeTab` | Where the user was |
+| localStorage | `selectedState`, `selectedPlan`, `rateType`, `planName`, `flatRate`, `flatFeedInRate`, `flatControlledLoad`, `dailyConnectionRate`, `touConfig`, `feedInWindows`, `enableFeedInTou`, `demandSettings`, `ratesDetailsOpen` | The Compare plan form |
+| localStorage | `customSupplierPlans` | Saved custom plans |
+| localStorage | Amber charge field IDs | Amber's fixed charges (this year and last) |
+| localStorage | `localSites` | Imported NEM12 households |
+| localStorage | `batteryShiftSettings` | Free? tab settings |
+| localStorage | `amberBillCheck` | The last bill check |
+| localStorage | `plannerSettings` | Every Solar+? input and the company ticks |
+
+## External data
+
+- **AEMO prices**: `scripts/update-prices.js` downloads `PRICE_AND_DEMAND_<YYYYMM>_<REGION>.csv` from AEMO into `data/prices/<REGION>/<YYYY-MM>.json` as `{ region, month, interval: 5, rrp: [...] }` ($/MWh, interval ending `month-01 00:00 + (i+1)×5 min` NEM time). `.github/workflows/update-prices.yml` runs it daily at 1:17 am AEST and commits changes.
+- **PVGIS weather**: `scripts/update-solar.js` downloads a typical meteorological year (hourly GHI, DNI, DHI and temperature) and PVGIS's own 1 kW yield for each town in `Amber.SOLAR_LOCATIONS`. It's run by hand; the files don't change.
+- **Plan prices**: maintained by hand in `templates.js` (with `asAt` dates) and `networks.js` (Amber's FY2026-27 network tariffs). `Amber.TEMPLATES_AS_AT` is shown in the UI.
+
+## Security and privacy
+
+- The CSP (`index.html` `<meta http-equiv="Content-Security-Policy">`) is `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; …`. This means no inline scripts, no inline `<style>` and no `style="…"` attributes (setting `element.style.x` from JS is fine), and no third-party hosts.
+- All data stays in the browser. The API key is obfuscated (XOR with a fixed key, then base64), not encrypted.
+- Dynamic HTML is built with template strings. Anything from data or user input goes through `Amber.escapeHTML` (aliased `esc` in `planner-ui.js`).
+
+## Build, test and CI
+
+- `npm run build:css` rebuilds `css/app.css`. Tailwind scans `index.html` and `js/**/*.js` for class names, and `tailwind.config.js` safelists classes that are only built dynamically. Commit `css/app.css` after changing classes.
+- **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
+- **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 54 tests take about 45 s with two workers.
+- **CI**: `.github/workflows/test.yml` runs `npm ci`, installs Chromium and runs `npm test -- --workers=2` on every pull request and on pushes to `main`. Failed runs upload `test-results/`.
+
+## Releases
+
+Each change ships as a version:
+
+1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert).
+2. `npm run build:css` if classes changed; update the README and these docs if behaviour changed.
+3. Run `npm test`, open a pull request, and merge once the Tests check passes. GitHub Pages serves `main`.
