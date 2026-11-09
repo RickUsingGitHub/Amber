@@ -127,6 +127,17 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(monthRows.last()).toContainText('Year');
     await expect(page.locator('#planPaybackNotes')).toContainText('Paid');
 
+    // Check the numbers: averages for the yardstick and the option, prices through the day, the settings used.
+    const averages = page.locator('#planNumbersBody [data-numbers="averages"]');
+    await expect(averages).toContainText('Average price per kWh bought');
+    await expect(averages).toContainText('Average earned per kWh sent out');
+    await expect(page.locator('#planNumbersBody [data-numbers="bands"] tbody tr')).toHaveCount(5);
+    await expect(page.locator('#planNumbersBody [data-numbers="assumes"]')).toContainText('Export limit');
+    // The option's bill there is the month table's year.
+    const yearCells = await monthRows.last().locator('td').allTextContents();
+    const billCells = await averages.locator('tbody tr').last().locator('td').allTextContents();
+    expect(billCells[billCells.length - 1].trim()).toBe(yearCells[yearCells.length - 3].trim());
+
     // Tapping another option shows its year instead.
     const second = page.locator('#planOptionsTable [data-plan-option="1"]');
     const secondPlan = (await second.locator('td').nth(1).textContent()).trim();
@@ -195,6 +206,39 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(page.locator('#planBatteryMode')).toHaveValue('none');
     await expect(page.locator('#planSwitchOff')).not.toBeChecked();
     await expect(page.locator('#planRetailersSummary')).toHaveText(`Only ${plan}`);
+    expect(errors).toEqual([]);
+});
+
+test('Solar & battery: on Amber, a curtailable inverter and the numbers to check', async ({ page }) => {
+    test.setTimeout(150000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await importYear(page);
+    await page.click('#tab-plan');
+    await expect(page.locator('#planInputs')).toBeVisible();
+    await page.selectOption('#planSolarMode', 'fixed');
+    await page.fill('#planSolarKw', '10');
+    await page.selectOption('#planBatteryMode', 'none');
+    await onlyPlans(page, (t) => t.startsWith('Amber'));
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
+    // Amber's feed-in price goes below zero and the panels are assumed to switch off: that takes a curtailable inverter.
+    await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for: 10 kW of panels with a "curtailable" inverter of about 7.5 kW.');
+    await expect(page.locator('#planRecommendation [data-curtail]')).toContainText('Curtailable inverter needed.');
+    await expect(page.locator('#planDetailBody')).toContainText('Curtailable inverter needed.');
+    await expect(page.locator('#planNumbersBody [data-numbers="bands"] thead')).toContainText('Feed-in below zero');
+    const thumb = page.locator('#planNumbersBody [data-numbers="thumb"]');
+    await expect(thumb).toContainText(/about \d\.\d kWh a day for each kW of panels/);
+    await expect(thumb).toContainText(/Each kWh the new panels make is worth about -?\d+\.\d c/);
+    await expect(thumb).toContainText(/Feed-in below zero: on Amber .* below zero for [0-9,]+ hours/);
+    await expect(page.locator('#planNumbersBody [data-numbers="assumes"]')).toContainText('a "curtailable" inverter of about 7.5 kW');
+
+    // Panels that can't switch off: no curtailable inverter assumed, and the note says what one would avoid.
+    await page.locator('#planInputs summary', { hasText: 'Roof and panels' }).click();
+    await page.uncheck('#planSwitchOff');
+    await page.click('#planRun');
+    await expect(page.locator('#planRecommendation [data-curtail]')).toContainText('A "curtailable" inverter would help.');
+    await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for: 10 kW of panels with an inverter of about 7.5 kW.');
     expect(errors).toEqual([]);
 });
 
