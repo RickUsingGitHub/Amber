@@ -101,6 +101,8 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(page.locator('#planProgressText')).toContainText('options compared');
     await expect(page.locator('#planRecommendation')).toContainText('Best for you');
     await expect(page.locator('#planRecommendation')).toContainText("Next year's bill");
+    await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for:');
+    await expect(page.locator('#planRecommendation')).toContainText(/usable that can charge and discharge at about \d+(\.\d)? kW/);
     await expect(page.locator('#planOptionsTable')).toContainText('cheapest with nothing new');
     // The money columns say what they count.
     for (const heading of ['Saves a year', 'Pays back', "Worth in today's money (20 yrs)"]) {
@@ -160,6 +162,9 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(rows.first().locator('td').nth(0)).toHaveText('6.6 kW solar');
     await expect(rows.first().locator('td').nth(1)).toHaveText(plan);
     await expect(page.locator('#planRecommendation')).toContainText('6.6 kW of solar and no battery');
+    // What to order: the panels and the inverter size the planner assumed.
+    await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for: 6.6 kW of panels with an inverter of about 5 kW.');
+    await expect(page.locator('#planDetailBody')).toContainText('What to ask installers for: 6.6 kW of panels with an inverter of about 5 kW');
     await expect(page.locator('#planDetailBody thead')).toContainText('Solar made');
 
     // The choices are remembered after a reload.
