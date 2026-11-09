@@ -761,6 +761,62 @@
         });
     }
 
+    // The year's bill in parts, the same way for Amber and other plans.
+    function billParts(ev) {
+        const c = ev.cost;
+        const exportCharge = c.exportCharge || 0;
+        const sum = (a) => a.reduce((s, v) => s + v, 0);
+        return {
+            bought: (c.usage || 0) - exportCharge + (c.controlled || 0), boughtKwh: sum(ev.imp) + sum(ev.cl),
+            sold: c.feedIn || 0, soldKwh: sum(ev.exp),
+            exportCharge, demand: c.demand || 0,
+            fixed: (c.daily || 0) + (c.connection || 0) + (c.subscription || 0),
+            total: c.total
+        };
+    }
+
+    // Where an option's saving comes from: against the same plan with nothing new, so it shows
+    // what the new panels or battery do (a plan switch is shown separately in the month table).
+    // Power thrown away at the export limit (after any battery has stored what it can).
+    const lostToLimit = (ev) => (ev.sim ? ev.sim.limited : ev.flows.curtailed);
+
+    function breakdownHtml(x, ev, base) {
+        if (!(x.solarKw > 0 || x.batteryKwh > 0)) return '';
+        const r = ui.results;
+        const a = billParts(base);
+        const b = billParts(ev);
+        const k = (v) => Math.round(v).toLocaleString('en-AU');
+        const row = (name, before, after, kwhBefore, kwhAfter) => {
+            const saves = before - after;
+            if (Math.abs(before) < 0.5 && Math.abs(after) < 0.5) return '';
+            return `<tr><td class="px-2 py-2">${name}${kwhBefore != null ? ` <span class="text-xs text-gray-500">(${k(kwhBefore)} → ${k(kwhAfter)} kWh)</span>` : ''}</td>`
+                + `<td class="px-2 py-2 text-right whitespace-nowrap">${dollars(before)}</td><td class="px-2 py-2 text-right whitespace-nowrap">${dollars(after)}</td>`
+                + `<td class="px-2 py-2 text-right whitespace-nowrap ${Math.abs(saves) < 0.5 ? 'text-gray-500' : saves > 0 ? 'text-green-700' : 'text-red-700'}">${Math.abs(saves) < 0.5 ? '—' : dollars(saves)}</td></tr>`;
+        };
+        const th2 = (t, right) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${t}</th>`;
+        let html = `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1" data-help="planBreakdown" data-help-label="Where the saving comes from">Where the saving comes from</h4>`
+            + `<p class="text-xs text-gray-600 mb-2">${esc(label(x.plan))} with nothing new, against ${esc(describe(x))} on the same plan.</p>`
+            + `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>${th2('Part of the bill')}${th2('Nothing new', 1)}${th2('With it', 1)}${th2('Saves', 1)}</tr></thead><tbody class="divide-y divide-gray-200">`
+            + row('Power bought', a.bought, b.bought, a.boughtKwh, b.boughtKwh)
+            + row('Solar and battery sent to the grid', a.sold, b.sold, a.soldKwh, b.soldKwh)
+            + row('Network export charge', a.exportCharge, b.exportCharge)
+            + row('Demand charge', a.demand, b.demand)
+            + row('Daily charges', a.fixed, b.fixed)
+            + `<tr class="bg-gray-50 font-semibold"><td class="px-2 py-2">Year</td><td class="px-2 py-2 text-right">${dollars(a.total)}</td><td class="px-2 py-2 text-right">${dollars(b.total)}</td><td class="px-2 py-2 text-right">${dollars(a.total - b.total)}</td></tr></tbody></table>`;
+        if (x.solarKw > 0) {
+            const f = ev.flows;
+            const clipped = (r.res.prep.ctx.solarPerKw && r.res.prep.ctx.solarPerKw.clipped || 0) * x.solarKw;
+            const made = f.solarKwh + clipped;
+            const pct = (v) => (made > 0 ? Math.round((v / made) * 100) : 0);
+            const lost = Math.max(0, lostToLimit(ev) - lostToLimit(base));
+            const sentOut = Math.max(0, f.solarKwh - f.solarSelf - lost);
+            html += `<p class="text-xs text-gray-600 mt-2">The new panels could make ${k(made)} kWh a year. ${k(f.solarSelf)} (${pct(f.solarSelf)} %) is used at home as it's made; ${k(sentOut)} (${pct(sentOut)} %) goes to the battery or the grid; `
+                + `${k(lost)} (${pct(lost)} %) is lost because the ${num('planExportLimit')} kW export limit is already used${clipped > 1 ? `, and ${k(clipped)} (${pct(clipped)} %) is clipped by the inverter on the sunniest middays` : ''}. `
+                + 'Sent-out solar earns each half hour\'s feed-in price from your readings\' year (on Amber, last year\'s actual prices), which is often small at midday and better early, late and in winter.</p>';
+        }
+        return html;
+    }
+
     function renderDetail() {
         const r = ui.results;
         const x = ui.selected || ranked()[0];
@@ -787,13 +843,14 @@
         if (x.solarKw > 0) {
             const f = ev.flows;
             const viaBattery = ev.sim ? ev.sim.charged - ev.sim.gridCharged : 0;
-            facts.push(`New panels make ${Math.round(f.solarKwh).toLocaleString('en-AU')} kWh a year: ${Math.round(f.solarSelf).toLocaleString('en-AU')} used straight away${viaBattery > 0 ? `, the battery stores up to ${Math.round(viaBattery).toLocaleString('en-AU')} of what would have been sent out` : ''}${f.curtailed > 1 ? `, and ${Math.round(f.curtailed).toLocaleString('en-AU')} kWh is lost to the ${num('planExportLimit')} kW export limit` : ''}.`);
+            facts.push(`New panels make ${Math.round(f.solarKwh).toLocaleString('en-AU')} kWh a year: ${Math.round(f.solarSelf).toLocaleString('en-AU')} used straight away${viaBattery > 0 ? `, the battery stores up to ${Math.round(viaBattery).toLocaleString('en-AU')} of what would have been sent out` : ''}${lostToLimit(ev) > 1 ? `, and ${Math.round(lostToLimit(ev)).toLocaleString('en-AU')} kWh is lost to the ${num('planExportLimit')} kW export limit` : ''}.`);
         }
         if (ev.sim) {
             const which = r.existing.kwh > 0 ? (x.batteryKwh > 0 ? `Your ${kwh(r.existing.kwh)} battery and the new one together` : `Your ${kwh(r.existing.kwh)} battery`) : 'The battery';
             facts.push(`${which} cycle${r.existing.kwh > 0 && x.batteryKwh > 0 ? '' : 's'} about ${Math.round(ev.sim.cycles)} times a year (${(ev.sim.cycles / 365).toFixed(1)} a day)${ev.sim.gridCharged > 1 ? `, charging ${Math.round(ev.sim.gridCharged).toLocaleString('en-AU')} kWh from the grid when it's cheap or free` : ''}${ev.sim.exported > 1 ? ` and selling ${Math.round(ev.sim.exported).toLocaleString('en-AU')} kWh back when prices are high` : ''}.`);
         }
         html += `<ul class="list-disc pl-5 mt-3 space-y-1 text-sm text-gray-700">${facts.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>`;
+        html += breakdownHtml(x, ev, Amber.plannerEvaluate(prep, x.plan, 0, 0));
         $('planDetailBody').innerHTML = html;
         renderPayback(x);
     }

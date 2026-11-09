@@ -117,7 +117,7 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     }
 
     // The month table: 12 months and the year.
-    const monthRows = page.locator('#planDetailBody tbody tr');
+    const monthRows = page.locator('#planDetailBody table').first().locator('tbody tr');
     await expect(monthRows).toHaveCount(13);
     await expect(monthRows.last()).toContainText('Year');
     await expect(page.locator('#planPaybackNotes')).toContainText('Paid');
@@ -172,7 +172,12 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     // What to order: the panels and the inverter size the planner assumed.
     await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for: 6.6 kW of panels with an inverter of about 5 kW.');
     await expect(page.locator('#planDetailBody')).toContainText('What to ask installers for: 6.6 kW of panels with an inverter of about 5 kW');
-    await expect(page.locator('#planDetailBody thead')).toContainText('Solar made');
+    await expect(page.locator('#planDetailBody table').first().locator('thead')).toContainText('Solar made');
+    // Where the saving comes from: the bill in parts, and where the new panels' power goes.
+    await expect(page.locator('#planDetailBody')).toContainText('Where the saving comes from');
+    await expect(page.locator('#planDetailBody table').nth(1)).toContainText('Power bought');
+    await expect(page.locator('#planDetailBody table').nth(1)).toContainText('Solar and battery sent to the grid');
+    await expect(page.locator('#planDetailBody')).toContainText(/The new panels could make [0-9,]+ kWh a year/);
 
     // The choices are remembered after a reload.
     await page.reload();
