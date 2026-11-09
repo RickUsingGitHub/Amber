@@ -109,6 +109,11 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(keen).toContainText(/(Strong|Good|Modest|Marginal|Not worth it)/);
     await expect(keen).toContainText(/every \$1 up front comes back as about \$\d+\.\d\d in today's money/);
     await expect(page.locator('#planPaybackNotes [data-keen]')).toHaveCount(1);
+    // With new panels it also checks middle-of-the-day feed-in halving; panels switch off at negative prices by default.
+    await expect(keen).toContainText('if feed-in prices from 10am to 3pm halve');
+    await expect(page.locator('#planSwitchOff')).toBeChecked();
+    await page.locator('#planResults summary', { hasText: 'How this is worked out' }).click();
+    await expect(page.locator('#planAssumptions')).toContainText('the panels switch off for the rest');
     await expect(page.locator('#planRecommendation')).toContainText(/usable that can charge and discharge at about \d+(\.\d)? kW/);
     await expect(page.locator('#planOptionsTable')).toContainText('cheapest with nothing new');
     // The money columns say what they count.
@@ -156,6 +161,9 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await page.fill('#planSolarKw', '6.6');
     await page.selectOption('#planBatteryMode', 'none');
     await expect(page.locator('#planBatteryKwh')).toBeHidden();
+    // Panels that can't switch off when the feed-in price is negative.
+    await page.locator('#planInputs summary', { hasText: 'Roof and panels' }).click();
+    await page.uncheck('#planSwitchOff');
     await expect(page.locator('#planBatteryMax')).toBeHidden();
     const plan = (await page.locator('#planRetailersPanel input[data-plan]').nth(2).locator('xpath=..').textContent()).trim();
     await onlyPlans(page, (t) => t === plan);
@@ -185,6 +193,7 @@ test('Solar & battery: fixing the panels, the battery and the plan', async ({ pa
     await expect(page.locator('#planInputs')).toBeVisible();
     await expect(page.locator('#planSolarMode')).toHaveValue('fixed');
     await expect(page.locator('#planBatteryMode')).toHaveValue('none');
+    await expect(page.locator('#planSwitchOff')).not.toBeChecked();
     await expect(page.locator('#planRetailersSummary')).toHaveText(`Only ${plan}`);
     expect(errors).toEqual([]);
 });

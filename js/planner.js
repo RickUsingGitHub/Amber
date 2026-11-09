@@ -762,7 +762,7 @@
         const flows = Amber.plannerFlows(prep.year, { exportLimitKw: prep.ctx.exportLimitKw });
         const sim = Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(0));
         const pack = (imp, exp, cl) => ({ bill: prep.costOf(plan, imp, exp, cl).total, importKwh: sum(imp) + sum(cl), exportKwh: sum(exp) });
-        return { readings: pack(original.imp, original.exp, original.cl), modelled: pack(sim.imp, sim.exp, flows.cl), without: pack(flows.imp, flows.exp, flows.cl), sim };
+        return { readings: pack(original.imp, original.exp, original.cl), modelled: pack(sim.imp, sim.exp, flows.cl), without: pack(flows.imp, prep.exportsFor(plan, flows.exp).exp, flows.cl), sim };
     };
 
     // ---------- Future changes: EV, heat-pump hot water, gas to electric ----------
@@ -1091,9 +1091,42 @@
      *   solarPerKw (kWh per slot for 1 kW of panels, or null), battery: { kwPerKwh, rte, wear },
      *   exportLimitKw, extra, clScale }.
      */
+    // Middle of the day for the feed-in check: 10am to 3pm NEM time (slots 20 to 29).
+    const DAY_FROM = 20;
+    const DAY_TO = 30;
+
+    // The year with Amber's feed-in credits from 10am to 3pm scaled by k (negative prices, which
+    // cost to export, stay as they are).
+    function scaleDayFeedIn(year, k) {
+        const amberExp = Float64Array.from(year.amberExp);
+        for (let i = 0; i < year.n; i++) {
+            const s = i % SLOTS;
+            if (s >= DAY_FROM && s < DAY_TO && amberExp[i] < 0) amberExp[i] *= k;
+        }
+        return Object.assign({}, year, { amberExp });
+    }
+
+    /**
+     * Everything the search needs about one household, once. ctx options besides the year and plans:
+     * switchOffNegative (default true): the panels stop sending power out whenever the feed-in price
+     * is negative (Amber can switch off inverters it controls), so nothing is paid to export;
+     * dayFeedInScale: a what-if where feed-in credits from 10am to 3pm are multiplied by it.
+     */
     Amber.plannerPrepare = function (ctx) {
-        const year = ctx.year;
-        const plans = ctx.plans.map((p) => Object.assign({}, p, { card: p.amber ? null : Amber.planRateCard(year, p.config, ctx.state), prices: null }));
+        const scaleDay = ctx.dayFeedInScale != null && ctx.dayFeedInScale !== 1 ? ctx.dayFeedInScale : null;
+        const year = scaleDay != null ? scaleDayFeedIn(ctx.year, scaleDay) : ctx.year;
+        const switchOff = ctx.switchOffNegative !== false;
+        const plans = ctx.plans.map((p) => {
+            const card = p.amber ? null : Amber.planRateCard(year, p.config, ctx.state);
+            if (card && scaleDay != null) {
+                card.exp = Float64Array.from(card.exp);
+                for (let i = 0; i < year.n; i++) {
+                    const s = i % SLOTS;
+                    if (s >= DAY_FROM && s < DAY_TO && card.exp[i] > 0) card.exp[i] *= scaleDay;
+                }
+            }
+            return Object.assign({}, p, { card, prices: null });
+        });
         const byName = Object.create(null);
         plans.forEach((p) => { byName[p.name] = p; });
         const flowsCache = new Map();
@@ -1103,8 +1136,29 @@
             costOf(plan, imp, exp, cl, range) {
                 return plan.amber ? Amber.amberCardCost(year, ctx.amberModel, imp, exp, cl, range) : Amber.planCardCost(year, plan.card, imp, exp, cl, range);
             },
+            switchOff,
             pricesOf(plan) {
-                return plan.prices || (plan.prices = Amber.plannerBatteryPrices(year, plan, plan.card, ctx.amberModel));
+                if (!plan.prices) {
+                    plan.prices = Amber.plannerBatteryPrices(year, plan, plan.card, ctx.amberModel);
+                    plan.prices.curtailNegative = switchOff;
+                }
+                return plan.prices;
+            },
+            // Power sent out with no battery to soak it up: if the panels can switch off, none goes
+            // out while the feed-in price is negative. Returns { exp, off (kWh not sent) }.
+            exportsFor(plan, exp) {
+                if (!switchOff) return { exp, off: 0 };
+                const sell = this.pricesOf(plan).sell;
+                let out = null;
+                let off = 0;
+                for (let i = 0; i < exp.length; i++) {
+                    if (exp[i] > 0 && sell[i] < 0) {
+                        if (!out) out = Float64Array.from(exp);
+                        off += exp[i];
+                        out[i] = 0;
+                    }
+                }
+                return { exp: out || exp, off };
             },
             flowsFor(kw) {
                 const key = ctx.solarPerKw ? kw : 0;
@@ -1141,8 +1195,9 @@
         if (!plan) return null;
         const flows = prep.flowsFor(solarKw);
         const sim = prep.hasBattery(batteryKwh) ? Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(batteryKwh)) : null;
+        const sent = sim ? null : prep.exportsFor(plan, flows.exp);
         const imp = sim ? sim.imp : flows.imp;
-        const exp = sim ? sim.exp : flows.exp;
+        const exp = sim ? sim.exp : sent.exp;
         const months = monthsOf(prep.year).map((m) => {
             const cost = prep.costOf(plan, imp, exp, flows.cl, { from: m.startDay, to: m.endDay });
             let importKwh = 0;
@@ -1155,7 +1210,19 @@
             }
             return { key: m.key, days: m.endDay - m.startDay + 1, bill: cost.total, cost, importKwh, exportKwh, solarKwh };
         });
-        return { plan, flows, sim, imp, exp, cl: flows.cl, cost: prep.costOf(plan, imp, exp, flows.cl), months };
+        return { plan, flows, sim, imp, exp, cl: flows.cl, cost: prep.costOf(plan, imp, exp, flows.cl), months, switchedOff: sim ? sim.curtailed : sent.off };
+    };
+
+    /** Just the year's bill for one option (as plannerEvaluate, without the months). */
+    Amber.plannerBill = function (prep, planName, solarKw, batteryKwh) {
+        const plan = prep.byName[planName];
+        if (!plan) return NaN;
+        const flows = prep.flowsFor(solarKw);
+        if (prep.hasBattery(batteryKwh)) {
+            const sim = Amber.simulateBattery(prep.year, flows, prep.pricesOf(plan), prep.batteryOf(batteryKwh));
+            return prep.costOf(plan, sim.imp, sim.exp, flows.cl).total;
+        }
+        return prep.costOf(plan, flows.imp, prep.exportsFor(plan, flows.exp).exp, flows.cl).total;
     };
 
     /**
@@ -1175,13 +1242,14 @@
         const rows = [];
         const add = (kw, plan, kwh, sim) => {
             const f = prep.flowsFor(kw);
+            const sent = sim ? null : prep.exportsFor(plan, f.exp);
             const imp = sim ? sim.imp : f.imp;
-            const exp = sim ? sim.exp : f.exp;
+            const exp = sim ? sim.exp : sent.exp;
             const cost = prep.costOf(plan, imp, exp, f.cl);
             rows.push({
                 solarKw: kw, batteryKwh: kwh, plan: plan.name, bill: cost.total, cost,
                 importKwh: sum(imp), exportKwh: sum(exp), controlledKwh: sum(f.cl),
-                solarKwh: f.solarKwh, solarSelf: f.solarSelf, curtailed: sim ? sim.curtailed + sim.limited : f.curtailed,
+                solarKwh: f.solarKwh, solarSelf: f.solarSelf, curtailed: sim ? sim.curtailed + sim.limited : f.curtailed + sent.off,
                 battery: sim ? { charged: sim.charged, gridCharged: sim.gridCharged, discharged: sim.discharged, exported: sim.exported, cycles: sim.cycles } : null
             });
         };
@@ -1365,14 +1433,15 @@
     /**
      * How keen to be on an option, 0–4 (Not worth it, Marginal, Modest, Good, Strong), from its
      * value in today's money per $1 up front, whether it still pays with power prices 20 % lower
-     * (lowNpv), and how soon it pays back for good. o: { npv, capex, payback, lowNpv }.
+     * (lowNpv) and if feed-in from 10am to 3pm halves (dayNpv, when there are panels to check), and
+     * how soon it pays back for good. o: { npv, capex, payback, lowNpv, dayNpv }.
      */
     Amber.plannerKeenLevel = function (o) {
         if (!(o.capex > 0)) return null;
         const back = 1 + o.npv / o.capex;
         if (o.npv <= 0) return 0;
         if (back < 1.15) return 1;
-        if (back < 1.4 || !(o.lowNpv > 0)) return 2;
+        if (back < 1.4 || !(o.lowNpv > 0) || (o.dayNpv != null && !(o.dayNpv > 0))) return 2;
         if (back >= 1.75 && o.payback != null && o.payback <= 8) return 4;
         return 3;
     };
