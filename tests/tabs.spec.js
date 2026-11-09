@@ -88,13 +88,23 @@ test('Free? has its own tab, pointing back to Start before there are results', a
     await expect(page.locator('#panel-compare #batteryShiftSection')).toHaveCount(0);
 });
 
-test('on a phone the six tabs fit without scrolling sideways', async ({ page }) => {
-    await page.setViewportSize({ width: 360, height: 740 });
-    await page.goto('/');
-    expect(await page.locator('#mainTabs [role="tab"]').evaluateAll((tabs) => tabs.map((t) => t.innerText))).toEqual(['Start', 'Compare', 'Usage', 'Bill?', 'Free?', 'Solar+?']);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(360);
-    const rows = await page.locator('#mainTabs [role="tab"]').evaluateAll((tabs) => new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size);
-    expect(rows).toBe(1);
+test('on a phone the tabs stay on one line, and the page never scrolls sideways', async ({ page }) => {
+    // Fonts differ between phones (and test machines), so the bar may fit or scroll sideways by itself,
+    // but it never wraps onto a second line and never makes the page wider than the screen.
+    for (const width of [320, 360, 390]) {
+        await page.setViewportSize({ width, height: 740 });
+        await page.goto('/');
+        expect(await page.locator('#mainTabs [role="tab"]').evaluateAll((tabs) => tabs.map((t) => t.innerText))).toEqual(['Start', 'Compare', 'Usage', 'Bill?', 'Free?', 'Solar+?']);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+        const rows = await page.locator('#mainTabs [role="tab"]').evaluateAll((tabs) => new Set(tabs.map((t) => Math.round(t.getBoundingClientRect().top))).size);
+        expect(rows).toBe(1);
+        // The last tab can always be reached, and choosing it brings it into view.
+        await page.click('#tab-plan');
+        await expect(page.locator('#tab-plan')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#tab-plan')).toBeInViewport({ ratio: 1 });
+        await page.click('#tab-setup');
+        await expect(page.locator('#tab-setup')).toBeInViewport({ ratio: 1 });
+    }
 });
 
 test('short tab names, the same on a computer, with the full name on hover', async ({ page }) => {
