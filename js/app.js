@@ -298,6 +298,12 @@
         });
         state.activeTab = tab;
         if (tab !== 'setup') state.resultsTab = tab;
+        // On a narrow phone with a wide font the tab bar scrolls: keep the chosen tab in view.
+        const list = $('mainTabs');
+        if (list.scrollWidth > list.clientWidth + 1) {
+            const b = $(`tab-${tab}`);
+            list.scrollLeft = Math.max(0, Math.min(b.offsetLeft - (list.clientWidth - b.offsetWidth) / 2, list.scrollWidth - list.clientWidth));
+        }
         try { localStorage.setItem(ACTIVE_TAB_KEY, tab); } catch (e) { /* ignore */ }
         if (opts && opts.focus) $(`tab-${tab}`).focus();
         // Charts drawn while their tab was hidden have no size until resized.
