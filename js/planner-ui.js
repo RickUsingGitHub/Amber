@@ -37,7 +37,7 @@
     const EXISTING = ['planExistingSolarKw', 'planExistingFacing', 'planExistingBatteryKwh', 'planExistingBatteryKw'];
     const FIELDS = EXISTING.concat(['planCompareWith', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
         'planBatteryMax', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
-        'planHotWaterRun', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
+        'planHotWaterRun', 'planSwitchOff', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
 
     const ui = { site: null, year: null, busy: false, results: null, selected: null, chart: null, built: false, excluded: { companies: new Set(), plans: new Set() }, groups: null };
 
@@ -475,14 +475,15 @@
             existing: existing.kwh > 0 ? { kwh: existing.kwh, kw: existing.kw } : null,
             battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100 },
             exportLimitKw: num('planExportLimit'), extra: loads.extra, clScale: loads.clScale,
-            keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], allowPlans: allow, alsoPlans: compareWith ? [compareWith] : []
+            keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], allowPlans: allow, alsoPlans: compareWith ? [compareWith] : [],
+            switchOffNegative: $('planSwitchOff').checked
         }, (p) => {
             const text = p.phase === 'existing' ? `Running your battery on every plan… ${p.done} of ${p.total}`
                 : p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
             const at = p.phase === 'existing' ? 0.04 + 0.11 * p.done / p.total : p.phase === 'probe' ? 0.15 + 0.1 * p.done / p.total : 0.25 + 0.75 * p.done / p.total;
             progress(text, at);
         });
-        ui.results = analyse(res, { f, compareWith, allow: new Set(allow), solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, seconds: (Date.now() - t0) / 1000 });
+        ui.results = analyse(res, { f, compareWith, allow: new Set(allow), solarMode, batteryMode, solarSizes, fixedBattery, loads, weather, plans, existing, unwound, switchOff: $('planSwitchOff').checked, seconds: (Date.now() - t0) / 1000 });
         ui.results.readingsPlan = readingsPlan || ui.results.free.plan;
         ui.results.check = unwound ? Amber.plannerExistingCheck(res.prep, ui.results.readingsPlan, year) : null;
         progress(`Done: ${ui.results.options.length.toLocaleString('en-AU')} options compared.`, null);
@@ -610,15 +611,35 @@
         { word: 'Strong', why: 'well worth doing', dot: 'bg-green-600', text: 'text-green-800' }
     ];
 
+    // What if feed-in prices from 10am to 3pm halve (as more rooftop solar pushes them down)? The
+    // option and everything it's measured against, re-run with those prices. Cached per option.
+    function dayFeedIn(x) {
+        const r = ui.results;
+        if (!x.fin || !(x.solarKw > 0)) return null;
+        const key = `${x.solarKw}|${x.batteryKwh}|${x.plan}`;
+        r.dayCache = r.dayCache || {};
+        if (r.dayCache[key]) return r.dayCache[key];
+        const dp = r.dayPrep || (r.dayPrep = Amber.plannerPrepare(Object.assign({}, r.res.prep.ctx, { dayFeedInScale: 0.5 })));
+        const bill = (plan, s, b) => Amber.plannerBill(dp, plan, s, b);
+        const opt = Object.assign({}, x.opt, {
+            free: bill(r.compare.plan, 0, 0), planOnly: bill(x.plan, 0, 0), solarOnly: bill(x.plan, x.solarKw, 0),
+            batteryBills: x.batteryKwh > 0 ? x.opt.batteryBills.map((bb) => ({ kwh: bb.kwh, bill: bill(x.plan, x.solarKw, bb.kwh) })) : []
+        });
+        opt.today = opt.free;
+        r.dayCache[key] = { fin: Amber.plannerFinance(opt, r.f) };
+        return r.dayCache[key];
+    }
+
     function keenness(x) {
         const fin = x.fin;
         if (!fin || fin.capex.total <= 0) return null;
         const f = ui.results.f;
         const back = 1 + fin.npv / fin.capex.total;
         const low = Amber.plannerFinance(scaled(x.opt, 0.8), f);
-        const robust = low.npv > 0;
-        const level = Amber.plannerKeenLevel({ npv: fin.npv, capex: fin.capex.total, payback: fin.payback, lowNpv: low.npv });
-        return { level, back, low, robust, wait: Amber.plannerWaitAYear(x.opt, f) };
+        const day = dayFeedIn(x);
+        const robust = low.npv > 0 && (!day || day.fin.npv > 0);
+        const level = Amber.plannerKeenLevel({ npv: fin.npv, capex: fin.capex.total, payback: fin.payback, lowNpv: low.npv, dayNpv: day ? day.fin.npv : null });
+        return { level, back, low, day, robust, wait: Amber.plannerWaitAYear(x.opt, f) };
     }
 
     function keenHtml(x, lead) {
@@ -630,7 +651,8 @@
         const dots = [1, 2, 3, 4].map((i) => `<span class="inline-block w-2.5 h-2.5 rounded-full ${i <= k.level ? l.dot : 'bg-gray-300'}"></span>`).join('');
         let why = `every $1 up front comes back as about $${Math.max(0, k.back).toFixed(2)} in today's money over ${r.f.years} years`;
         if (fin.irr != null) why += ` (like ${(fin.irr * 100).toFixed(1)} % a year, against the ${r.f.discount} % you'd otherwise earn)`;
-        if (fin.npv > 0) why += k.robust ? '; it still pays if power prices are 20 % lower than you set' : `; if power prices are 20 % lower than you set, it doesn't pay (${dollars(k.low.npv)})`;
+        if (fin.npv > 0) why += k.low.npv > 0 ? '; it still pays if power prices are 20 % lower than you set' : `; if power prices are 20 % lower than you set, it doesn't pay (${dollars(k.low.npv)})`;
+        if (fin.npv > 0 && k.day) why += k.day.fin.npv > 0 ? `; if feed-in prices from 10am to 3pm halve, it's still worth ${dollars(k.day.fin.npv)}` : `; if feed-in prices from 10am to 3pm halve, it doesn't pay (${dollars(k.day.fin.npv)})`;
         let timing = '';
         const capex = fin.capex.total;
         const quiet = k.wait.change > -0.01 * capex; // waiting costs under 1 % of the up-front cost, or pays
@@ -809,10 +831,23 @@
             const made = f.solarKwh + clipped;
             const pct = (v) => (made > 0 ? Math.round((v / made) * 100) : 0);
             const lost = Math.max(0, lostToLimit(ev) - lostToLimit(base));
-            const sentOut = Math.max(0, f.solarKwh - f.solarSelf - lost);
-            html += `<p class="text-xs text-gray-600 mt-2">The new panels could make ${k(made)} kWh a year. ${k(f.solarSelf)} (${pct(f.solarSelf)} %) is used at home as it's made; ${k(sentOut)} (${pct(sentOut)} %) goes to the battery or the grid; `
-                + `${k(lost)} (${pct(lost)} %) is lost because the ${num('planExportLimit')} kW export limit is already used${clipped > 1 ? `, and ${k(clipped)} (${pct(clipped)} %) is clipped by the inverter on the sunniest middays` : ''}. `
-                + 'Sent-out solar earns each half hour\'s feed-in price from your readings\' year (on Amber, last year\'s actual prices), which is often small at midday and better early, late and in winter.</p>';
+            const offNew = Math.max(0, (ev.switchedOff || 0) - (base.switchedOff || 0));
+            const sentOut = Math.max(0, f.solarKwh - f.solarSelf - lost - offNew);
+            const parts = [`${k(f.solarSelf)} (${pct(f.solarSelf)} %) is used at home as it's made`, `${k(sentOut)} (${pct(sentOut)} %) goes to the battery or the grid`,
+                `${k(lost)} (${pct(lost)} %) is lost because the ${num('planExportLimit')} kW export limit is already used`];
+            if (offNew > 1) parts.push(`${k(offNew)} (${pct(offNew)} %) isn't sent because the feed-in price is negative then (the panels switch off)`);
+            if (clipped > 1) parts.push(`${k(clipped)} (${pct(clipped)} %) is clipped by the inverter on the sunniest middays`);
+            let negative = '';
+            if (!r.switchOff) {
+                // Panels that can't switch off: what sending power out at negative prices costs.
+                const sell = r.res.prep.pricesOf(r.res.prep.byName[x.plan]).sell;
+                let negKwh = 0;
+                let negCost = 0;
+                for (let i = 0; i < ev.exp.length; i++) if (ev.exp[i] > 0 && sell[i] < 0) { negKwh += ev.exp[i]; negCost -= ev.exp[i] * sell[i] / 100; }
+                if (negKwh > 1) negative = ` With panels that can't switch off, ${k(negKwh)} kWh a year goes out while the feed-in price is negative, costing about ${dollars(negCost)}.`;
+            }
+            html += `<p class="text-xs text-gray-600 mt-2">The new panels could make ${k(made)} kWh a year: ${parts.join('; ')}.${negative} `
+                + 'Sent-out solar earns each half hour\'s feed-in price from your readings\' year (on Amber, last year\'s actual prices), which is often small or even negative at midday and better early, late and in winter.</p>';
         }
         return html;
     }
@@ -913,6 +948,10 @@
                 : 'New panels are added on top of your meter readings, so panels you already have keep doing what they did.',
             'The battery covers your home when power is dear, soaks up solar that would sell cheaply, charges from the grid in free or cheap hours, and sells when an export pays well. It knows each day\'s prices in the morning (as fixed plans and Amber\'s forecasts allow), so a real battery may do a little worse, especially on Amber\'s price spikes.',
             `Money: prices rise ${r.f.escalation} % a year; the battery loses ${r.f.batteryFade} % of its capacity a year and is replaced after ${r.f.batteryLife} years; the inverter after ${r.f.inverterLife}; panels lose ${r.f.solarDegradation} % a year. "Worth" is today's money at ${r.f.discount} % a year.`,
+            r.switchOff
+                ? 'When a feed-in price is negative (on Amber it happens in the middle of sunny days), a battery soaks up what it can and the panels switch off for the rest, so nothing is paid to export. Untick "Panels switch off when the feed-in price is negative" if yours can\'t.'
+                : 'Your panels can\'t switch off, so power sent out while the feed-in price is negative costs you (a battery soaks up what it can first).',
+            'How keen to be also checks what happens if feed-in prices from 10am to 3pm halve, as more rooftop solar pushes them down; it uses last year\'s prices otherwise.',
             'Not included: maintenance, any payments for joining a virtual power plant, the value of backup power in a blackout, or your network moving you to a different tariff after you install.'
         ];
         if (y.exportUnpriced) items.push(`${y.exportUnpriced} half hours had no wholesale price, so Amber pays nothing for solar sent out then.`);
