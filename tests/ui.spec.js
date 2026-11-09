@@ -170,7 +170,7 @@ test.describe('Amber UI flows', () => {
         const plans = await page.locator('#planOptionsTable [data-plan-option]:not([data-plan-option^="-"]) td:nth-child(2)').allTextContents();
         expect(plans.length).toBeGreaterThan(1);
         expect(new Set(plans.map((t) => t.trim()))).toEqual(new Set(['Amber']));
-        await expect(page.locator('#planDetailBody tbody tr')).toHaveCount(13);
+        await expect(page.locator('#planDetailBody table').first().locator('tbody tr')).toHaveCount(13);
         expect(errors).toEqual([]);
     });
 
