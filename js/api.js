@@ -1,6 +1,13 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Amber API client (https://api.amber.com.au/v1): the site list, and usage for a date range
+     * fetched in chunks of Amber.FETCH_CHUNK_DAYS, a few at a time (mapPool). Every request has a
+     * timeout; 429s, server errors and network failures are retried after Amber.RETRY_DELAYS_MS.
+     * The caller (app.js fetchAndCompare) caches what comes back (storage.js).
+     */
+
     Amber.sleep = function (ms) {
         return new Promise((resolve) => setTimeout(resolve, ms));
     };

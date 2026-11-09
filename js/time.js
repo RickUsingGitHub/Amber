@@ -1,6 +1,13 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Dates and times. Amber's nemTime is an interval's end in NEM time (UTC+10, no daylight
+     * saving); plans' windows are local wall-clock time (or NEM time with clock: 'nem'). Helpers
+     * here convert between them (getClockParts, localWallToNemIso), match intervals to time-of-use
+     * windows (timeInWindow, windowMatches), and do day arithmetic on YYYY-MM-DD strings.
+     */
+
     function pad(n) {
         return String(n).padStart(2, '0');
     }

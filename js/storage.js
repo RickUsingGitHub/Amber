@@ -1,6 +1,14 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Browser storage. IndexedDB AmberDataCacheDB / dailyUsage holds the meter readings, one record
+     * per site and NEM date (id "<siteId>_<YYYY-MM-DD>"). Only final whole days are cached (with
+     * old empty days remembered), and estimated readings stay eligible for a refetch
+     * (cachedDayUsable). Also the API key (obfuscated, not encrypted; localStorage, or
+     * sessionStorage when not remembered) and escapeHTML for everything put into innerHTML.
+     */
+
     const DB_NAME = 'AmberDataCacheDB';
     const STORE_NAME = 'dailyUsage';
     const DB_VERSION = 1;
