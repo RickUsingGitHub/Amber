@@ -1340,6 +1340,21 @@
         return { capex, flows, payback, firstPayback, npv, irr, residual, batteryBought, net10, netAll: cum, firstYearSaving: flows.length ? flows[0].saving : 0 };
     };
 
+    /**
+     * How keen to be on an option, 0–4 (Not worth it, Marginal, Modest, Good, Strong), from its
+     * value in today's money per $1 up front, whether it still pays with power prices 20 % lower
+     * (lowNpv), and how soon it pays back for good. o: { npv, capex, payback, lowNpv }.
+     */
+    Amber.plannerKeenLevel = function (o) {
+        if (!(o.capex > 0)) return null;
+        const back = 1 + o.npv / o.capex;
+        if (o.npv <= 0) return 0;
+        if (back < 1.15) return 1;
+        if (back < 1.4 || !(o.lowNpv > 0)) return 2;
+        if (back >= 1.75 && o.payback != null && o.payback <= 8) return 4;
+        return 3;
+    };
+
     function irrOf(c0, nets) {
         const npvAt = (rate) => nets.reduce((s, x, i) => s + x / Math.pow(1 + rate, i + 1), c0);
         if (c0 >= 0 || npvAt(-0.99) < 0) return null;
