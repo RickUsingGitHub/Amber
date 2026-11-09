@@ -1,6 +1,12 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Month by month on Compare: Amber and the compared plan for each calendar month (and any
+     * period), worked out the same way as the main comparison (feed-in settlement, monthly demand,
+     * daily charges for every day).
+     */
+
     function daysInMonth(monthKey) {
         const y = parseInt(monthKey.substring(0, 4), 10);
         const m = parseInt(monthKey.substring(5, 7), 10);

@@ -1,6 +1,14 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * App-wide settings and reference data: Amber API limits, the app version (APP_VERSION, also
+     * in index.html and tests/unit-time.js), Amber's default fixed charges for this financial year
+     * and last (split at AMBER_RATES_CHANGE_DATE), state time zones, network names and matching
+     * plans to a site's network, and the company behind each plan (planCompany). Update each
+     * 1 July with templates.js and networks.js.
+     */
+
     Amber.API_URL = 'https://api.amber.com.au/v1';
     Amber.FETCH_CHUNK_DAYS = 7;
     Amber.FETCH_CONCURRENCY = 3;
@@ -12,7 +20,7 @@
     // Compare "This month" when the page opens with a saved API key (a test can preset
     // window.Amber.AUTO_COMPARE = false to start idle).
     Amber.AUTO_COMPARE = Amber.AUTO_COMPARE !== false;
-    Amber.APP_VERSION = '1.60';
+    Amber.APP_VERSION = '1.61';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.

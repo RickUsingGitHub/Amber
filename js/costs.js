@@ -1,6 +1,20 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Pricing a period of meter data. processUsageData turns API-shaped usage items into
+     * per-channel totals (with each interval kept for re-pricing); from those:
+     *   - Amber: interval prices, the Ausgrid EA029 export settlement (applyAmberFeedInSettlement),
+     *     demand per calendar month (calculateDemandTariff), daily connection and subscription
+     *     for the year each day falls in (amberRatesOn);
+     *   - another plan (calculateOtherSupplierCosts, computePlanTotals): flat or time-of-use rates,
+     *     free windows with daily caps, controlled load, flat, windowed and capped feed-in (caps
+     *     shared across channels: householdCappedSplits), demand (calculateOtherDemandTariff);
+     *   - daily rows for the calendar and CSV (precalculateDailySummaries).
+     * Compare, month by month (monthly.js), Bill Check and Free? all price through here; the
+     * planner's half-hourly costing is checked against computePlanTotals (tests/unit-planner.js).
+     */
+
     Amber.absKwh = function (value) {
         const n = parseFloat(value);
         if (!Number.isFinite(n)) return 0;
