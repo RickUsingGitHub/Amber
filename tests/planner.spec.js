@@ -102,6 +102,13 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(page.locator('#planRecommendation')).toContainText('Best for you');
     await expect(page.locator('#planRecommendation')).toContainText("Next year's bill");
     await expect(page.locator('#planRecommendation')).toContainText('What to ask installers for:');
+    // How keen to be: a level, a word and the reasons.
+    const keen = page.locator('#planRecommendation [data-keen]');
+    await expect(keen).toHaveCount(1);
+    await expect(keen).toContainText(/How keen to be/);
+    await expect(keen).toContainText(/(Strong|Good|Modest|Marginal|Not worth it)/);
+    await expect(keen).toContainText(/every \$1 up front comes back as about \$\d+\.\d\d in today's money/);
+    await expect(page.locator('#planPaybackNotes [data-keen]')).toHaveCount(1);
     await expect(page.locator('#planRecommendation')).toContainText(/usable that can charge and discharge at about \d+(\.\d)? kW/);
     await expect(page.locator('#planOptionsTable')).toContainText('cheapest with nothing new');
     // The money columns say what they count.
