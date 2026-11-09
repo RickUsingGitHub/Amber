@@ -155,7 +155,9 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
     const battery = { kwh: 13.5, kw: 5, rte: 0.9, wear: 2 };
     const balance = (f, sim) => {
         const d = (a) => a.reduce((s, x) => s + x, 0);
-        return near(d(sim.imp) - d(sim.exp), d(f.imp) - d(f.exp) + sim.charged - sim.discharged + sim.curtailed, 1e-6);
+        // The battery starts from the spare power before the export limit (expRaw); what the limit
+        // still throws away afterwards is sim.limited.
+        return near(d(sim.imp) - d(sim.exp), d(f.imp) - d(f.expRaw || f.exp) + sim.charged - sim.discharged + sim.curtailed + sim.limited, 1e-6);
     };
 
     // Flat plan, no solar: nothing to gain, so the battery sits idle.
@@ -382,6 +384,27 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
     const freshCost = flatCost(fresh.imp, fresh.exp);
     assert(replay - freshCost > 50 && off(freshCost, real) < 0.08,
         `Amber battery moved to a flat plan: replayed $${replay.toFixed(0)}, run afresh $${freshCost.toFixed(0)}, really about $${real.toFixed(0)}`);
+
+    // The export limit is measured against what the meter sent out (not the solar the old battery
+    // soaked up), and a battery stores what the limit would otherwise throw away.
+    const meterExp = readings(selfUse).exp;
+    const big = Amber.plannerFlows(back.year, { solar: pv.map((x) => x * 2), exportLimitKw: 5 });
+    const run = Amber.simulateBattery(back.year, big, Amber.plannerBatteryPrices(back.year, flat, flatCard, model), battery);
+    let over = 0;
+    for (let i = 0; i < year.n; i++) over = Math.max(over, run.exp[i] - Math.max(2.5, meterExp[i]));
+    assert(back.year.meterExp === meterExp && over < 1e-9 && run.limited > 0,
+        `never more than the 5 kW limit (or what the meter already sent) goes to the grid; ${run.limited.toFixed(0)} kWh is lost to the limit`);
+    // Zero export allowed: spare midday solar can only go into the battery (on a flat plan, with no
+    // reason to charge from the grid). Capping first would have thrown it all away.
+    const spareArr = new Float64Array(year.n);
+    for (let i = 0; i < year.n; i++) { const h = i % 48; if (h >= 20 && h < 28) spareArr[i] = 2; }
+    const zeroExport = { imp: truth.imp, exp: new Float64Array(year.n), expRaw: spareArr, cl: truth.cl, expCap: new Float64Array(year.n) };
+    const flatPrices0 = Amber.plannerBatteryPrices(year, flat, flatCard, model);
+    const stored = Amber.simulateBattery(year, zeroExport, flatPrices0, battery);
+    const thrown = Amber.simulateBattery(year, Object.assign({}, zeroExport, { expRaw: null }), flatPrices0, battery);
+    assert(stored.charged > 3000 && thrown.charged < 1 && stored.exp.every((v) => v === 0) && near(stored.limited + stored.charged, total(spareArr), 1e-6)
+        && flatCost(stored.imp, stored.exp) < flatCost(thrown.imp, thrown.exp) - 300,
+        `zero export: the battery stores ${stored.charged.toFixed(0)} kWh of solar the limit would have thrown away, and nothing reaches the grid`);
 
     pending.push((async () => {
         const ctx = { year: back.year, plans: [flat, amberPlan], state: 'NSW', amberModel: model, solarSizes: [0], batterySizes: [0, 5], existing: { kwh: 10, kw: 5 }, battery: { rte: 0.9 } };

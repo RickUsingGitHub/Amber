@@ -448,15 +448,24 @@
         }
         let expCap = null;
         let curtailed = 0;
+        let expRaw = exp;
         if (o.exportLimitKw != null && o.exportLimitKw >= 0) {
             expCap = new Float64Array(n);
             const limit = o.exportLimitKw * 0.5;
+            const meter = year.meterExp || year.exp;
+            expRaw = Float64Array.from(exp);
             for (let i = 0; i < n; i++) {
-                expCap[i] = Math.max(limit, year.exp[i]);
+                // What the meter already sent out keeps its room (the existing system did it within its
+                // own limit); anything new only uses what's left under the limit. With a battery taken
+                // out of the readings, year.exp also holds the solar that battery soaked up, which never
+                // reached the meter: the limit is measured against the meter (meterExp), not that.
+                expCap[i] = Math.max(limit, meter[i]);
                 if (exp[i] > expCap[i]) { curtailed += exp[i] - expCap[i]; exp[i] = expCap[i]; }
             }
         }
-        return { imp, exp, cl, expCap, solarKwh, solarSelf, curtailed };
+        // exp: what reaches the grid with no battery (capped); expRaw: the spare power before the
+        // cap, which a battery can soak up before the limit throws the rest away.
+        return { imp, exp, expRaw, cl, expCap, solarKwh, solarSelf, curtailed };
     };
 
     // ---------- What the household already has: solar and a battery ----------
@@ -738,7 +747,7 @@
             stats.fromGrid += fromGrid[i];
         }
         stats.cycles = B > 0 ? (stats.toHome + stats.toGrid) / (B * eta) : 0;
-        return { year: Object.assign({}, year, { imp: imp0, exp: exp0, unwound: true }), stats };
+        return { year: Object.assign({}, year, { imp: imp0, exp: exp0, meterExp: year.meterExp || exp, unwound: true }), stats };
     };
 
     /**
@@ -938,7 +947,8 @@
         const n = year.n;
         const imp = Float64Array.from(flows.imp);
         const exp = Float64Array.from(flows.exp);
-        const out = { imp, exp, charged: 0, gridCharged: 0, discharged: 0, exported: 0, curtailed: 0, cycles: 0 };
+        const out = { imp, exp, charged: 0, gridCharged: 0, discharged: 0, exported: 0, curtailed: 0, limited: 0, cycles: 0 };
+        const spare = flows.expRaw || flows.exp;
         if (!B) return out;
         const rte = battery.rte || 0.9;
         const eta = Math.sqrt(rte);
@@ -959,7 +969,7 @@
             for (let i = day * SLOTS; i < (day + 1) * SLOTS; i++) {
                 const b = staticBuy(i);
                 if (!prices.noGrid[i]) refill = Math.min(refill, buy[i] / eta);
-                if (flows.exp[i] > 0) refill = Math.min(refill, sell[i] / eta);
+                if (spare[i] > 0) refill = Math.min(refill, sell[i] / eta);
                 best = Math.max(best, b * eta);
             }
             if (!Number.isFinite(refill)) refill = best;
@@ -974,7 +984,7 @@
             const winUsed = [0, 0, 0, 0, 0, 0, 0, 0];
             for (let i = d * SLOTS; i < (d + 1) * SLOTS; i++) {
                 let im = flows.imp[i];
-                let ex = flows.exp[i];
+                let ex = spare[i];
                 let b = buy[i];
                 if (prices.free && prices.free[i] && freeUsed >= prices.freeCap) b = prices.alt[i];
                 b += shadow[i];
@@ -1003,12 +1013,23 @@
                     power -= toGrid;
                     e -= toGrid / eta;
                 }
-                if (ex > 0 && !toGrid && s < theta * rte && power > 0) {
-                    chg = Math.min(ex, power, (B - e) / eta);
-                    ex -= chg;
-                    power -= chg;
-                    e += chg * eta;
+                // Power over the export limit would be thrown away: store it whatever the price.
+                if (cap && ex > cap[i] && !toLoad && !toGrid && power > 0) {
+                    const free = Math.min(ex - cap[i], power, (B - e) / eta);
+                    chg += free;
+                    ex -= free;
+                    power -= free;
+                    e += free * eta;
                 }
+                if (ex > 0 && !toGrid && s < theta * rte && power > 0) {
+                    const more = Math.min(ex, power, (B - e) / eta);
+                    chg += more;
+                    ex -= more;
+                    power -= more;
+                    e += more * eta;
+                }
+                let limited = 0;
+                if (cap && ex > cap[i]) { limited = ex - cap[i]; ex = cap[i]; }
                 if (b <= phi && !toLoad && !toGrid && !prices.noGrid[i] && power > 0) {
                     grid = Math.min(power, (B - e) / eta);
                     im += grid;
@@ -1028,6 +1049,7 @@
                     out.discharged += dis;
                     out.exported += toGrid;
                     out.curtailed += curtail;
+                    out.limited += limited;
                 }
             }
             return commit ? e : cost - vEnd * e;
@@ -1159,7 +1181,7 @@
             rows.push({
                 solarKw: kw, batteryKwh: kwh, plan: plan.name, bill: cost.total, cost,
                 importKwh: sum(imp), exportKwh: sum(exp), controlledKwh: sum(f.cl),
-                solarKwh: f.solarKwh, solarSelf: f.solarSelf, curtailed: f.curtailed + (sim ? sim.curtailed : 0),
+                solarKwh: f.solarKwh, solarSelf: f.solarSelf, curtailed: sim ? sim.curtailed + sim.limited : f.curtailed,
                 battery: sim ? { charged: sim.charged, gridCharged: sim.gridCharged, discharged: sim.discharged, exported: sim.exported, cycles: sim.cycles } : null
             });
         };
