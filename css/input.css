@@ -27,10 +27,11 @@
     .plan-multi > summary::-webkit-details-marker {
         display: none;
     }
+    /* Tighter on phones so all six tabs fit on one line. */
     .main-tab {
-        padding: 0.5rem 0.75rem;
+        padding: 0.5rem 0.375rem;
         border-radius: 0.375rem;
-        font-size: 0.875rem;
+        font-size: 0.8125rem;
         font-weight: 600;
         color: #4b5563;
         transition: background-color 0.15s ease, color 0.15s ease;
@@ -38,6 +39,7 @@
     @media (min-width: 640px) {
         .main-tab {
             padding: 0.5rem 1rem;
+            font-size: 0.875rem;
         }
     }
     .main-tab:hover {
