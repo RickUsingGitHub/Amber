@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.58</title>
+    <title>Amber Compare &amp; Export v1.59</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.58">
+    <link rel="stylesheet" href="css/app.css?v=1.59">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,7 +19,7 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.58.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.59.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -669,7 +669,7 @@
                                 <input type="number" id="planShading" min="0" max="80" step="1" value="0" class="plan-input">
                             </div>
                             <div class="sm:col-span-3">
-                                <label class="inline-flex items-start gap-2 text-sm text-gray-700" data-help="planSwitchOff" data-help-label="Panels switch off when the feed-in price is negative"><input type="checkbox" id="planSwitchOff" checked class="mt-0.5"> Panels switch off when the feed-in price is negative</label>
+                                <label class="inline-flex items-start gap-2 text-sm text-gray-700" data-help="planSwitchOff" data-help-label="Panels switch off when the feed-in price is negative"><input type="checkbox" id="planSwitchOff" checked class="mt-0.5"> <span>Panels switch off when the feed-in price is negative <span class="text-gray-500">(a "curtailable" inverter)</span></span></label>
                             </div>
                         </div>
                     </details>
@@ -764,6 +764,10 @@
                         <h3 id="planDetailTitle" class="text-xl font-bold text-gray-900 mb-1">Next year, month by month</h3>
                         <div id="planDetailBody"></div>
                     </div>
+                    <div class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                        <h3 class="text-xl font-bold text-gray-900 mb-1" data-help="planNumbers">Check the numbers</h3>
+                        <div id="planNumbersBody"></div>
+                    </div>
                     <div class="bg-white rounded-lg shadow-md p-6 mb-6">
                         <h3 class="text-xl font-bold text-gray-900 mb-1" data-help="planPayback">Paying it back</h3>
                         <div class="relative h-64"><canvas id="planPaybackChart" aria-label="Money saved over the years, after paying for the system"></canvas></div>
@@ -794,26 +798,26 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.58"></script>
-    <script src="js/help.js?v=1.58"></script>
-    <script src="js/time.js?v=1.58"></script>
-    <script src="js/templates.js?v=1.58"></script>
-    <script src="js/storage.js?v=1.58"></script>
-    <script src="js/costs.js?v=1.58"></script>
-    <script src="js/api.js?v=1.58"></script>
-    <script src="js/bill.js?v=1.58"></script>
-    <script src="js/csv.js?v=1.58"></script>
-    <script src="js/charts.js?v=1.58"></script>
-    <script src="js/calendar.js?v=1.58"></script>
-    <script src="js/stats.js?v=1.58"></script>
-    <script src="js/monthly.js?v=1.58"></script>
-    <script src="js/redispatch.js?v=1.58"></script>
-    <script src="js/import.js?v=1.58"></script>
-    <script src="js/networks.js?v=1.58"></script>
-    <script src="js/estimate.js?v=1.58"></script>
-    <script src="js/solar.js?v=1.58"></script>
-    <script src="js/planner.js?v=1.58"></script>
-    <script src="js/planner-ui.js?v=1.58"></script>
-    <script src="js/app.js?v=1.58"></script>
+    <script src="js/constants.js?v=1.59"></script>
+    <script src="js/help.js?v=1.59"></script>
+    <script src="js/time.js?v=1.59"></script>
+    <script src="js/templates.js?v=1.59"></script>
+    <script src="js/storage.js?v=1.59"></script>
+    <script src="js/costs.js?v=1.59"></script>
+    <script src="js/api.js?v=1.59"></script>
+    <script src="js/bill.js?v=1.59"></script>
+    <script src="js/csv.js?v=1.59"></script>
+    <script src="js/charts.js?v=1.59"></script>
+    <script src="js/calendar.js?v=1.59"></script>
+    <script src="js/stats.js?v=1.59"></script>
+    <script src="js/monthly.js?v=1.59"></script>
+    <script src="js/redispatch.js?v=1.59"></script>
+    <script src="js/import.js?v=1.59"></script>
+    <script src="js/networks.js?v=1.59"></script>
+    <script src="js/estimate.js?v=1.59"></script>
+    <script src="js/solar.js?v=1.59"></script>
+    <script src="js/planner.js?v=1.59"></script>
+    <script src="js/planner-ui.js?v=1.59"></script>
+    <script src="js/app.js?v=1.59"></script>
 </body>
 </html>
