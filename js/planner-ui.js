@@ -1115,6 +1115,7 @@
         const high = Amber.plannerFinance(scaled(x.opt, 1.2), r.f);
         const series = (fin) => [-fin.capex.total].concat(fin.flows.map((y) => y.cumulative));
         const labels = ['Now'].concat(x.fin.flows.map((y) => `Year ${y.year}`));
+        const isZero = (c) => !!(c.tick && Math.abs(c.tick.value) < 1e-6);
         if (typeof Chart === 'function') {
             ui.chart = new Chart(canvas.getContext('2d'), {
                 type: 'line',
@@ -1130,7 +1131,15 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
-                    scales: { y: { title: { display: true, text: 'Money ahead ($)' }, ticks: { callback: (v) => dollars(v) } } },
+                    // $0 is where it's paid back: always on the chart, and a darker, thicker line.
+                    scales: {
+                        y: {
+                            suggestedMax: 0,
+                            title: { display: true, text: 'Money ahead ($)' },
+                            ticks: { callback: (v) => dollars(v), font: (c) => ({ weight: isZero(c) ? 'bold' : 'normal' }), color: (c) => (isZero(c) ? '#111827' : '#666') },
+                            grid: { color: (c) => (isZero(c) ? '#374151' : 'rgba(0, 0, 0, 0.1)'), lineWidth: (c) => (isZero(c) ? 2 : 1) }
+                        }
+                    },
                     plugins: { tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${dollars(c.parsed.y)}` } } }
                 }
             });

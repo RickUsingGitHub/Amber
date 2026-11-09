@@ -126,6 +126,13 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     await expect(monthRows).toHaveCount(13);
     await expect(monthRows.last()).toContainText('Year');
     await expect(page.locator('#planPaybackNotes')).toContainText('Paid');
+    // The $0 line (paid back) stands out on the payback chart.
+    const zeroLine = await page.evaluate(() => {
+        const s = window.Chart.getChart('planPaybackChart').scales.y;
+        const i = s.ticks.findIndex((t) => t.value === 0);
+        return i < 0 ? null : s.options.grid.setContext(s.getContext(i)).lineWidth;
+    });
+    expect(zeroLine).toBe(2);
 
     // Check the numbers: averages for the yardstick and the option, prices through the day, the settings used.
     const averages = page.locator('#planNumbersBody [data-numbers="averages"]');
