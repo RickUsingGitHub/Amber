@@ -599,6 +599,52 @@
         return `pays back in ${yearsText(fin.payback)}`;
     }
 
+    // ---------- How keen to be ----------
+    // A verdict from today's dollars back per $1 up front, whether it still pays with power prices
+    // 20 % lower, and how soon it pays back for good (thresholds in the planEnthusiasm help).
+    const KEEN = [
+        { word: 'Not worth it', why: 'at these prices it costs more than it saves', dot: 'bg-red-500', text: 'text-red-700' },
+        { word: 'Marginal', why: 'it only just pays for itself, and could easily not', dot: 'bg-orange-500', text: 'text-orange-700' },
+        { word: 'Modest', why: 'worth it on paper, but not by much', dot: 'bg-amber-500', text: 'text-amber-700' },
+        { word: 'Good', why: 'clearly worth doing', dot: 'bg-green-500', text: 'text-green-700' },
+        { word: 'Strong', why: 'well worth doing', dot: 'bg-green-600', text: 'text-green-800' }
+    ];
+
+    function keenness(x) {
+        const fin = x.fin;
+        if (!fin || fin.capex.total <= 0) return null;
+        const f = ui.results.f;
+        const back = 1 + fin.npv / fin.capex.total;
+        const low = Amber.plannerFinance(scaled(x.opt, 0.8), f);
+        const robust = low.npv > 0;
+        const level = Amber.plannerKeenLevel({ npv: fin.npv, capex: fin.capex.total, payback: fin.payback, lowNpv: low.npv });
+        return { level, back, low, robust, wait: Amber.plannerWaitAYear(x.opt, f) };
+    }
+
+    function keenHtml(x, lead) {
+        const k = keenness(x);
+        if (!k) return '';
+        const r = ui.results;
+        const fin = x.fin;
+        const l = KEEN[k.level];
+        const dots = [1, 2, 3, 4].map((i) => `<span class="inline-block w-2.5 h-2.5 rounded-full ${i <= k.level ? l.dot : 'bg-gray-300'}"></span>`).join('');
+        let why = `every $1 up front comes back as about $${Math.max(0, k.back).toFixed(2)} in today's money over ${r.f.years} years`;
+        if (fin.irr != null) why += ` (like ${(fin.irr * 100).toFixed(1)} % a year, against the ${r.f.discount} % you'd otherwise earn)`;
+        if (fin.npv > 0) why += k.robust ? '; it still pays if power prices are 20 % lower than you set' : `; if power prices are 20 % lower than you set, it doesn't pay (${dollars(k.low.npv)})`;
+        let timing = '';
+        const capex = fin.capex.total;
+        const quiet = k.wait.change > -0.01 * capex; // waiting costs under 1 % of the up-front cost, or pays
+        const cost = k.wait.change >= 0 ? `${dollars(k.wait.change)} better off` : `${dollars(-k.wait.change)} worse off`;
+        if (k.level > 0 && quiet && k.level <= 2) timing = ` Waiting a year costs next to nothing (${cost}), so it's reasonable to wait and see what prices, rebates and technology do.`;
+        else if (k.level > 0 && quiet) timing = ` There's no rush: waiting a year costs next to nothing (${cost}), though it's worth doing either way.`;
+        else if (k.level > 0 && k.wait.change < -0.03 * capex) timing = ` Waiting a year would cost about ${dollars(-k.wait.change)}, so if you're going to do it, sooner is better.`;
+        const lbl = lead || 'How keen to be';
+        return `<div class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 mb-3" data-keen="${k.level}">`
+            + `<div class="flex flex-wrap items-center gap-2"><span class="text-sm font-semibold text-gray-800" data-help="planEnthusiasm" data-help-label="${esc(lbl)}">${esc(lbl)}</span>`
+            + `<span class="flex gap-1" role="img" aria-label="${k.level} of 4">${dots}</span><span class="text-sm font-bold ${l.text}">${l.word}</span></div>`
+            + `<p class="text-sm text-gray-700 mt-1">${l.why.charAt(0).toUpperCase()}${l.why.slice(1)}: ${why}.${timing}</p></div>`;
+    }
+
     function renderRecommendation() {
         const r = ui.results;
         const best = ranked()[0];
@@ -627,14 +673,16 @@
         }
         if (hardware) {
             const wait = Amber.plannerWaitAYear(best.opt, r.f);
-            lines.push(`<p class="text-sm text-gray-600">Waiting a year: up front would be ${dollars(wait.capexLater)} (hardware cheaper, rebates smaller), but you'd miss a year of savings, so overall you'd be <strong>${dollars(Math.abs(wait.change))} ${wait.change > 0 ? 'better' : 'worse'} off</strong>.</p>`);
+            lines.push(`<p class="text-sm text-gray-600">Waiting a year: up front would be ${dollars(wait.capexLater)} (hardware cheaper, rebates smaller) and you'd miss a year of savings; overall you'd be <strong>${dollars(Math.abs(wait.change))} ${wait.change > 0 ? 'better' : 'worse'} off</strong> by waiting.</p>`);
         }
         const k = r.loads.kwh;
         const added = k.ev + k.hotWater + k.heating + k.cooking;
         if (added > 0) {
             lines.push(`<p class="text-sm text-gray-600">Your planned changes add ${Math.round(added).toLocaleString('en-AU')} kWh a year to every option (car ${Math.round(k.ev)}, hot water ${Math.round(k.hotWater)}, heating ${Math.round(k.heating)}, cooking ${Math.round(k.cooking)})${r.loads.gasSaving > 0 ? `, and you'd stop paying about ${dollars(r.loads.gasSaving)} a year for gas` : ''}.</p>`);
         }
-        box.innerHTML = `<h3 class="text-xl font-bold text-gray-900 mb-2">Best for you: ${esc(describe(best))}, on ${esc(label(best.plan))}</h3><div class="space-y-2 text-gray-800">${lines.join('')}</div>`;
+        const kit = hardware ? best : ranked().filter((x) => x.solarKw > 0 || x.batteryKwh > 0).sort((a, b) => b.fin.npv - a.fin.npv)[0];
+        const keen = kit ? keenHtml(kit, hardware ? 'How keen to be' : 'New panels or a battery') : '';
+        box.innerHTML = `<h3 class="text-xl font-bold text-gray-900 mb-2">Best for you: ${esc(describe(best))}, on ${esc(label(best.plan))}</h3>${keen}<div class="space-y-2 text-gray-800">${lines.join('')}</div>`;
     }
 
     function system(x) {
@@ -791,7 +839,7 @@
             const left = r.f.batteryLife - (r.f.years - fin.batteryBought.year + 1);
             repl += ` When the ${r.f.years} years are up, the replacement battery still has ${left} of its ${r.f.batteryLife} years to go, worth about ${dollars(fin.residual.total)} then (with the inverter's). That isn't on the chart, which is cash only, but it counts toward the worth in today's money.`;
         }
-        notes.innerHTML = `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20 % higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20 % lower).${repl}</p>`
+        notes.innerHTML = keenHtml(x) + `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20 % higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20 % lower).${repl}</p>`
             + `<p class="text-gray-600">Savings here are against nothing new on ${esc(label(r.compare.plan))}${r.compare === r.free ? ', the cheapest plan as things are, so they count only what the panels and battery add' : ', so they include anything gained just by switching plan'}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation} % a year.</p>`;
     }
 
