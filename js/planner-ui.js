@@ -541,6 +541,25 @@
         return list;
     }
 
+    // What to ask installers for: the sizes the planner assumed for this option (new equipment only).
+    function orderText(x) {
+        const parts = [];
+        if (x.solarKw > 0) parts.push(`${kw(x.solarKw)} of panels with an inverter of about ${kw(x.solarKw / INVERTER_RATIO)}`);
+        if (x.batteryKwh > 0) {
+            const b = ui.results.res.prep.ctx.battery || {};
+            const power = Math.min(15, Math.max(2.5, x.batteryKwh * (b.kwPerKwh || 0.4)));
+            parts.push(`a battery with ${kwh(x.batteryKwh)} usable that can charge and discharge at about ${kw(power)}`);
+        }
+        return parts.join(', and ');
+    }
+
+    function orderNote(x) {
+        const notes = ['These are the sizes the planner assumed.'];
+        if (x.solarKw > 0) notes.push('A bigger inverter loses a little less on sunny middays.');
+        if (x.solarKw > 0 && x.batteryKwh > 0) notes.push('The battery\'s power is treated as separate from the panels\' inverter: if one hybrid inverter will run both, ask for one that can handle both.');
+        return notes.join(' ');
+    }
+
     function describe(x) {
         const has = ui.results && ui.results.existing && ui.results.existing.kwh > 0;
         const parts = [];
@@ -593,6 +612,7 @@
         const lines = [];
         lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.base)}</strong> with nothing new on ${esc(label(r.compare.plan))}${r.compareWith ? '' : ` (the cheapest plan ${r.allow.size < r.plans.length ? 'you\'d use ' : ''}for you as things are)`}: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
         if (hardware) {
+            lines.push(`<p>What to ask installers for: <strong>${esc(orderText(best))}</strong>. <span class="text-sm text-gray-600">${esc(orderNote(best))}</span></p>`);
             lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)} % interest a year)` : ''}.</p>`);
         }
         if (r.free.plan !== r.compare.plan && r.base - r.free.bill > 1) {
@@ -714,6 +734,7 @@
         const facts = [];
         const nowImport = now.imp.reduce((s, v) => s + v, 0) + now.cl.reduce((s, v) => s + v, 0);
         const change = nowImport > 0 ? Math.round((tot.imp / nowImport - 1) * 100) : 0;
+        if (x.solarKw > 0 || x.batteryKwh > 0) facts.push(`What to ask installers for: ${orderText(x)}. ${orderNote(x)}`);
         facts.push(`Power bought from the grid: ${Math.round(nowImport).toLocaleString('en-AU')} → ${Math.round(tot.imp).toLocaleString('en-AU')} kWh a year${change ? ` (${Math.abs(change)} % ${change < 0 ? 'less' : 'more'})` : ''}.${change > 0 && ev.sim ? ' The battery buys extra when power is cheap, to use or sell when it\'s dear, and loses a little on the way.' : ''}`);
         if (x.solarKw > 0) {
             const f = ev.flows;
@@ -781,7 +802,7 @@
         const items = [
             `Next year is your readings from ${fmtDate(y.first)} to ${fmtDate(y.last)} with the changes you entered, priced at today's plan rates (${r.plans.length - 1} plans for your network, prices as at ${fmtDate(Amber.TEMPLATES_AS_AT)}). Amber uses its prices over those same 12 months: a different year's wholesale prices could make it cheaper or dearer.`,
             'Each option is worked out half hour by half hour, with every plan\'s daily charges, free windows, caps and demand charges, the same way as the Compare tab.',
-            r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')} % shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is sized at 75 % of the panels, as most installers do.` : 'No new panels.',
+            r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')} % shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is assumed to be 75 % of the panel size (panels up to 133 % of the inverter, as most installers fit them); each option shows the sizes to ask for.` : 'No new panels.',
             r.existing.kwh > 0
                 ? `Your ${kwh(r.existing.kwh)} battery is taken out of your readings (an estimate: the meter can't see what it covers at home, so that comes from its size, the days it filled up and ran flat, and your use on nights it was empty), then run again on every plan, together with any new battery. Your panels stay in the readings; new ones are added on top.`
                 : 'New panels are added on top of your meter readings, so panels you already have keep doing what they did.',
