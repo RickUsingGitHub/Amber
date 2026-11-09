@@ -1,6 +1,14 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * The Usage tab's Chart.js charts: the 24-hour average day (displayAverageGraph) and one day
+     * up close (displayDailyGraph), per channel (general, controlled load, feed-in) with Amber's
+     * price and the compared plan's c/kWh in the tooltip, on local time and the real interval
+     * length, with zoom and pan (chartjs-plugin-zoom). registerChartPlugins adds the cursor
+     * tooltip and the hover highlight once.
+     */
+
     Amber.registerChartPlugins = function () {
         if (!root.Chart || Amber._chartPluginsRegistered) return;
         root.Chart.Tooltip.positioners.cursor = function (items, eventPosition) {

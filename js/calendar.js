@@ -1,6 +1,13 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * The Usage tab's calendar: a grid per month of the days in the selected period, with the
+     * day's cost on Amber and on the plan compared with in a tooltip (and Amber's demand peaks);
+     * clicking a day opens it on the daily graph. Days without readings say so rather than
+     * showing zero.
+     */
+
     Amber.hideTooltip = function () {
         const tooltip = document.getElementById('day-tooltip');
         if (tooltip) tooltip.remove();

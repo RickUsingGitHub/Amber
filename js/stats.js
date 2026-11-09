@@ -1,6 +1,12 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * More Stats on the Usage tab: average import and feed-in prices, power bought and sent out
+     * during price spikes (above STATS_DEFAULTS.spikeCents) and at negative prices, the evening
+     * share of imports, and days with no grid use.
+     */
+
     Amber.STATS_DEFAULTS = {
         spikeCents: 50
     };

@@ -1,6 +1,14 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
 
+    /*
+     * Amber bills: the text of a PDF (pdf.js, loaded on demand) or a text file is read into the bill
+     * period, Amber's fixed rates (connection, subscription, demand) and the line items
+     * (parseAmberBillText, parseBillCheck). compareBill then checks each line against the meter
+     * data for the same period. Used by the Bill? tab, and on Start to fill Amber's fixed charges.
+     * Layout-dependent: if a bill can't be read, the caller shows the text that was read.
+     */
+
     function roundCents(n) {
         if (!Number.isFinite(n)) return null;
         return Math.round(n * 1000) / 1000;
