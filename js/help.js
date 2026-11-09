@@ -10,7 +10,7 @@
         // ---------- Top of the page ----------
         dates: 'The days to look at. Type a start and end date, or tap a shortcut underneath. Today is never included because its meter readings aren\'t final yet.',
         presets: 'Shortcuts for common periods. "Last 12 months" needs a year of history: Amber\'s connection only reaches back about 3 months, so import your usage file on the Start tab first.',
-        compareBtn: 'Gets your meter readings for these dates (from Amber, or from what\'s already saved in this browser) and works out what they cost on Amber and on the plan you\'re comparing with. Results appear on the Compare and My usage tabs.',
+        compareBtn: 'Gets your meter readings for these dates (from Amber, or from what\'s already saved in this browser) and works out what they cost on Amber and on the plan you\'re comparing with. Results appear on the Compare and Usage tabs.',
         gst: 'GST is the 10% tax on your bill. On: totals include GST, the same as your bill. Off: totals without GST. Solar feed-in credits have no GST either way.',
         exportMenu: 'Download the numbers as a spreadsheet file (CSV) that opens in Excel, Numbers or Google Sheets.',
         settings: 'Housekeeping: clear the meter readings saved in this browser, or delete plans you typed in yourself.',
@@ -24,7 +24,7 @@
         amberSubscription: 'Amber\'s membership fee, shown per day. About $25 a month (82 cents a day) including GST. Other retailers don\'t charge this but build their margin into their prices instead.',
         amberDemand: 'Only used if your network charges for demand (for example Ausgrid\'s EA116 tariff): cents per kW per day for your busiest half hour each month. Set it to 0 if your bill has no demand line.',
         amberPrev: 'Network charges change every 1 July. Days before 1 July 2026 are costed with these. Loading a bill from before July fills them in.',
-        loadBill: 'Choose the PDF bill Amber emailed you. It\'s read here in your browser (nothing is uploaded), fills in the boxes below with your real charges, and opens a line-by-line check on the Bill check tab.',
+        loadBill: 'Choose the PDF bill Amber emailed you. It\'s read here in your browser (nothing is uploaded), fills in the boxes below with your real charges, and opens a line-by-line check on the Bill? tab.',
         csvImport: 'Amber\'s connection here only reaches back about 3 months. For a longer history, download your usage file from Amber (Usage, then Export, in the Amber app or website; Amber support can email up to 12 months) and import it here. It\'s saved in this browser so every tab can use it.',
         nem12: 'NEM12 is the standard file of meter readings that every Australian retailer and network can give you. Ask your current retailer for your "interval data" or download it from your network\'s website (for example Ausgrid, Endeavour, Energex or Powercor). A year of data gives the fairest answer.',
         nem12Network: 'The company that owns the poles and wires in your area. It\'s on your bill, and the app guesses it from the meter number. It decides Amber\'s network charges.',

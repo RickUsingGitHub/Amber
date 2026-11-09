@@ -203,7 +203,7 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#fetchData')).toBeVisible();
         await expect(page.locator('label[for="startDate"]')).toHaveText('From');
 
-        // Arrow keys move between tabs (Start, Compare, My usage, Bill check, Free power?, Solar & battery).
+        // Arrow keys move between tabs (Start, Compare, Usage, Bill?, Free?, Solar+?).
         await page.focus('#tab-check');
         await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
@@ -242,7 +242,7 @@ test.describe('Amber UI flows', () => {
         await expect(compareNav).toBeVisible();
         await expect(compareNav.locator('[data-jump="results-output"]')).toBeVisible();
         await expect(compareNav.locator('[data-jump="batteryShiftSection"]')).toHaveCount(0);
-        // A single day has no whole month, and the Free power? tab says so.
+        // A single day has no whole month, and the Free? tab says so.
         await page.click('#tab-free');
         await expect(page.locator('#panel-free [data-results-placeholder]')).toBeHidden();
         await expect(page.locator('#freePowerEmpty')).toContainText('whole calendar month');

@@ -152,7 +152,7 @@
         if (parsed.demandCents != null) $('amberDemandRate' + suffix).value = parsed.demandCents.toFixed(3);
         saveAllSettings();
         const gstNote = parsed.exGst ? ' The bill shows prices without GST, so 10% was added.' : '';
-        const billNote = billOk ? ' The bill is checked on the Bill Check tab.' : '';
+        const billNote = billOk ? ' The bill is checked on the Bill? tab.' : '';
         const yearNote = earlier ? ' The bill is from before 1 July 2026, so these went into last year\'s charges.' : '';
         setAmberBillStatus(`Prefilled from your bill (including GST): ${parsed.found.join(', ')}.${yearNote}${gstNote} Change any box that looks wrong.${billNote}`, false);
         if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
@@ -371,7 +371,7 @@
         document.addEventListener('click', (e) => {
             if (!e.target.closest) return;
             if (e.target.closest('[data-go-start]')) selectTab('setup');
-            // Links to another tab from inside a tab (for example Compare to Free power?).
+            // Links to another tab from inside a tab (for example Compare to Free?).
             const goTab = e.target.closest('[data-go-tab]');
             if (goTab) {
                 selectTab(goTab.getAttribute('data-go-tab'));
@@ -1636,7 +1636,7 @@
 
     let shiftRun = 0;
 
-    // The Free power? tab says why there's nothing to show once results are in.
+    // The Free? tab says why there's nothing to show once results are in.
     function showFreePowerEmpty(html) {
         const el = $('freePowerEmpty');
         const show = !!html && !$('resultsSection').classList.contains('hidden');
