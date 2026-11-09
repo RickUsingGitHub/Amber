@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.51</title>
+    <title>Amber Compare &amp; Export v1.52</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.51">
+    <link rel="stylesheet" href="css/app.css?v=1.52">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,7 +19,7 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.51.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.52.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -66,11 +66,12 @@
             </div>
 
             <div class="flex flex-wrap items-center gap-3 mb-4">
-                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-wrap gap-1 bg-white rounded-lg shadow-md p-1">
+                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-wrap gap-0.5 sm:gap-1 bg-white rounded-lg shadow-md p-1">
                     <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Start</button>
                     <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare</button>
                     <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Usage</span><span class="hidden sm:inline">My usage</span></button>
                     <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Bill</span><span class="hidden sm:inline">Bill check</span></button>
+                    <button type="button" role="tab" id="tab-free" data-tab="free" aria-controls="panel-free" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Free?</span><span class="hidden sm:inline">Free power?</span></button>
                     <button type="button" role="tab" id="tab-plan" data-tab="plan" aria-controls="panel-plan" aria-selected="false" tabindex="-1" class="main-tab"><span class="sm:hidden">Solar</span><span class="hidden sm:inline">Solar &amp; battery</span></button>
                 </div>
                 <div id="resultTools" class="ml-auto flex items-center">
@@ -264,7 +265,6 @@
                     <button type="button" data-jump="results-output" class="jump-link">The answer</button>
                     <button type="button" data-jump="allPlansSection" class="jump-link">Every plan</button>
                     <button type="button" data-jump="monthlySection" class="jump-link">Month by month</button>
-                    <button type="button" data-jump="batteryShiftSection" class="jump-link">Free-power plans</button>
                     <button type="button" data-jump="planChooser" class="jump-link">Plan prices</button>
                 </nav>
                 <div id="planChooser" class="bg-white rounded-lg shadow-md p-6 mb-6">
@@ -457,34 +457,8 @@
                         <div id="monthlyTable"></div>
                     </div>
 
-                    <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
-                        <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="freeWindow">Free-power plans: what if you moved your use?</h3>
-                        <p class="text-sm text-gray-600 mb-4">Some plans make power free for a few hours in the middle of the day. If you have a battery, an electric car, a pool pump or a timer hot-water system, you could run them then. This shows each plan as you actually used power, and as if you'd moved some of it into the free hours.</p>
-                        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 text-sm">
-                            <div class="flex flex-col justify-between">
-                                <label for="shiftBudgets" class="block text-xs font-medium text-gray-600" data-help="shiftBudgets">kWh a day you could move</label>
-                                <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="flex flex-col justify-between">
-                                <label for="shiftBatteryKwh" class="block text-xs font-medium text-gray-600" data-help="shiftBattery">Home battery (kWh)</label>
-                                <input type="number" id="shiftBatteryKwh" step="0.5" min="0" placeholder="Auto" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="flex flex-col justify-between">
-                                <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600" data-help="shiftWindowKw">Max grid draw (kW)</label>
-                                <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="flex flex-col justify-between">
-                                <label for="shiftExportKw" class="block text-xs font-medium text-gray-600" data-help="shiftExportKw">Max export (kW)</label>
-                                <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                            </div>
-                            <div class="flex flex-col justify-between">
-                                <label for="shiftRte" class="block text-xs font-medium text-gray-600" data-help="shiftRte">Battery efficiency (%)</label>
-                                <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
-                            </div>
-                        </div>
-                        <p id="shiftBatteryNote" class="text-xs text-gray-600 mb-3 hidden"></p>
-                        <div id="batteryShiftTable"></div>
-                        <div id="batteryShiftMonthly" class="mt-6"></div>
+                    <div id="freePowerPointer" class="bg-white rounded-lg shadow-md p-4 mb-6 text-sm text-gray-700">
+                        Thinking about a free-power plan? The <button type="button" data-go-tab="free" class="text-indigo-600 font-medium hover:underline">Free power?</button> tab works out what you'd pay on each one if you moved some of your use into its free hours.
                     </div>
                 </div>
             </section>
@@ -556,6 +530,41 @@
                     </div>
                     <p id="billCheckPeriod" class="text-sm text-gray-500 mb-3"></p>
                     <div id="billCheckBody"></div>
+                </div>
+            </section>
+
+            <!-- ==================== Free power? ==================== -->
+            <section id="panel-free" role="tabpanel" aria-labelledby="tab-free" data-panel="free" class="hidden">
+                <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600"></div>
+                <div id="freePowerEmpty" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600"></div>
+                <div id="batteryShiftSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
+                    <h3 class="text-xl sm:text-2xl font-bold text-gray-900 mb-2" data-help="freeWindow">Free-power plans: what if you moved your use?</h3>
+                    <p class="text-sm text-gray-600 mb-4">Some plans make power free for a few hours in the middle of the day. If you have a battery, an electric car, a pool pump or a timer hot-water system, you could run them then. This shows each plan as you actually used power, and as if you'd moved some of it into the free hours.</p>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4 text-sm">
+                        <div class="flex flex-col justify-between">
+                            <label for="shiftBudgets" class="block text-xs font-medium text-gray-600" data-help="shiftBudgets">kWh a day you could move</label>
+                            <input type="text" id="shiftBudgets" value="10, 20, 30" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="flex flex-col justify-between">
+                            <label for="shiftBatteryKwh" class="block text-xs font-medium text-gray-600" data-help="shiftBattery">Home battery (kWh)</label>
+                            <input type="number" id="shiftBatteryKwh" step="0.5" min="0" placeholder="Auto" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="flex flex-col justify-between">
+                            <label for="shiftWindowKw" class="block text-xs font-medium text-gray-600" data-help="shiftWindowKw">Max grid draw (kW)</label>
+                            <input type="number" id="shiftWindowKw" value="13" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="flex flex-col justify-between">
+                            <label for="shiftExportKw" class="block text-xs font-medium text-gray-600" data-help="shiftExportKw">Max export (kW)</label>
+                            <input type="number" id="shiftExportKw" value="5" step="0.5" min="0" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                        <div class="flex flex-col justify-between">
+                            <label for="shiftRte" class="block text-xs font-medium text-gray-600" data-help="shiftRte">Battery efficiency (%)</label>
+                            <input type="number" id="shiftRte" value="90" step="1" min="50" max="100" class="w-full mt-1 px-2 py-1 border border-gray-300 rounded-md">
+                        </div>
+                    </div>
+                    <p id="shiftBatteryNote" class="text-xs text-gray-600 mb-3 hidden"></p>
+                    <div id="batteryShiftTable"></div>
+                    <div id="batteryShiftMonthly" class="mt-6"></div>
                 </div>
             </section>
 
@@ -781,26 +790,26 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.51"></script>
-    <script src="js/help.js?v=1.51"></script>
-    <script src="js/time.js?v=1.51"></script>
-    <script src="js/templates.js?v=1.51"></script>
-    <script src="js/storage.js?v=1.51"></script>
-    <script src="js/costs.js?v=1.51"></script>
-    <script src="js/api.js?v=1.51"></script>
-    <script src="js/bill.js?v=1.51"></script>
-    <script src="js/csv.js?v=1.51"></script>
-    <script src="js/charts.js?v=1.51"></script>
-    <script src="js/calendar.js?v=1.51"></script>
-    <script src="js/stats.js?v=1.51"></script>
-    <script src="js/monthly.js?v=1.51"></script>
-    <script src="js/redispatch.js?v=1.51"></script>
-    <script src="js/import.js?v=1.51"></script>
-    <script src="js/networks.js?v=1.51"></script>
-    <script src="js/estimate.js?v=1.51"></script>
-    <script src="js/solar.js?v=1.51"></script>
-    <script src="js/planner.js?v=1.51"></script>
-    <script src="js/planner-ui.js?v=1.51"></script>
-    <script src="js/app.js?v=1.51"></script>
+    <script src="js/constants.js?v=1.52"></script>
+    <script src="js/help.js?v=1.52"></script>
+    <script src="js/time.js?v=1.52"></script>
+    <script src="js/templates.js?v=1.52"></script>
+    <script src="js/storage.js?v=1.52"></script>
+    <script src="js/costs.js?v=1.52"></script>
+    <script src="js/api.js?v=1.52"></script>
+    <script src="js/bill.js?v=1.52"></script>
+    <script src="js/csv.js?v=1.52"></script>
+    <script src="js/charts.js?v=1.52"></script>
+    <script src="js/calendar.js?v=1.52"></script>
+    <script src="js/stats.js?v=1.52"></script>
+    <script src="js/monthly.js?v=1.52"></script>
+    <script src="js/redispatch.js?v=1.52"></script>
+    <script src="js/import.js?v=1.52"></script>
+    <script src="js/networks.js?v=1.52"></script>
+    <script src="js/estimate.js?v=1.52"></script>
+    <script src="js/solar.js?v=1.52"></script>
+    <script src="js/planner.js?v=1.52"></script>
+    <script src="js/planner-ui.js?v=1.52"></script>
+    <script src="js/app.js?v=1.52"></script>
 </body>
 </html>

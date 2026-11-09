@@ -203,11 +203,14 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#fetchData')).toBeVisible();
         await expect(page.locator('label[for="startDate"]')).toHaveText('From');
 
-        // Arrow keys move between tabs (Start, Compare, My usage, Bill check, Solar & battery).
+        // Arrow keys move between tabs (Start, Compare, My usage, Bill check, Free power?, Solar & battery).
         await page.focus('#tab-check');
         await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
         await expect(page.locator('#tab-bill')).toBeFocused();
+        await page.keyboard.press('ArrowRight');
+        await expect(page.locator('#tab-free')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#configSection')).toBeVisible();
         await page.keyboard.press('ArrowRight');
         await expect(page.locator('#tab-plan')).toHaveAttribute('aria-selected', 'true');
         await expect(page.locator('#configSection')).toBeHidden();
@@ -238,7 +241,12 @@ test.describe('Amber UI flows', () => {
         const compareNav = page.locator('#panel-compare [data-jump-nav]');
         await expect(compareNav).toBeVisible();
         await expect(compareNav.locator('[data-jump="results-output"]')).toBeVisible();
-        await expect(compareNav.locator('[data-jump="batteryShiftSection"]')).toBeHidden();
+        await expect(compareNav.locator('[data-jump="batteryShiftSection"]')).toHaveCount(0);
+        // A single day has no whole month, and the Free power? tab says so.
+        await page.click('#tab-free');
+        await expect(page.locator('#panel-free [data-results-placeholder]')).toBeHidden();
+        await expect(page.locator('#freePowerEmpty')).toContainText('whole calendar month');
+        await expect(page.locator('#batteryShiftSection')).toBeHidden();
         await page.click('#tab-check');
         await expect(page.locator('#panel-check [data-jump="calendarSection"]')).toBeVisible();
         await page.click('#panel-check [data-jump="calendarSection"]');

@@ -51,7 +51,13 @@ test.describe('Battery re-scheduling estimate', () => {
         await page.fill('#startDate', '2025-11-01');
         await page.fill('#endDate', '2025-11-30');
         await page.click('#fetchData');
+        await page.waitForSelector('#resultsSection:not(.hidden)');
+        // It has its own tab now; Compare points to it.
+        await page.click('#freePowerPointer [data-go-tab="free"]');
+        await expect(page.locator('#tab-free')).toHaveAttribute('aria-selected', 'true');
+        await expect(page.locator('#configSection')).toBeVisible();
         await page.waitForSelector('#batteryShiftSection:not(.hidden)');
+        await expect(page.locator('#freePowerEmpty')).toBeHidden();
         const table = page.locator('#batteryShiftTable');
         await expect(table).toContainText('CovaU SolarMax');
         await expect(table).toContainText('GloBird Four4Free');

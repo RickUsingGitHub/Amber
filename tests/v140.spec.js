@@ -86,6 +86,8 @@ test('solar-only data: the re-scheduling estimate assumes no battery until one i
     await page.fill('#startDate', '2025-11-01');
     await page.fill('#endDate', '2025-11-30');
     await page.click('#fetchData');
+    await page.waitForSelector('#resultsSection:not(.hidden)');
+    await page.click('#tab-free');
     await page.waitForSelector('#batteryShiftSection:not(.hidden)');
     const note = page.locator('#shiftBatteryNote');
     await expect(note).toContainText('assumes there is no battery');

@@ -284,7 +284,7 @@
 
     // ---------- Tabs ----------
 
-    const TABS = ['setup', 'compare', 'check', 'bill', 'plan'];
+    const TABS = ['setup', 'compare', 'check', 'bill', 'free', 'plan'];
     const ACTIVE_TAB_KEY = 'activeTab';
 
     function selectTab(name, opts) {
@@ -343,6 +343,7 @@
     function syncResultPlaceholders() {
         const hasResults = !$('resultsSection').classList.contains('hidden');
         const connected = isConnected();
+        if (!hasResults) $('freePowerEmpty').classList.add('hidden');
         document.querySelectorAll('[data-results-placeholder]').forEach((el) => {
             el.classList.toggle('hidden', hasResults);
             if (hasResults) return;
@@ -370,6 +371,12 @@
         document.addEventListener('click', (e) => {
             if (!e.target.closest) return;
             if (e.target.closest('[data-go-start]')) selectTab('setup');
+            // Links to another tab from inside a tab (for example Compare to Free power?).
+            const goTab = e.target.closest('[data-go-tab]');
+            if (goTab) {
+                selectTab(goTab.getAttribute('data-go-tab'));
+                $('mainTabs').scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
             // Links to a section inside generated text (the nav buttons have their own handlers).
             const jump = e.target.closest('[data-jump]:not(.jump-link)');
             if (jump && $(jump.getAttribute('data-jump'))) $(jump.getAttribute('data-jump')).scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1629,14 +1636,26 @@
 
     let shiftRun = 0;
 
+    // The Free power? tab says why there's nothing to show once results are in.
+    function showFreePowerEmpty(html) {
+        const el = $('freePowerEmpty');
+        const show = !!html && !$('resultsSection').classList.contains('hidden');
+        el.classList.toggle('hidden', !show);
+        if (show) el.innerHTML = html;
+    }
+
     async function renderBatteryShift() {
         const section = $('batteryShiftSection');
         const monthly = state.monthly;
         const plans = freeWindowPlans();
         if (!monthly || !monthly.months.length || !plans.length) {
             section.classList.add('hidden');
+            if (!monthly) showFreePowerEmpty('Press <strong>Compare costs</strong> to work this out for the dates at the top.');
+            else if (!monthly.months.length) showFreePowerEmpty('This works month by month, so it needs at least one whole calendar month within the dates at the top. Pick a longer period (for example <strong>Last month</strong> or <strong>Last 12 months</strong>) and press <strong>Compare costs</strong>.');
+            else showFreePowerEmpty('There are no free-power plans for your network in the app yet. To try one, go to the <button type="button" data-go-tab="compare" class="text-indigo-600 font-medium hover:underline">Compare</button> tab, pick <strong>Enter my own rates</strong> and set its free hours.');
             return;
         }
+        showFreePowerEmpty('');
         section.classList.remove('hidden');
         const params = readShiftParams();
         if (!state.batteryDetect || state.batteryDetect.data !== monthly.channelData) {
@@ -2328,6 +2347,7 @@
         $('dailyGraphSection').classList.add('hidden');
         $('allPlansSection').classList.add('hidden');
         $('batteryShiftSection').classList.add('hidden');
+        $('freePowerEmpty').classList.add('hidden');
         $('moreStatsSection').classList.add('hidden');
         downloadCsvButton.disabled = true;
         $('results-table-container').innerHTML = '';
@@ -2703,6 +2723,7 @@
                 $('calendar-container').innerHTML = '';
                 $('monthlySection').classList.add('hidden');
                 $('batteryShiftSection').classList.add('hidden');
+                $('freePowerEmpty').classList.add('hidden');
                 state.batteryShift = null;
                 msg.textContent = 'Cache cleared successfully!';
                 msg.className = 'text-sm mt-2 font-medium text-green-600';
