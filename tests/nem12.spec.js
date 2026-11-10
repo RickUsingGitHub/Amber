@@ -1,6 +1,5 @@
 const { test, expect } = require('@playwright/test');
 
-const pad = (n) => String(n).padStart(2, '0');
 const addDays = (d, n) => new Date(Date.parse(d + 'T00:00:00Z') + n * 86400000).toISOString().substring(0, 10);
 
 // Two whole months of 30-minute NEM12 data (NEM time): evening use, midday exports.
@@ -119,7 +118,7 @@ test('switching between an Amber site and an imported household swaps the Amber 
 test('header-less NEM12 (data rows only) with a daytime hot-water circuit', async ({ page }) => {
     await page.goto('/');
     const lines = [];
-    for (const [suffix, fn] of [['E1', (i) => 0.03], ['E3', (i) => (i >= 180 && i < 192) || (i >= 240 && i < 252) ? 0.4 : 0]]) {
+    for (const [suffix, fn] of [['E1', () => 0.03], ['E3', (i) => (i >= 180 && i < 192) || (i >= 240 && i < 252) ? 0.4 : 0]]) {
         lines.push(`200,4102382010,E1E3,${suffix},${suffix},${suffix},M1,kWh,5, `);
         for (let d = '2026-05-01'; d <= '2026-05-31'; d = addDays(d, 1)) {
             lines.push(`300,${d.replace(/-/g, '')},${Array.from({ length: 288 }, (_, i) => fn(i).toFixed(7)).join(',')} , ,20260602000000,`);

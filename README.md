@@ -92,8 +92,9 @@ The solar and battery planner. From the last 12 months of meter readings (Amber'
 ## For developers
 
 ```bash
-npm install          # Tailwind CLI and Playwright
+npm install          # Tailwind CLI, ESLint and Playwright
 npm run build:css    # css/input.css -> css/app.css (commit the result)
+npm run lint         # ESLint (eslint.config.js)
 npm test             # unit checks, then Playwright against a local static server
 npm run test:unit    # unit checks only
 npm run serve        # http://127.0.0.1:4173

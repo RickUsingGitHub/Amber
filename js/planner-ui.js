@@ -229,7 +229,7 @@
                 const exportCode = (site.estimate && site.estimate.exportCode)
                     || (feedIn && net.exportTariffs && net.exportTariffs[feedIn.tariff] ? feedIn.tariff : '')
                     || net.defaultExport || '';
-                let prices = null;
+                let prices;
                 try { prices = await Amber.loadRegionPrices(net.region, Amber.priceMonthsFor(year.first, year.last)); } catch (e) { prices = null; }
                 Amber.fillPlannerExportPrices(year, { net, exportCode, prices });
             } else {
@@ -281,8 +281,8 @@
         $('planRetailersPanel').addEventListener('change', retailerChange);
         $('planRetailersPanel').addEventListener('click', retailerButtons);
         document.addEventListener('click', (e) => {
-            const d = $('planRetailers');
-            if (d.open && !d.contains(e.target)) d.open = false;
+            const box = $('planRetailers');
+            if (box.open && !box.contains(e.target)) box.open = false;
         });
         $('planRetailers').addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && $('planRetailers').open) {
@@ -796,7 +796,6 @@
         const k = (v) => Math.round(v).toLocaleString('en-AU');
         const gap = c.readings.bill !== 0 ? (c.modelled.bill - c.readings.bill) / Math.abs(c.readings.bill) : 0;
         const close = Math.abs(gap) <= 0.1;
-        const th = (t, right) => `<th scope="col" class="px-2 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider">${t}</th>`;
         const row = (name, f) => `<tr><td class="px-2 py-2">${name}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.readings)}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.modelled)}</td><td class="px-2 py-2 text-right whitespace-nowrap">${f(c.without)}</td></tr>`;
         const sources = [];
         if (st.fromSolar > 1) sources.push(`${k(st.fromSolar)} kWh of your solar`);
