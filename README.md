@@ -37,7 +37,7 @@ The tab bar is Start, Compare, Usage, Bill?, Free? and Solar+?. Hovering a tab s
 ### Compare
 
 - Pick a plan to compare with: pre-built templates for each state (including 2026-27 Default Market Offer and Victorian Default Offer rates, market offers, and the Solar Sharer Offer), or your own flat or time-of-use plan with controlled load, optional demand tariffs, time-varying feed-in (for example Synergy DEBS 10c peak / 2c off-peak) with optional daily kWh caps, and free-window plans (a free or cheap window with an optional daily cap, a super off-peak / EV window, and seasonal peak windows).
-- The answer for the chosen dates, every plan for your network ranked, and month by month. Demand charges are worked out per calendar month from each month's own peak, and Ausgrid EA029 exports are settled as on the bill (free midday allowance, export charge on usage). GST can be shown or hidden.
+- The answer for the chosen dates, every plan for your network ranked, and month by month. Demand charges are worked out per calendar month from each month's own peak, and Ausgrid EA029 exports are settled as on the bill (free midday allowance, export charge on usage), one calendar month at a time, so the answer, month by month and the Free? tab give the same Amber total. GST can be shown or hidden.
 - Download every meter reading, daily totals or the comparison table as CSV.
 
 ### Usage
@@ -56,7 +56,7 @@ The tab bar is Start, Compare, Usage, Bill?, Free? and Solar+?. Hovering a tab s
 
 The solar and battery planner. From the last 12 months of meter readings (Amber's, an imported Amber CSV, or a NEM12 file) it tries every mix of new solar size, battery size and plan for the network, half hour by half hour, and ranks them by 20-year value, payback or yearly bill.
 
-- **What you can set**: panels, battery and plan can each be "find the best", "a size I choose", "none", or one plan. Companies, or single plans, can be ticked or unticked; only ticked plans are searched and shown. Roof size, facing, pitch, shade, town, export limit, whether panels switch off at negative feed-in prices, battery round trip and power, prices and rebates, wear and replacement, price rises, the interest rate and planned changes (an electric car, heat-pump hot water, gas heating and cooking to electric with the gas bill saved).
+- **What you can set**: panels, battery and plan can each be "find the best", "a size I choose", "none", or one plan. Companies, or single plans, can be ticked or unticked; only ticked plans are searched and shown. Roof size, facing, pitch, shade, town, export limit, whether panels switch off at negative feed-in prices, battery round trip and power, prices and rebates (the battery rebate is tiered by size: the full rate on the first 14 kWh, 60% from 14 to 28 kWh, 15% from 28 to 50 kWh), wear and replacement, price rises, the interest rate and planned changes (an electric car, heat-pump hot water, gas heating and cooking to electric with the gas bill saved).
 - **The yardstick**: every option is measured against nothing new on the plan you compare against; by default that's whichever ticked plan is cheapest for you with nothing new, since switching is free.
 - **What it shows**:
   - the best option, with what to ask installers for (panel, inverter and battery sizes; a "curtailable" inverter where the feed-in price goes below zero, and on Amber a battery SmartShift can run);
@@ -78,14 +78,15 @@ The solar and battery planner. From the last 12 months of meter readings (Amber'
 ## Data completeness and CSV backups
 
 - When the selected dates contain days without readings, Compare labels the result **Incomplete comparison**. Usage costs leave out missing readings, while fixed charges and export allowances cover the full period, so savings are provisional until the missing readings arrive. The calendar labels missing days **No readings** rather than treating them as zero use. Daily CSV and calendar totals cover only dates with readings and may differ from an incomplete full-period comparison.
-- Daily free-power and feed-in caps are shared across the household's meter channels. Ausgrid export settlement adjustments are allocated to days in proportion to midday exports, so daily totals reconcile with the period's settlement; they aren't separate daily allowances.
+- Daily free-power and feed-in caps are shared across the household's meter channels. Ausgrid export settlement adjustments are allocated to days in proportion to midday exports, so daily totals reconcile with each month's settlement; they aren't separate daily allowances. The free allowance is counted per calendar month (a bill is checked as one settlement of its own), so a quiet month doesn't lend its allowance to a sunny one.
 - **Download → Every meter reading** produces a versioned CSV that can be restored through the Amber usage CSV import on the Start tab, for the same Amber site. It keeps the original NEM interval-end times, duration, quality, renewables and demand flags, including zero-use channels. Whole-day backups can restore recent and estimated readings; cached final API days are kept, and estimated readings can still be refreshed from the API. Incomplete days aren't restored. App exports from before the version column aren't supported as backups (Amber's own usage export is). For a non-Amber household, keep its original NEM12 file to re-import.
 
 ## Privacy
 
 - The API key is stored only in this browser (localStorage, or sessionStorage if **Remember key on this device** is unticked). It is obfuscated, not encrypted.
 - Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else; the page's Content Security Policy allows no other connections. Imported files (Amber CSV, NEM12, bills) are read in the browser and stay there.
-- Meter readings are cached in IndexedDB; settings, saved plans, imported households and the last checked bill (until **Clear**) are in localStorage. The settings menu (cog) can clear the cache and saved plans.
+- Meter readings are cached in IndexedDB; settings, saved plans, imported households and the last checked bill (until **Clear**) are in localStorage. The settings menu (cog) can clear the cache and saved plans. Clearing the saved meter readings also removes imported Amber CSV history and households imported from NEM12, which then need importing again.
+- A built-in plan you've selected keeps any prices you change yourself, but when a new version of the app changes that plan's published prices, the saved form is filled again from the new prices.
 
 ## For developers
 

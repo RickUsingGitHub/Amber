@@ -170,6 +170,50 @@ const ea025Totals = { importKwh: 480.092, amberUsage: 85.848, amberDemand: 0, am
 const ea025Rows = Amber.compareBill(ea025, ea025Totals);
 assert(ea025Rows.every((r) => r.ok), `EA025 bill checks out line by line (${ea025Rows.filter((r) => !r.ok).map((r) => r.key).join(', ')})`);
 
+// The Ausgrid export allowance is settled per calendar month (as demand is), so the answer for a
+// longer period, month by month and the Free? tab agree. A bill is one settlement of its own.
+{
+    const site = { network: 'Ausgrid', channels: [{ identifier: 'E1', type: 'general', tariff: 'EA116' }, { identifier: 'B1', type: 'feedIn', tariff: 'EA029' }] };
+    const two = { E1: Amber.emptyChannel(site.channels[0]), B1: Amber.emptyChannel(site.channels[1]) };
+    const items = [];
+    const addDay = (date, middayKwh) => {
+        // Midday (10am–3pm Sydney summer time) is 9am–2pm NEM time: the 10 half hours ending 09:30–14:00.
+        const next = new Date(Date.parse(date + 'T00:00:00Z') + 86400000).toISOString().substring(0, 10);
+        for (let i = 1; i <= 48; i++) {
+            const h = Math.floor(i / 2);
+            const nemTime = i === 48 ? `${next}T00:00:00+10:00` : `${date}T${String(h).padStart(2, '0')}:${i % 2 ? '30' : '00'}:00+10:00`;
+            items.push({ nemTime, date, kwh: 0.3, perKwh: 25, duration: 30, channelIdentifier: 'E1', quality: 'billable' });
+            items.push({ nemTime, date, kwh: i >= 19 && i <= 28 ? middayKwh / 10 : 0, perKwh: -4, duration: 30, channelIdentifier: 'B1', quality: 'billable' });
+        }
+    };
+    for (let d = 1; d <= 31; d++) addDay(`2025-12-${String(d).padStart(2, '0')}`, 20); // well over the free 6.83 kWh a day
+    for (let d = 1; d <= 31; d++) addDay(`2026-01-${String(d).padStart(2, '0')}`, 2); // well under it
+    Amber.processUsageData(items, two, true);
+    const o = { amberRates: rates, state: 'NSW', site, planConfig: plan };
+    const t = Amber.EXPORT_TARIFFS.EA029;
+    const decCharge = (31 * 20 - 31 * t.belKwhPerDay) * t.chargeIncGst / 100;
+    const pooledCharge = (31 * 20 + 31 * 2 - 62 * t.belKwhPerDay) * t.chargeIncGst / 100;
+    const period = Amber.periodTotals(two, '2025-12-01', '2026-01-31', o);
+    const months = Amber.monthlyBreakdown(two, ['2025-12', '2026-01'], o);
+    assert(near(period.amberExportCharge, decCharge) && near(months.rows[0].amberExportCharge, decCharge) && months.rows[1].amberExportCharge === 0,
+        `export charge is settled month by month: $${period.amberExportCharge.toFixed(2)}, all of it December's (a quiet January doesn't lend its allowance)`);
+    assert(near(months.total.amberTotal, period.amberTotal), `so the months add up to the period ($${months.total.amberTotal.toFixed(2)} vs $${period.amberTotal.toFixed(2)})`);
+    const bill = Amber.periodTotals(two, '2025-12-01', '2026-01-31', Object.assign({ billPeriod: true }, o));
+    assert(near(bill.amberExportCharge, pooledCharge) && bill.amberExportCharge < period.amberExportCharge,
+        `a bill covering both months is one settlement: $${bill.amberExportCharge.toFixed(2)}`);
+    // Part months get the allowance for their days in the range.
+    const part = Amber.periodTotals(two, '2025-12-22', '2026-01-10', o);
+    assert(near(part.amberExportCharge, (10 * 20 - 10 * t.belKwhPerDay) * t.chargeIncGst / 100), 'a part month gets the allowance for its own days in the dates');
+    assert(Amber.monthsInRange('2025-12-22', '2026-02-03').map((m) => `${m.key}:${m.days}`).join() === '2025-12:10,2026-01:31,2026-02:3', 'months in a range, clipped to it');
+    // Daily rows: each month's charge lands on that month's days.
+    Amber.applyAmberFeedInSettlement(two, site, 62, { from: '2025-12-01', to: '2026-01-31' });
+    const daily = Amber.precalculateDailySummaries(two, plan, rates, 'NSW').summaries;
+    const amberOf = (prefix) => Object.keys(daily).filter((d) => d.startsWith(prefix)).reduce((sum, d) => sum + daily[d].amberCost, 0);
+    const energyOnly = (kwhPerDay) => 31 * (48 * 0.3 * 25 - kwhPerDay * (4 + t.chargeExGst)) / 100;
+    assert(near(amberOf('2025-12'), energyOnly(20) + decCharge) && near(amberOf('2026-01'), energyOnly(2)),
+        'daily rows carry December\'s export charge in December and none in January');
+}
+
 const fromName = Amber.parseBillPeriod('no dates here', '20260801-20260831.pdf');
 assert(fromName.start === '2026-08-01' && fromName.end === '2026-08-31' && fromName.fromFileName, 'period from Amber file name');
 const viaFile = Amber.parseAmberBillText('Usage 744.00 kWh 0.2000 $/kWh $148.80\nCHARGES TOTAL $254.95', '20260801-20260831.pdf').check;

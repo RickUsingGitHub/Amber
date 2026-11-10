@@ -51,7 +51,13 @@
                     db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 }
             };
-            request.onsuccess = (event) => resolve(event.target.result);
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                // Connections aren't closed after use, so let go when the database is being deleted
+                // ("Clear saved meter readings"): an open connection would block the delete.
+                db.onversionchange = () => db.close();
+                resolve(db);
+            };
             request.onerror = (event) => {
                 console.error('IndexedDB error:', event.target.error);
                 reject(event.target.error);

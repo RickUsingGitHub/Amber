@@ -21,7 +21,7 @@ These are the properties the tests guard and that users rely on. A change that b
 2. **Missing readings are never zero.** Days without readings are left out of usage costs and flagged ("Incomplete comparison", "No readings"). Fixed charges still cover the whole period. The planner fills at most 31 missing days from the same weekday and says so.
 3. **Time is explicit.** Amber's `nemTime` is an interval's end in NEM time (UTC+10, no daylight saving). Plan windows are local wall-clock time unless a plan says `clock: 'nem'`. Interval-end semantics matter at window edges (`Amber.intervalEndInWindow`, `timeInWindow`). The planner's slots are NEM half hours.
 4. **GST is consistent.** Templates are GST-inclusive; `networks.js` figures are ex GST and GST is added in `estimate.js`; household feed-in is GST-free. The GST toggle only changes the display (`adjustForGst`).
-5. **The cache is trustworthy.** Only final whole days are cached. Estimated readings stay refetchable, and empty old days are remembered as empty. The CSV backup round-trips (`tests/review.spec.js`).
+5. **The cache is trustworthy.** Only final whole days are cached. Clearing it also removes what was worked out from it (results, imported households). Estimated readings stay refetchable, and empty old days are remembered as empty. The CSV backup round-trips (`tests/review.spec.js`).
 6. **Nothing leaves the browser** except requests to Amber's API with the user's key. The CSP enforces this; keep it.
 7. **User and data text is escaped** (`Amber.escapeHTML` / `esc`) before going into `innerHTML`.
 8. **The planner is fair between options.** Every option is measured against the same yardstick, and the same rules (export limit, negative feed-in switch-off, battery dispatch) apply on every plan.
@@ -50,7 +50,6 @@ These are the properties the tests guard and that users rely on. A change that b
 - **Yearly maintenance is manual.** Each 1 July: the default offers and VDO in `templates.js`, Amber's network tariffs in `networks.js` (FY2026-27 today), Amber's default fixed charges and `AMBER_RATES_CHANGE_DATE` in `constants.js`, rebate and hardware defaults in `PLANNER_FINANCE_DEFAULTS`, and `TEMPLATES_AS_AT`. Market offers drift during the year.
 - **Vendored libraries** are pinned copies: Chart.js 4.4.2, chartjs-plugin-zoom 2.0.1, pdf.js 3.11.174. Updating them is manual.
 - **The price-update workflow** uses Node 20 actions, which GitHub is deprecating (a warning only). `test.yml` already uses Node 22.
-- **Maintainer tools in the settings menu** ("Save custom plans", "Show stats"; IDs `saveCustomPlansForRick`, `showStatsForRick`) sit alongside user actions.
 - **The API key** is obfuscated, not encrypted. That's fine for a browser-only tool, but it shouldn't be described as secure.
 - **Number formatting** varies: percentages are "20%" in most places but "20 %" on Solar+?. Money uses `toLocaleString('en-AU')` in some places and `toFixed` in others.
 
@@ -80,4 +79,5 @@ These are the properties the tests guard and that users rely on. A change that b
 | `autoload`, `cache`, `import`, `review` specs | Opening state, the cache, CSV import and backup round trip |
 | `ui`, `tabs`, `graphs`, `stats`, `performance` specs | Tabs, help bubbles, disclaimer, phone layout, charts, More Stats, fetch behaviour |
 | `billcheck`, `shift`, `v140` specs | Bill?, Free?, financial-year rate switching |
+| `v162` spec | Saved plan prices refreshed when a built-in plan changes, the answer and month by month agreeing on Amber's total, clearing saved readings, no maintainer tools in the menu |
 | `nem12`, `planner` specs | The NEM12 path and every Solar+? flow |

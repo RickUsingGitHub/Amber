@@ -99,7 +99,7 @@ Imports (Amber CSV, NEM12 estimate) produce the same shape, so every feature wor
 
 ### The cache
 
-IndexedDB `AmberDataCacheDB`, store `dailyUsage`, one record per site and NEM date (`id = "<siteId>_<date>"`). Compare reads the cache first and fetches only missing or stale days, in 7-day chunks, 3 at a time (`Amber.FETCH_CHUNK_DAYS`, `FETCH_CONCURRENCY`). Final whole days are cached. Old days with no data are remembered as empty (`emptyDayCutoff`). Estimated readings stay eligible for refetch (`cachedDayUsable`).
+IndexedDB `AmberDataCacheDB`, store `dailyUsage`, one record per site and NEM date (`id = "<siteId>_<date>"`). Connections aren't closed after use; each closes itself on `versionchange`, so "Clear saved meter readings" (`deleteDatabase`) isn't blocked. Compare reads the cache first and fetches only missing or stale days, in 7-day chunks, 3 at a time (`Amber.FETCH_CHUNK_DAYS`, `FETCH_CONCURRENCY`). Final whole days are cached. Old days with no data are remembered as empty (`emptyDayCutoff`). Estimated readings stay eligible for refetch (`cachedDayUsable`).
 
 ### Channel totals
 
@@ -142,7 +142,7 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 ### Compare (`app.js`: `fetchAndCompare`, `displayResults`, `renderAllPlansTable`, `renderMonthly`)
 
 1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back.
-2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement).
+2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement, one calendar month at a time via `Amber.monthsInRange`; Bill? settles the bill's own period with `billPeriod`).
 3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
 4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
 
@@ -181,7 +181,7 @@ Key pieces:
 - **Battery** (`simulateBattery`): one day at a time with that day's prices known (perfect daily foresight). It searches a charge threshold and a discharge threshold per day. It charges from solar over the export cap first, then from cheap or free grid; it discharges into dear use and high feed-in. Charge and discharge share the power limit, and a small wear cost per kWh stops pointless cycling. `limited` counts what's thrown away at the export limit.
 - **Existing battery**: `plannerDetectExisting` guesses panels and battery from the readings. `plannerUnwindBattery` removes the battery's effect (grid sales are seen directly; what it covered at home is estimated), and the search re-runs it on every plan with any new battery. `plannerExistingCheck` compares the planner's version with the real readings.
 - **Search** (`plannerSearch`): every solar size on every plan without a battery. A probe battery ranks plans, then the full battery search runs on the best `keepPlans` (6) plus any that must be included. `allowPlans` limits the plans considered to those ticked.
-- **Money** (`plannerCapex`, `plannerFinance`): the up-front cost after rebates. Then year by year: savings grow with price rises and shrink with panel and battery wear, the battery and inverter are replaced, and a battery replaced inside the period is credited with its remaining life. The results are NPV, IRR, payback "ahead for good" (and the first time it reaches $0), and `plannerWaitAYear`.
+- **Money** (`plannerCapex`, `plannerFinance`): the up-front cost after rebates (the battery rebate follows `Amber.BATTERY_REBATE_TIERS`: full to 14 kWh, 60% to 28 kWh, 15% to 50 kWh). Then year by year: savings grow with price rises and shrink with panel and battery wear, the battery and inverter are replaced, and a battery replaced inside the period is credited with its remaining life. The results are NPV, IRR, payback "ahead for good" (and the first time it reaches $0), and `plannerWaitAYear`.
 - **Ratings** (`plannerKeenLevel`): the value per $1 up front (≥1.75 Strong, ≥1.4 Good, ≥1.15 Modest). Strong and Good also need the result to hold with prices 20% lower and with 10am–3pm feed-in halved (`dayFeedInScale`), and payback within 8 years.
 - **UI** (`planner-ui.js`): `search()` gathers inputs, `analyse()` builds options against the yardstick, and the `render*` functions build each card as HTML strings (escaped with `esc`).
 
@@ -193,6 +193,7 @@ Key pieces:
 | localStorage | `amberApiKey` (or sessionStorage) | Obfuscated API key |
 | localStorage | `selectedSiteId`, `startDate`, `endDate`, `activeTab` | Where the user was |
 | localStorage | `selectedState`, `selectedPlan`, `rateType`, `planName`, `flatRate`, `flatFeedInRate`, `flatControlledLoad`, `dailyConnectionRate`, `touConfig`, `feedInWindows`, `enableFeedInTou`, `demandSettings`, `ratesDetailsOpen` | The Compare plan form |
+| localStorage | `selectedPlanSig` | Fingerprint (`Amber.templateSignature`) of the built-in plan the form was filled from. If it no longer matches on load, the plan's prices have changed and the form is filled again |
 | localStorage | `customSupplierPlans` | Saved custom plans |
 | localStorage | Amber charge field IDs | Amber's fixed charges (this year and last) |
 | localStorage | `localSites` | Imported NEM12 households |
