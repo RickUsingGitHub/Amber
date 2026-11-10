@@ -6,7 +6,7 @@ How Amber Compare & Export is put together, for contributors and reviewers. User
 
 - **A static site** (GitHub Pages) with one page, `index.html`. There is no server, no backend and no account. Network traffic is limited to Amber's API (`https://api.amber.com.au/v1`) and the site's own files (`data/…`), enforced by a Content Security Policy in `index.html`.
 - **Plain JavaScript, no framework and no bundler.** Each file in `js/` is an IIFE that adds to a single global namespace, `window.Amber` (or `globalThis.Amber` under Node). The files are classic `<script>` tags loaded in a fixed order, so `file://` works.
-- **Logic and UI are mostly separate.** Calculation modules (`costs`, `monthly`, `estimate`, `redispatch`, `planner`, `solar`, `stats`, `bill`, `import`, `time`, `templates`, `networks`) don't touch the DOM and are unit-tested in Node. DOM code lives in `app.js` (everything except the planner), `planner-ui.js` (the Solar+? tab), `charts.js`, `calendar.js`, `help.js` and parts of `csv.js` and `storage.js`.
+- **Logic and UI are mostly separate.** Calculation modules (`costs`, `monthly`, `estimate`, `redispatch`, `planner`, `solar`, `stats`, `bill`, `import`, `time`, `templates`, `networks`) don't touch the DOM and are unit-tested in Node. DOM code lives in the page controller (`app-*.js` and `app.js`: everything except the planner), `planner-ui.js` (the Solar+? tab), `charts.js`, `calendar.js`, `help.js` and parts of `csv.js` and `storage.js`.
 - **Styling** is Tailwind CSS 3, prebuilt by the Tailwind CLI from `css/input.css` into `css/app.css` (committed). There's no runtime CSS-in-JS and no inline `<style>`.
 - **Vendored libraries** in the repository root: Chart.js 4.4.2 (`chart.umd.min.js`), chartjs-plugin-zoom (`chartjs-plugin-zoom.min.js`) and pdf.js (`pdf.min.js`, `pdf.worker.min.js`, loaded on demand for bill PDFs).
 - **Storage**: IndexedDB for meter readings (a per-site, per-day cache), localStorage for settings, saved plans, imported households and the last bill check.
@@ -41,19 +41,31 @@ js/constants.js   js/help.js      js/time.js      js/templates.js   js/storage.j
 js/costs.js       js/api.js       js/bill.js      js/csv.js         js/charts.js
 js/calendar.js    js/stats.js     js/monthly.js   js/redispatch.js  js/import.js
 js/networks.js    js/estimate.js  js/solar.js     js/planner.js     js/planner-ui.js
+js/app-core.js    js/app-plan-form.js   js/app-results.js   js/app-imports.js
+js/app-bill.js    js/app-free.js        js/app-settings.js
 js/app.js
 ```
 
-Every file starts with `const Amber = root.Amber = root.Amber || {};` and attaches functions and constants as `Amber.something`. Later files may use anything earlier files define. `app.js` is last and starts the page (`init()` on `DOMContentLoaded`). Every script URL carries `?v=<version>` to bust caches.
+Every file starts with `const Amber = root.Amber = root.Amber || {};` and attaches functions and constants as `Amber.something`. Later files may use anything earlier files define. `app.js` is last and starts the page (`init()` on `DOMContentLoaded`). Every script URL carries `?v=<version>` to bust caches. `tests/unit-syntax.js` checks that every file in `js/` has its script tag, that `app-core.js` is the first of the app files and that `app.js` is last.
 
 Under Node (unit tests), files are `require`d in the same order and attach to `global.Amber`; DOM-free modules work unchanged.
 
-There are two cross-module UI hooks:
+### The page controller: `app-*.js`, `app.js` and `Amber.app`
+
+Everything in the UI except the Solar+? tab is one controller, split over eight files by area (the module map lists them). They work on one `state` object and call each other's functions, so they share an internal namespace, `Amber.app`:
+
+- `app-core.js` loads first and creates it: `Amber.app = { state, $, … }`, with `state` (what the page remembers while it is open: the templates, the last Compare's channel totals, sites, the bill check and so on), `$` (`getElementById`) and the helpers every file reads (the selected site and state, Amber's fixed charges, saved JSON, messages).
+- Each file starts with `const app = Amber.app; const state = app.state; const $ = app.$;`. Functions in the same file are called directly. A function in another file is called as `app.name(…)`, looked up when the call runs, so the files can call each other in both directions and only `app-core.js` has to come before the rest.
+- Each file ends with `Object.assign(app, { … })`, listing only what another file uses. That list is the file's interface: a function that isn't on it is private to its file. To use a function from another file, add it to that file's list and call it as `app.name()`.
+- Each area has a `setup…` function that adds its event listeners (`setupPlanForm`, `setupImports`, `setupBillCheck`, `setupFreeTab`, `setupSettingsMenu`; `setupTabs`, `setupStartTab`, `setupAccount` and `setupResultTools` in `app.js`). `init()` in `app.js` calls them in order.
+
+Two checks keep this honest. ESLint's `no-undef` reports a call to another file's function that was written without `app.`, and `tests/unit-syntax.js` checks that every `app.<name>` used is put on `Amber.app` by exactly one file, that everything on it is used by another file, and that no module outside the app files touches it.
+
+`Amber.app` is internal to those files. The hooks for everything else are:
 
 - `Amber.appApi` (set in `app.js`) gives `planner-ui.js` what it needs from the main app: `selectedSite`, `currentStateCode`, `readAmberRates`, `templates()`, `selectedPlanName()` and `selectTab`. The planner reads the meter cache itself through `storage.js`.
 - `Amber.plannerUi = { show, run }` (set in `planner-ui.js`) is called by `app.js` when the Solar+? tab opens.
-
-`Amber._appState` exposes `app.js`'s internal state for tests and debugging.
+- `Amber._appState` (set in `app-core.js`) is the same `state` object, for tests and debugging.
 
 ## Module map
 
@@ -78,8 +90,15 @@ There are two cross-module UI hooks:
 | `estimate.js` | ~400 | NEM12 parsing and the rebuild of Amber's interval prices from wholesale prices, as a local "site" |
 | `solar.js` | ~220 | Towns, PVGIS weather loading, sun position, panel output per half hour (tilt, facing, shade, temperature, inverter clipping) |
 | `planner.js` | ~1,480 | Solar+? engine: the half-hourly year, plan rate cards, exact costing, flows, existing-battery detection and unwinding, battery simulation, the search, finance and ratings |
-| `planner-ui.js` | ~1,180 | Solar+? tab UI: inputs and settings, running the search, every results card |
-| `app.js` | ~3,010 | Everything else in the UI: tabs, Start, Compare (plan form, results, all plans, month by month), Usage, Bill?, Free?, imports, settings menu, `init()` |
+| `planner-ui.js` | ~1,190 | Solar+? tab UI: inputs and settings, running the search, every results card |
+| `app-core.js` | ~180 | What the page controller's files share: `state`, `Amber.app`, `$`, `storedJson`, the selected site and state, Amber's fixed charges (`loadAmberChargeFields`, `readAmberRates`), `fmtDate`, the message under the dates bar |
+| `app-plan-form.js` | ~620 | The plan form on Compare: TOU and feed-in windows, the plan picker (`updatePlanSelector`, `selectSupplierPlan`), `createPlanObjectFromForm`, `applyPlanTemplate`, saved settings (`saveAllSettings`, `loadAllSettings`), custom plans |
+| `app-results.js` | ~680 | Showing results: the answer (`displayResults`), every plan (`renderAllPlansTable`), savings in the plan picker (`updatePlanSavings`), month by month (`loadMonthlyData`, `renderMonthly`), the Usage tab's daily graph, day picker and More Stats, `hideResults` |
+| `app-imports.js` | ~450 | Sites and imports: the site picker (`populateSites`, `syncSiteMode`), imported households (`loadLocalSites`, `renderLocalSites`), Amber CSV import (`handleUsageCsvFile`), NEM12 (`handleNem12File`, `renderNem12Options`, `buildNem12Estimate`) |
+| `app-bill.js` | ~260 | An Amber bill: reading the file and filling Amber's charges from it (`handleAmberBillFile`, `applyAmberBillRates`), and the Bill? tab (`ensureBillLoaded`, `renderBillCheck`) |
+| `app-free.js` | ~250 | The Free? tab: its settings, `renderBatteryShift`, `drawBatteryShift` |
+| `app-settings.js` | ~120 | The settings menu: `buildSettingsMenu`, `clearSavedReadings`, deleting custom plans |
+| `app.js` | ~700 | The top of the controller, loaded last: tabs (`selectTab`), the Start tab's welcome and account fields, the dates bar and Download menu, `fetchAndCompare`, `recalculateAndShow`, `init()`, `Amber.appApi` |
 
 ## Data model
 
@@ -119,7 +138,7 @@ A plan (built-in template or saved custom plan):
   demand: { e (enabled), … window and rate fields }, asAt }
 ```
 
-TOU period names and labels are in `Amber.PERIOD_LABELS`. Days are 0 = Sunday. Rates in templates are GST-inclusive c/kWh and c/day; feed-in is the published rate. `templates.js` has the full set; `app.js` `createPlanObjectFromForm` builds one from the plan form.
+TOU period names and labels are in `Amber.PERIOD_LABELS`. Days are 0 = Sunday. Rates in templates are GST-inclusive c/kWh and c/day; feed-in is the published rate. `templates.js` has the full set; `app-plan-form.js` `createPlanObjectFromForm` builds one from the plan form.
 
 ### The planner's year
 
@@ -134,29 +153,29 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 
 ## How each tab works
 
-### Start (`app.js`: `setupStartTab`, imports, sites)
+### Start (`app.js`: `setupStartTab`, `setupAccount`; `app-imports.js`: sites and imports; `app-core.js`: Amber's charges)
 
 - API key: `Amber.setApiKey` stores an obfuscated key in localStorage (or sessionStorage); `Amber.fetchSites` lists sites. The state selector follows the site's network (`siteNetworkState`, from `Amber.NETWORKS`) when the state showing has no plans for it, unless the user picked the state by hand for that site.
 - Amber's fixed charges: `loadAmberChargeFields` / `readAmberRates`. The two years' connection, subscription and demand rates are split at `Amber.AMBER_RATES_CHANGE_DATE` (1 July 2026). Uploading a bill (`handleAmberBillFile` → `bill.js`) fills the year it belongs to.
 - Amber CSV import: `handleUsageCsvFile` → `import.js` → `setUsageDataMany`.
 - NEM12: `handleNem12File` → `estimate.js` parses the file and rebuilds Amber's interval prices from `data/prices` and `networks.js`. The result becomes a local site whose days are written to the cache.
 
-### Compare (`app.js`: `fetchAndCompare`, `displayResults`, `renderAllPlansTable`, `renderMonthly`)
+### Compare (`app.js`: `fetchAndCompare`; `app-results.js`: `displayResults`, `renderAllPlansTable`, `renderMonthly`; `app-plan-form.js`: the plan form)
 
 1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back.
 2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement, one calendar month at a time via `Amber.monthsInRange`; Bill? settles the bill's own period with `billPeriod`).
 3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
 4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
 
-### Usage (`charts.js`, `calendar.js`, `stats.js`)
+### Usage (`charts.js`, `calendar.js`, `stats.js`, `app-results.js`)
 
 Uses the same channel totals and daily summaries. Charts use the interval's local time and real interval length.
 
-### Bill? (`bill.js`, `app.js` bill check section)
+### Bill? (`bill.js`, `app-bill.js`)
 
 Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The last result is kept in localStorage `amberBillCheck`.
 
-### Free? (`redispatch.js`, `app.js` battery re-scheduling section)
+### Free? (`redispatch.js`, `app-free.js`)
 
 For each free-window plan, re-times each day's real readings. Grid use moves into the free window (dearest first) within a daily shift budget, the window's cap and an import limit. Battery exports move into the best feed-in window when a battery is present. The result is priced with the same cost functions as Compare.
 
@@ -203,7 +222,7 @@ Key pieces:
 | localStorage | `amberBillCheck` | The last bill check |
 | localStorage | `plannerSettings` | Every Solar+? input and the company ticks |
 
-Saved JSON is read through `storedJson` / `storedCustomPlans` in `app.js`: a value that is missing, damaged or the wrong shape falls back to the default instead of stopping `init()`.
+Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` (`app-plan-form.js`): a value that is missing, damaged or the wrong shape falls back to the default instead of stopping `init()`.
 
 ## External data
 
@@ -221,7 +240,7 @@ Saved JSON is read through `storedJson` / `storedCustomPlans` in `app.js`: a val
 
 - `npm run build:css` rebuilds `css/app.css`. Tailwind scans `index.html` and `js/**/*.js` for class names, and `tailwind.config.js` safelists classes that are only built dynamically. Commit `css/app.css` after changing classes.
 - **Lint**: `npm run lint` runs ESLint 10 with `eslint.config.js` (a flat config). The files in `js/` are checked as classic browser scripts, and the unit checks, scripts and specs as CommonJS. On top of ESLint's recommended set it reports unused variables, shadowed names, `var`, `==` and a `let` that never changes, and holds the house style (4-space indent, single quotes, semicolons, from `@stylistic/eslint-plugin`). One rule is the project's own: `local/no-extra-arguments` (`eslint-rules/no-extra-arguments.js`) reports a call that passes more arguments than the function takes, for functions and `Amber.*` functions defined in the same file. Rules are tuned to the code rather than the code restyled: the tests keep their own alignment of long asserts, and `preserve-caught-error` is off because network errors are replaced on purpose by plain messages.
-- **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-syntax.js` runs first: it parses every `js/*.js` (no other unit script loads the DOM files such as `help.js` and `app.js`) and checks that `index.html` loads each of them once, with `app.js` last. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
+- **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-syntax.js` runs first: it parses every `js/*.js` (no other unit script loads the DOM files such as `help.js` and `app.js`), checks that `index.html` loads each of them once, with `app.js` last, and checks the calls between the app files through `Amber.app`. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
 - **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 66 tests take about a minute with two workers.
 - **CI**: `.github/workflows/test.yml` runs `npm ci`, `npm run lint`, installs Chromium and runs `npm test -- --workers=2` on every pull request and on pushes to `main`. Failed runs upload `test-results/`.
 
