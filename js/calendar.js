@@ -38,7 +38,7 @@
         tooltip.innerHTML = `
             <div class="font-bold mb-1">Estimated Monthly Tariff</div>
             <div>Expected total for <span class="font-semibold">${Amber.escapeHTML(monthName)}</span>:</div>
-            <div class="text-lg font-bold text-blue-600 mt-1">$${cost.toFixed(2)}</div>
+            <div class="text-lg font-bold text-blue-600 mt-1">${Amber.money(cost)}</div>
             <div class="text-xs text-gray-500 mt-2 max-w-[200px]">
                 Based on the max demand occurring in this month applied to all days in the month.
             </div>
@@ -53,8 +53,8 @@
                 html += `<tr>
                     <td class="px-2 py-1 whitespace-nowrap">${data.type === 'feedIn' ? 'Solar sent out' : (data.type === 'controlledLoad' ? 'Hot water' : 'Power bought')}</td>
                     <td class="px-2 py-1 text-right">${data.kwh.toFixed(1)} kWh</td>
-                    <td class="px-2 py-1 text-right">$${data.amberCost.toFixed(2)}</td>
-                    <td class="px-2 py-1 text-right">$${data.otherCost.toFixed(2)}</td>
+                    <td class="px-2 py-1 text-right">${Amber.money(data.amberCost)}</td>
+                    <td class="px-2 py-1 text-right">${Amber.money(data.otherCost)}</td>
                 </tr>`;
             }
         });
@@ -110,7 +110,7 @@
             const maxDemandKw = (monthDemandInfo.amber.maxDemandKwh * 2).toFixed(2);
             contentHtml += `<tr>
                 <td class="px-2 py-1 text-sm" colspan="2">Amber demand charge <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
-                <td class="px-2 py-1 text-right font-semibold">$${amberDemandCost.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right font-semibold">${Amber.money(amberDemandCost)}</td>
                 <td class="px-2 py-1 text-right"></td>
             </tr>`;
             hasDemandRow = true;
@@ -120,19 +120,19 @@
             contentHtml += `<tr>
                 <td class="px-2 py-1 text-sm" colspan="2">${Amber.escapeHTML(planName)} demand charge <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
                 <td class="px-2 py-1 text-right"></td>
-                <td class="px-2 py-1 text-right font-semibold">$${otherDemandCost.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right font-semibold">${Amber.money(otherDemandCost)}</td>
             </tr>`;
             hasDemandRow = true;
         }
         contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}">
             <td class="px-2 py-1 font-semibold" colspan="2">Daily charges</td>
-            <td class="px-2 py-1 text-right font-semibold">$${amberDaily.toFixed(2)}</td>
-            <td class="px-2 py-1 text-right font-semibold">$${otherDaily.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right font-semibold">${Amber.money(amberDaily)}</td>
+            <td class="px-2 py-1 text-right font-semibold">${Amber.money(otherDaily)}</td>
         </tr>
         <tr class="bg-gray-50 font-bold">
             <td class="px-2 py-1" colspan="2">Total</td>
-            <td class="px-2 py-1 text-right">$${totalAmberCharges.toFixed(2)}</td>
-            <td class="px-2 py-1 text-right">$${totalOtherCharges.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right">${Amber.money(totalAmberCharges)}</td>
+            <td class="px-2 py-1 text-right">${Amber.money(totalOtherCharges)}</td>
         </tr></tbody></table>
         <p class="text-xs text-gray-500 mt-2">Tap to see this day on the graph.</p>`;
 
@@ -200,7 +200,7 @@
             const maxDemandKw = (monthDemandInfo.amber.maxDemandKwh * 2).toFixed(2);
             contentHtml += `<tr>
                 <td class="px-2 py-1 text-sm" colspan="2">Amber demand charge <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
-                <td class="px-2 py-1 text-right font-semibold">$${monthlySummary.amberDemandCost.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right font-semibold">${Amber.money(monthlySummary.amberDemandCost)}</td>
                 <td class="px-2 py-1 text-right"></td>
             </tr>`;
             hasDemandRow = true;
@@ -210,19 +210,19 @@
             contentHtml += `<tr>
                 <td class="px-2 py-1 text-sm" colspan="2">${Amber.escapeHTML(planName)} demand charge <span class="font-normal text-gray-500 text-[10px]">(${maxDemandKw}kW peak)</span></td>
                 <td class="px-2 py-1 text-right"></td>
-                <td class="px-2 py-1 text-right font-semibold">$${monthlySummary.otherDemandCost.toFixed(2)}</td>
+                <td class="px-2 py-1 text-right font-semibold">${Amber.money(monthlySummary.otherDemandCost)}</td>
             </tr>`;
             hasDemandRow = true;
         }
         contentHtml += `<tr class="${hasDemandRow ? '' : 'border-t'}">
             <td class="px-2 py-1 font-semibold" colspan="2">Daily charges (${monthlySummary.daysInMonth} days)</td>
-            <td class="px-2 py-1 text-right font-semibold">$${amberDaily.toFixed(2)}</td>
-            <td class="px-2 py-1 text-right font-semibold">$${otherDaily.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right font-semibold">${Amber.money(amberDaily)}</td>
+            <td class="px-2 py-1 text-right font-semibold">${Amber.money(otherDaily)}</td>
         </tr>
         <tr class="bg-gray-50 font-bold">
             <td class="px-2 py-1" colspan="2">Total</td>
-            <td class="px-2 py-1 text-right">$${totalAmberCharges.toFixed(2)}</td>
-            <td class="px-2 py-1 text-right">$${totalOtherCharges.toFixed(2)}</td>
+            <td class="px-2 py-1 text-right">${Amber.money(totalAmberCharges)}</td>
+            <td class="px-2 py-1 text-right">${Amber.money(totalOtherCharges)}</td>
         </tr></tbody></table>`;
         tooltip.innerHTML = contentHtml;
         Amber.positionTooltip(tooltip, element);
@@ -276,9 +276,9 @@
                             <span>
                               <span class="text-blue-600">↓${totals.inKwh.toFixed(1)}</span><span class="text-gray-400">/</span><span class="text-green-700">↑${totals.outKwh.toFixed(1)}</span>
                             </span>
-                            <span><strong>Amber:</strong> $${totals.amber.toFixed(2)}</span>
-                            <span><strong>Other plan:</strong> $${totals.other.toFixed(2)}</span>
-                            <span class="${savingsColor}"><strong>${savings >= 0 ? 'Amber saved' : 'Other plan saves'}:</strong> $${Math.abs(savings).toFixed(2)}</span>
+                            <span><strong>Amber:</strong> ${Amber.money(totals.amber)}</span>
+                            <span><strong>Other plan:</strong> ${Amber.money(totals.other)}</span>
+                            <span class="${savingsColor}"><strong>${savings >= 0 ? 'Amber saved' : 'Other plan saves'}:</strong> ${Amber.money(Math.abs(savings))}</span>
                         </div>`;
                 }
                 const monthContainer = document.createElement('div');
@@ -323,7 +323,7 @@
                             <div class="text-xs mt-1 whitespace-nowrap">
                                 <span class="text-blue-600">↓${summary.totalInKwh.toFixed(1)}</span><span class="text-gray-400">/</span><span class="text-green-700">↑${summary.totalOutKwh.toFixed(1)}</span>
                             </div>
-                            <div class="text-sm mt-auto font-semibold ${costColor}">$${totalAmberCost.toFixed(2)}</div>
+                            <div class="text-sm mt-auto font-semibold ${costColor}">${Amber.money(totalAmberCost)}</div>
                         </div>`;
                 } else {
                     dayHtml = `<div class="calendar-day has-data ${borderClass} bg-gray-50 rounded-md p-2 flex flex-col justify-center items-center" data-date="${dateStr}" role="button" tabindex="0" aria-label="Open ${dateStr} on the daily graph"><div class="font-bold text-gray-800">${day}</div><div class="text-xs mt-1 text-center text-gray-500 leading-tight">No power used</div></div>`;

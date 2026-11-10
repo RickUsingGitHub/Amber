@@ -21,6 +21,16 @@
         return `${year}-${month}-${day}`;
     };
 
+    /** A YYYY-MM-DD date as people read it: "31 Oct 2026", or "Sat 31 Oct 2026" with weekday. */
+    Amber.formatDate = function (iso, weekday) {
+        const d = new Date(String(iso).substring(0, 10) + 'T00:00:00');
+        if (Number.isNaN(d.getTime())) return String(iso || '');
+        const options = { day: 'numeric', month: 'short', year: 'numeric' };
+        if (weekday) options.weekday = 'short';
+        // en-AU puts a comma after the weekday ("Sat, 31 Oct 2026"); it reads better without.
+        return d.toLocaleDateString('en-AU', options).replace(',', '');
+    };
+
     Amber.localYesterday = function () {
         const d = new Date();
         d.setHours(0, 0, 0, 0);

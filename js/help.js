@@ -88,7 +88,7 @@
         moreStats: 'A few handy numbers about how you buy and sell power on Amber. The price spike and negative price lines show how much of your use landed on Amber\'s dearest or cheapest moments.',
 
         // ---------- Bill check tab ----------
-        billCheck: 'Choose the PDF bill Amber emailed you. The app reads it here in your browser, loads your meter readings for the same dates, and checks each line of the bill against them. Differences of a few cents are normal rounding.',
+        billCheck: 'Choose the PDF bill Amber emailed you. The app reads it here in your browser, loads your meter readings for the bill\'s dates (the dates at the top stay as they are), and checks each line of the bill against them. Differences of a few cents are normal rounding.',
 
         // ---------- Solar & battery tab ----------
         planner: 'Uses your last 12 months of meter readings to try every mix of solar panels, home battery and retailer plan, half hour by half hour, and shows which pays for itself best. It works with Amber or with any retailer\'s NEM12 file. It\'s an estimate: get quotes before you buy.',

@@ -141,7 +141,7 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 
 ### Compare (`app.js`: `fetchAndCompare`, `displayResults`, `renderAllPlansTable`, `renderMonthly`)
 
-1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back.
+1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back (`loadReadings`, shared with the bill check).
 2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement, one calendar month at a time via `Amber.monthsInRange`; Bill? settles the bill's own period with `billPeriod`).
 3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
 4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
@@ -152,7 +152,7 @@ Uses the same channel totals and daily summaries. Charts use the interval's loca
 
 ### Bill? (`bill.js`, `app.js` bill check section)
 
-Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The last result is kept in localStorage `amberBillCheck`.
+Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The load is the bill check's own (`ensureBillLoaded` → `loadReadings` → `state.billData`): the dates bar and the Compare results are left alone, and results already on show are used when they cover the bill. The last result is kept in localStorage `amberBillCheck`.
 
 ### Free? (`redispatch.js`, `app.js` battery re-scheduling section)
 
@@ -213,6 +213,7 @@ Saved JSON is read through `storedJson` / `storedCustomPlans` in `app.js`: a val
 
 - The CSP (`index.html` `<meta http-equiv="Content-Security-Policy">`) is `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; …`. This means no inline scripts, no inline `<style>` and no `style="…"` attributes (setting `element.style.x` from JS is fine), and no third-party hosts.
 - All data stays in the browser. The API key is obfuscated (XOR with a fixed key, then base64), not encrypted.
+- Text is formatted in one place each: dollars with `Amber.money` (`costs.js`: "$1,234.56", a proper minus sign, whole dollars on Solar+?), dates with `Amber.formatDate` (`time.js`: "31 Oct 2026"), plan rates with `Amber.formatCentsPerKwh` ("27.11 c/kWh"), and percentages with no space ("20%").
 - Dynamic HTML is built with template strings. Anything from data or user input goes through `Amber.escapeHTML` (aliased `esc` in `planner-ui.js`), which escapes `& < > " '`, so it is safe inside an element and inside a quoted attribute.
 
 ## Build, test and CI
