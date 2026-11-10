@@ -210,8 +210,16 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
             batteryBills: [0, 5, 13.5].map((b) => ({ kwh: b, bill: pick(6, b, 'Flat') }))
         };
         const fin = Amber.plannerFinance(opt, f);
-        const capex = 1500 + 1150 * 6 - 280 * 6 + 1500 + 900 * 13.5 - 330 * 13.5;
+        const capex = 1500 + 1150 * 6 - 280 * 6 + 1500 + 900 * 13.5 - f.batteryRebatePerKwh * 13.5;
         assert(near(fin.capex.total, capex) && fin.flows.length === 20, `capex after rebates $${fin.capex.total.toFixed(0)}`);
+        // The battery rebate is tiered by size: full on the first 14 kWh, 60 % to 28 kWh, 15 % to 50 kWh.
+        const rebateKwh = [5, 14, 20, 28, 30, 50, 60].map((b) => Amber.batteryRebateKwh(b));
+        assert(rebateKwh.every((v, i) => near(v, [5, 14, 17.6, 22.4, 22.7, 25.7, 25.7][i])),
+            `battery rebate tiers: 20 kWh earns it on ${rebateKwh[2].toFixed(1)} kWh, 30 kWh on ${rebateKwh[4].toFixed(1)}, nothing more past 50 kWh`);
+        const cap20 = Amber.plannerCapex(0, 20, f);
+        assert(near(cap20.batteryRebate, f.batteryRebatePerKwh * 17.6) && near(cap20.rebates, cap20.batteryRebate) && near(cap20.total, 1500 + 900 * 20 - cap20.batteryRebate)
+            && near(Amber.plannerCapex(6, 0, f).solarRebate, 280 * 6),
+            `a 20 kWh battery gets $${cap20.batteryRebate.toFixed(0)} off, not the flat $${(f.batteryRebatePerKwh * 20).toFixed(0)}`);
         assert(fin.flows[12].spend > 0 && fin.flows[12].capacity === 1 && fin.flows[11].capacity < 0.8, 'battery replaced after 12 years (capacity back to full)');
         assert(fin.payback > 0 && fin.payback < 20 && Number.isFinite(fin.npv) && fin.irr > 0, `payback ${fin.payback.toFixed(1)} years, NPV $${fin.npv.toFixed(0)}, IRR ${(fin.irr * 100).toFixed(1)}%`);
         const never = Amber.plannerFinance(Object.assign({}, opt, { solarOnly: opt.planOnly, batteryBills: [] , solarKw: 6, batteryKwh: 0 }), f);
@@ -220,7 +228,9 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         // 10 kW + 30 kWh: back to $0 in year 11, behind again when the battery is replaced in year 13,
         // ahead for good later. The replacement's 4 unused years count toward its worth.
         const big = { solarKw: 10, batteryKwh: 30, today: 4000, free: 3200, planOnly: 3200, solarOnly: 2200, batteryBills: [{ kwh: 0, bill: 2200 }, { kwh: 30, bill: 900 }] };
-        const bigFin = Amber.plannerFinance(big, f);
+        // (With a battery rebate that leaves $28,800 up front, whatever the current rate is.)
+        const bigF = Object.assign({}, f, { batteryRebatePerKwh: 9900 / Amber.batteryRebateKwh(30) });
+        const bigFin = Amber.plannerFinance(big, bigF);
         assert(near(bigFin.capex.total, 28800) && bigFin.firstPayback > 9 && bigFin.firstPayback < 13 && bigFin.payback > 13 && bigFin.payback <= 20 && bigFin.flows[12].cumulative < 0,
             `ahead for good: first back to $0 at ${bigFin.firstPayback.toFixed(1)} years, behind again after the year-13 replacement, ahead for good at ${bigFin.payback.toFixed(1)}`);
         const replacement = 900 * 30 * Math.pow(0.96, 12);
@@ -236,7 +246,7 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
             && keen(14000, 17000, 9, 8000) === 3 && keen(9000, 17000, 7, -50) === 2 && keen(1500, 17000, 15, -3000) === 1
             && keen(-500, 17000, null, -4000) === 0 && keen(0, 0, 0, 0) === null,
             'how keen to be: Not worth it, Marginal, Modest, Good, Strong from value per $1, robustness and payback');
-        const short = Amber.plannerFinance(big, Object.assign({}, f, { years: 12 }));
+        const short = Amber.plannerFinance(big, Object.assign({}, bigF, { years: 12 }));
         assert(short.residual.total === 0 && short.payback === short.firstPayback, 'nothing replaced within 12 years: no credit, one payback');
 
         // One option in full: its months add up to its year, and the search's bill for it.
@@ -246,7 +256,7 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
             `an option's 12 months add up to its year ($${one.cost.total.toFixed(2)})`);
         const amberOne = Amber.plannerEvaluate(res.prep, 'Amber', 6, 13.5);
         const amberMonths = amberOne.months.reduce((s, m) => s + m.bill, 0);
-        assert(Math.abs(amberMonths - amberOne.cost.total) < 0.02 * Math.abs(amberOne.cost.total), `Amber's months within 2 % of its year (export settlement is yearly): $${amberMonths.toFixed(2)} vs $${amberOne.cost.total.toFixed(2)}`);
+        assert(near(amberMonths, amberOne.cost.total, 1e-6), `Amber's 12 months add up to its year too (the export allowance and demand are both monthly): $${amberMonths.toFixed(2)} vs $${amberOne.cost.total.toFixed(2)}`);
 
         const allowedOnly = await Amber.plannerSearch(Object.assign({}, ctx, { allowPlans: ['Flat', 'Amber'] }));
         assert(allowedOnly.searchedPlans.sort().join() === 'Amber,Flat' && allowedOnly.rows.filter((r) => r.batteryKwh > 0).every((r) => r.plan !== free.name)

@@ -41,6 +41,30 @@
     };
 
     /**
+     * The calendar months that [from, to] (inclusive YYYY-MM-DD dates) touches, oldest first, each
+     * clipped to the range: [{ key: 'YYYY-MM', from, to, days }].
+     */
+    Amber.monthsInRange = function (from, to) {
+        const out = [];
+        if (!from || !to || to < from) return out;
+        let y = parseInt(from.substring(0, 4), 10);
+        let m = parseInt(from.substring(5, 7), 10);
+        const endKey = to.substring(0, 7);
+        for (;;) {
+            const key = `${y}-${pad(m)}`;
+            const first = `${key}-01`;
+            const last = `${key}-${pad(new Date(y, m, 0).getDate())}`;
+            const start = from > first ? from : first;
+            const end = to < last ? to : last;
+            out.push({ key, from: start, to: end, days: Amber.inclusiveDayCount(start, end) });
+            if (key >= endKey) break;
+            m += 1;
+            if (m > 12) { m = 1; y += 1; }
+        }
+        return out;
+    };
+
+    /**
      * NEM timestamps are the END of the interval in UTC+10.
      * Shift back one second so midnight-ending intervals bucket on the usage day.
      */

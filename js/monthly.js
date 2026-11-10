@@ -19,7 +19,10 @@
      * monthly demand, daily connection and subscription for every day in the period.
      * All dollar values are GST-inclusive; feed-in is negative when it is a credit.
      *
-     * opts: { site, planConfig, state, amberRates }
+     * The feed-in export allowance is settled per calendar month, each month clipped to the
+     * period, like demand. A bill is one settlement whatever months it covers: pass billPeriod.
+     *
+     * opts: { site, planConfig, state, amberRates, billPeriod }
      */
     Amber.periodTotals = function (channelTotals, from, to, opts) {
         const o = opts || {};
@@ -41,7 +44,7 @@
             items.forEach((item) => dataDays.add(Amber.usageDateStr(item)));
             Amber.processUsageData(items, ct, true);
         });
-        Amber.applyAmberFeedInSettlement(ct, o.site, days);
+        Amber.applyAmberFeedInSettlement(ct, o.site, days, o.billPeriod ? null : { from, to });
         const demand = Amber.calculateDemandTariff(ct, rates);
         const fixed = Amber.amberFixedForPeriod(rates, from, to);
 
