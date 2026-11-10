@@ -241,7 +241,7 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
             `worth in today's money counts it: $${cashOnly.toFixed(0)} → $${bigFin.npv.toFixed(0)}`);
         // How keen to be. A 15 kW system costing $14,550 that's worth $5,105 (about $1.35 back per $1,
         // paying back in 9.7 years) is only Modest; $1.70 back and 7 years is Good; Strong needs more.
-        const keen = (npv, capex, payback, lowNpv) => Amber.plannerKeenLevel({ npv, capex, payback, lowNpv });
+        const keen = (npv, cost, payback, lowNpv) => Amber.plannerKeenLevel({ npv, capex: cost, payback, lowNpv });
         assert(keen(5105, 14550, 9.7, 900) === 2 && keen(11932, 17010, 7.0, 6000) === 3 && keen(14000, 17000, 6.5, 8000) === 4
             && keen(14000, 17000, 9, 8000) === 3 && keen(9000, 17000, 7, -50) === 2 && keen(1500, 17000, 15, -3000) === 1
             && keen(-500, 17000, null, -4000) === 0 && keen(0, 0, 0, 0) === null,

@@ -12,7 +12,8 @@ A browser-only tool for Australian electricity bills (Amber Electric vs other pl
 ```bash
 npm install
 npm run build:css     # after changing any Tailwind class in index.html or js/; commit css/app.css
-npm run test:unit     # Node unit checks (fast)
+npm run lint          # ESLint: unused or shadowed variables, undefined names, house style
+npm run test:unit     # Node unit checks (fast), starting with a syntax check of every js/*.js
 npm test              # unit checks + Playwright (starts scripts/static-server.js on :4173)
 npx playwright test tests/planner.spec.js --workers=2   # one spec
 npm run serve         # http://127.0.0.1:4173
@@ -23,6 +24,7 @@ If Playwright can't find its browser, point it at an installed Chromium with `la
 ## Rules of the codebase
 
 - **No build step for JS, no framework, no ES modules.** Each `js/*.js` is an IIFE adding to `window.Amber`; the load order in `index.html` matters (`app.js` is last). New files need a `<script>` tag with `?v=<version>`, and the unit tests `require` them in order.
+- **The page controller is `app-*.js` plus `app.js`**, split by area and sharing `Amber.app` (created by `app-core.js`, which loads first). A function in another app file is called as `app.name()` and must be in that file's `Object.assign(app, { … })` list at the bottom; `npm run lint` and `tests/unit-syntax.js` catch a missing one. Other modules don't use `Amber.app`: `planner-ui.js` goes through `Amber.appApi`.
 - **CSP**: no inline scripts or styles, no `style="…"` in HTML or HTML strings, no third-party hosts. `element.style.x = …` from JS is fine.
 - **Tailwind classes must appear literally** in `index.html` or `js/`, or be safelisted in `tailwind.config.js`.
 - **IDs, `data-*` hooks and visible wording are used by the tests.** Change them together with `tests/*.spec.js`.
@@ -40,5 +42,5 @@ If Playwright can't find its browser, point it at an installed Chromium with `la
    - `js/constants.js`: `Amber.APP_VERSION`;
    - `tests/unit-time.js`: the version assert.
 2. Update `README.md` and `docs/` if behaviour or structure changed.
-3. Run `npm run build:css` if classes changed, then `npm test`.
-4. Open a pull request. Merge only after the GitHub "Tests" check passes (GitHub Pages serves `main`).
+3. Run `npm run build:css` if classes changed, then `npm run lint` and `npm test`.
+4. Open a pull request. Merge only after the GitHub "Tests" check passes: it runs the lint and the tests (GitHub Pages serves `main`).

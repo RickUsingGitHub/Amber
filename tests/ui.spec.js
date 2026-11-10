@@ -136,7 +136,6 @@ test.describe('Amber UI flows', () => {
 
         // A year of Amber readings saved in this browser (as if imported): evening use, cheap middays, some spikes.
         await page.evaluate(async () => {
-            const pad = (n) => String(n).padStart(2, '0');
             const entries = [];
             const start = Date.UTC(2025, 9, 1);
             for (let d = 0; d < 365; d++) {

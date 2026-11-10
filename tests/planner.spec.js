@@ -52,12 +52,6 @@ async function onlyPlans(page, keep) {
     await page.keyboard.press('Escape');
 }
 
-async function tickAll(page) {
-    await page.click('#planRetailers summary');
-    await page.click('#planRetailersPanel [data-plan-all="1"]');
-    await page.keyboard.press('Escape');
-}
-
 async function importYear(page, file) {
     await page.route('**/api.amber.com.au/**', (route) => route.abort());
     await page.goto('/');
