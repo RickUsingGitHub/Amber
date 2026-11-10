@@ -79,5 +79,5 @@ These are the properties the tests guard and that users rely on. A change that b
 | `autoload`, `cache`, `import`, `review` specs | Opening state, the cache, CSV import and backup round trip |
 | `ui`, `tabs`, `graphs`, `stats`, `performance` specs | Tabs, help bubbles, disclaimer, phone layout, charts, More Stats, fetch behaviour |
 | `billcheck`, `shift`, `v140` specs | Bill?, Free?, financial-year rate switching |
-| `v162` spec | Saved plan prices refreshed when a built-in plan changes, the answer and month by month agreeing on Amber's total, clearing saved readings, no maintainer tools in the menu, plan names with quotes or tags, changing state (and a site outside NSW), the bill check's pointer to Start |
+| `v162` spec | Saved plan prices refreshed when a built-in plan changes, the answer and month by month agreeing on Amber's total, clearing saved readings, no maintainer tools in the menu, plan names with quotes or tags, changing state (and a site outside NSW), the bill check's pointer to Start, damaged saved settings, a Compare when the readings can't be saved, Escape closing the menus |
 | `nem12`, `planner` specs | The NEM12 path and every Solar+? flow |

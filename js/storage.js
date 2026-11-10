@@ -81,6 +81,8 @@
             entries.forEach((entry) => store.put({ id: entry.id, data: entry.data }));
             transaction.oncomplete = () => resolve();
             transaction.onerror = (event) => reject(event.target.error || transaction.error);
+            // A write that runs out of room is aborted, often with no error event first.
+            transaction.onabort = () => reject(transaction.error || new Error('The browser could not save the readings.'));
         });
     };
 
@@ -115,6 +117,7 @@
                 request.onerror = () => done(request.error);
             });
             transaction.onerror = (event) => done(event.target.error || transaction.error);
+            transaction.onabort = () => done(transaction.error || new Error('The saved readings could not be read.'));
         });
     };
 
@@ -182,6 +185,7 @@
                 resolve({ byDate, dates });
             };
             request.onerror = (event) => reject(event.target.error);
+            transaction.onabort = () => reject(transaction.error || new Error('The saved readings could not be read.'));
         });
     };
 
@@ -194,6 +198,7 @@
             transaction.objectStore(STORE_NAME).delete(IDBKeyRange.bound(prefix, `${prefix}￿`));
             transaction.oncomplete = () => resolve();
             transaction.onerror = (event) => reject(event.target.error);
+            transaction.onabort = () => reject(transaction.error || new Error('The saved readings could not be removed.'));
         });
     };
 

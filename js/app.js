@@ -46,6 +46,33 @@
         return document.getElementById(id);
     }
 
+    /** JSON saved in the browser, or the fallback when it is missing, damaged or the wrong kind of thing. */
+    function storedJson(key, fallback) {
+        try {
+            const value = JSON.parse(localStorage.getItem(key));
+            if (value == null || typeof value !== 'object' || Array.isArray(value) !== Array.isArray(fallback)) return fallback;
+            return value;
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    /** Plans the user typed in, by state: { NSW: { 'My plan': { rateType, ... } } }. Damaged entries are left out. */
+    function storedCustomPlans() {
+        const saved = storedJson('customSupplierPlans', {});
+        const out = {};
+        Object.keys(saved).forEach((stateCode) => {
+            const plans = saved[stateCode];
+            if (!plans || typeof plans !== 'object' || Array.isArray(plans)) return;
+            Object.keys(plans).forEach((name) => {
+                const plan = plans[name];
+                if (!plan || typeof plan !== 'object' || (plan.rateType !== 'flat' && plan.rateType !== 'tou')) return;
+                (out[stateCode] || (out[stateCode] = {}))[name] = plan;
+            });
+        });
+        return out;
+    }
+
     function gstInclusive() {
         const toggle = $('gstToggle');
         return !toggle || toggle.checked;
@@ -747,7 +774,7 @@
             updateOtherSupplierHeading();
         }
         const savedRateType = localStorage.getItem('rateType');
-        if (savedRateType) {
+        if (savedRateType === 'flat' || savedRateType === 'tou') {
             document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
             if (savedRateType === 'tou') {
                 $('flatRateSection').classList.add('hidden');
@@ -761,13 +788,14 @@
         const savedFlatCl = localStorage.getItem('flatControlledLoad');
         if (savedFlatCl) $('otherSupplierControlledLoadFlat').value = savedFlatCl;
 
-        const savedTouConfig = localStorage.getItem('touConfig');
-        if (savedTouConfig) {
-            const config = JSON.parse(savedTouConfig);
-            $('otherSupplierFeedInRateTou').value = config.feedIn;
-            $('tou_controlled_load_rate').value = config.controlledLoad;
+        // Saved settings that can't be read (damaged, or from a much older version) are skipped,
+        // leaving that part of the form as it starts out, rather than stopping the page loading.
+        const config = storedJson('touConfig', null);
+        if (config) {
+            if (config.feedIn != null) $('otherSupplierFeedInRateTou').value = config.feedIn;
+            if (config.controlledLoad != null) $('tou_controlled_load_rate').value = config.controlledLoad;
             const setPeriodSettings = (period, settings) => {
-                if (!settings) return;
+                if (!settings || typeof settings !== 'object') return;
                 $(`tou_${period}_rate`).value = settings.rate || 0;
                 if (period === 'free') $('tou_free_cap').value = settings.capKwh || '';
                 if (period !== 'offpeak') {
@@ -789,20 +817,20 @@
         if (savedDaily) $('dailyConnectionRate').value = savedDaily;
         loadAmberChargeFields();
 
-        const savedDemand = localStorage.getItem('demandSettings');
-        if (savedDemand) {
-            const settings = JSON.parse(savedDemand);
-            $('enableDemandTariff').checked = settings.enabled;
-            $('demandRate').value = settings.rate;
-            $('demandWindowStart').value = settings.start;
-            $('demandWindowEnd').value = settings.end;
+        const settings = storedJson('demandSettings', null);
+        if (settings) {
+            $('enableDemandTariff').checked = !!settings.enabled;
+            if (settings.rate != null) $('demandRate').value = settings.rate;
+            if (settings.start) $('demandWindowStart').value = settings.start;
+            if (settings.end) $('demandWindowEnd').value = settings.end;
             if (settings.enabled) $('demandTariffInputs').classList.remove('hidden');
+            const days = Array.isArray(settings.days) ? settings.days : [];
             $('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-                cb.checked = (settings.days || []).includes(parseInt(cb.value, 10));
+                cb.checked = days.includes(parseInt(cb.value, 10));
             });
         }
 
-        const feedInWindows = JSON.parse(localStorage.getItem('feedInWindows') || '[]');
+        const feedInWindows = storedJson('feedInWindows', []).filter((win) => win && typeof win === 'object');
         if (localStorage.getItem('enableFeedInTou') === 'true' || feedInWindows.length) {
             applyFeedInWindows(feedInWindows);
         }
@@ -818,7 +846,7 @@
     }
 
     function mergeCustomPlans() {
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+        const customPlans = storedCustomPlans();
         Object.keys(customPlans).forEach((stateCode) => {
             if (!state.templates[stateCode]) state.templates[stateCode] = {};
             Object.keys(customPlans[stateCode]).forEach((planName) => {
@@ -833,7 +861,7 @@
         if (!stateCode || !planName) return;
         if (isBuiltInPlan(stateCode, planName)) return;
         const plan = createPlanObjectFromForm();
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+        const customPlans = storedCustomPlans();
         if (!customPlans[stateCode]) customPlans[stateCode] = {};
         customPlans[stateCode][planName] = plan;
         localStorage.setItem('customSupplierPlans', JSON.stringify(customPlans));
@@ -1377,7 +1405,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">X ${demandTariffInfo.demandDays} days</div>`}
+                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
@@ -1395,7 +1423,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">X ${dayCount} applicable days</div>`}
+                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">× ${dayCount} applicable days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
@@ -1585,6 +1613,8 @@
         const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
         const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
         const planName = $('planName').value.trim() || 'your plan';
+        // The plan's name as the plan list shows it (without the network), for the Difference column.
+        const planShort = Amber.escapeHTML($('planName').value.trim() ? Amber.planListLabel($('planName').value.trim(), currentSiteNetwork()) : 'Your plan');
         const view = (r) => {
             const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
             const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
@@ -1602,7 +1632,7 @@
             const v = view(r);
             const isTotal = r.month === 'Total';
             const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
-            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber ' : 'Other plan '}${money(Math.abs(v.diff))} cheaper`;
+            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber' : planShort} ${money(Math.abs(v.diff))} cheaper`;
             const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
             html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
                 ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
@@ -2534,7 +2564,17 @@
                     return [];
                 }
             });
-            if (cacheWrites.length) await Amber.setUsageDataMany(db, cacheWrites);
+            // The readings are in hand either way: if the browser can't save them (its storage is
+            // full, say), compare anyway and say they'll download again next time.
+            let cacheWriteFailed = false;
+            if (cacheWrites.length) {
+                try {
+                    await Amber.setUsageDataMany(db, cacheWrites);
+                } catch (err) {
+                    console.error(err);
+                    cacheWriteFailed = true;
+                }
+            }
             chunkResults.forEach((data) => selectedUsageData.push(...data));
 
             if (!selectedUsageData.length) {
@@ -2574,6 +2614,8 @@
                 showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
             } else if (localMode && localMissing) {
                 showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so this comparison is incomplete. Fixed charges still cover the full selected period.`, true);
+            } else if (cacheWriteFailed) {
+                showMessage('Your results are below, but this browser couldn\'t save the meter readings (its storage may be full), so they will download again next time.', true);
             } else {
                 hideMessage();
             }
@@ -2695,7 +2737,7 @@
         $('clearCustomPlansBtn').addEventListener('click', () => {
             closeSettingsMenu();
             if (!window.confirm('Delete ALL saved custom plans? This cannot be undone.')) return;
-            const oldCustomPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+            const oldCustomPlans = storedCustomPlans();
             localStorage.removeItem('customSupplierPlans');
             Object.keys(oldCustomPlans).forEach((stateCode) => {
                 if (!state.templates[stateCode]) return;
@@ -2867,6 +2909,18 @@
             if (!$('settingsMenu').contains(event.target) && !$('settingsBtn').contains(event.target)) {
                 $('settingsMenu').classList.add('hidden');
                 $('settingsBtn').setAttribute('aria-expanded', 'false');
+            }
+        });
+        // Escape closes whichever menu is open and hands the keyboard back to its button.
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (!csvMenu.classList.contains('hidden')) {
+                csvMenu.classList.add('hidden');
+                $('downloadCsvButton').focus();
+            }
+            if (!$('settingsMenu').classList.contains('hidden')) {
+                closeSettingsMenu();
+                $('settingsBtn').focus();
             }
         });
         $('downloadFullIntervalCsv').addEventListener('click', (e) => {
