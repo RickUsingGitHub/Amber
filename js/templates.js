@@ -558,7 +558,7 @@
     /**
      * A short fingerprint of a plan's prices and times. The plan form remembers the fingerprint
      * of the built-in plan it was filled from, so a later version of the app with new prices for
-     * that plan can tell the saved form is out of date (app.js loadAllSettings).
+     * that plan can tell the saved form is out of date (app-plan-form.js loadAllSettings).
      */
     Amber.templateSignature = function (plan) {
         const text = JSON.stringify(plan || null);

@@ -39,11 +39,11 @@ These are the properties the tests guard and that users rely on. A change that b
 | Unwinding an existing battery | Estimates what the battery covered at home, which the meter can't see. The check card shows the gap against real readings. | `planner.js` `plannerUnwindBattery`, `plannerExistingCheck` |
 | Finance | Price rises, wear, replacements, residual value, payback "ahead for good", IRR. Small errors move recommendations. | `planner.js` `plannerFinance`, `plannerKeenLevel`, `plannerWaitAYear` |
 | Bill parsing | Depends on the layout of Amber's PDF text; new layouts break it. Unreadable bills show the text read. | `bill.js` |
-| Big UI files | `app.js` (~3,000 lines, module-level state) and `planner-ui.js` (~1,200) mix data handling and HTML building. | `app.js`, `planner-ui.js` |
+| Big UI files | The page controller (`app-*.js` and `app.js`, ~3,300 lines over eight files sharing one `state` object) and `planner-ui.js` (~1,200) mix data handling and HTML building. | `app-*.js`, `app.js`, `planner-ui.js` |
 
 ## Known technical debt
 
-- **`app.js` is a monolith.** Tabs, plan form, results, imports, bill check, Free? and settings live in one IIFE sharing a `state` object. Natural seams: the plan form (`createPlanObjectFromForm`, `applyPlanTemplate`, TOU windows), results rendering, imports (CSV, NEM12, local sites), the bill check, the Free? tab and settings.
+- **The page controller shares one `state` object.** `app.js` was one 3,000-line IIFE until v1.64, which split it by area into `app-core.js`, `app-plan-form.js`, `app-results.js`, `app-imports.js`, `app-bill.js`, `app-free.js`, `app-settings.js` and a smaller `app.js` (see ARCHITECTURE.md, "The page controller"). The files still read and write the same `state` and call each other through `Amber.app` in both directions (results call the plan form, the plan form asks for a recalculation), so they are separate files more than separate modules. Narrowing what each one touches in `state` would be the next step. `planner-ui.js` is still one file.
 - **HTML as strings.** Most results are template strings set with `innerHTML`, with table markup repeated (`th`/`td` helpers exist only in `planner-ui.js`). It's safe while everything is escaped, but verbose and easy to make inconsistent.
 - **No formatter or type checking.** ESLint (`npm run lint`, run in CI) catches unused and shadowed variables, undefined names and calls with too many arguments within a file, and holds the style (4-space indentation, single quotes, semicolons). There's no Prettier, and nothing checks types or calls between files. JSDoc comments exist on many engine functions but not throughout.
 - **Home-made unit test harness.** `tests/unit-*.js` use their own `assert` and print `ok:`/`FAIL:`. They work, but give no per-test isolation or coverage.
@@ -56,7 +56,7 @@ These are the properties the tests guard and that users rely on. A change that b
 
 ## Questions worth a reviewer's opinion
 
-1. Is it worth splitting `app.js` along the seams above before a frontend refresh, so the refresh doesn't have to touch pricing code?
+1. `app.js` is now split by area. Is it worth going further before a frontend refresh, for example giving each file its own slice of `state` or splitting `planner-ui.js` the same way?
 2. Should HTML building move to small render helpers (or `<template>` elements in `index.html`) to cut repetition, while staying build-free and within the CSP?
 3. ESLint now runs in CI. Would a formatter (Prettier) or type checking of the JSDoc (`tsc --checkJs`) be welcome too, given the no-build constraint?
 4. Is the planner's battery heuristic good enough, or should it be compared against a simple linear-programming optimum for a few test days to measure how optimistic it is?
@@ -68,7 +68,7 @@ These are the properties the tests guard and that users rely on. A change that b
 
 | Test | Covers |
 |---|---|
-| `unit-syntax.js` | Every `js/*.js` parses as a classic script; `index.html` loads each one once, `app.js` last |
+| `unit-syntax.js` | Every `js/*.js` parses as a classic script; `index.html` loads each one once, `app-core.js` before the other app files and `app.js` last; every `app.<name>` used between the app files is on `Amber.app` |
 | `unit-time.js` | Dates, NEM vs local time, TOU windows, app version |
 | `unit-bill.js`, `unit-billcheck.js` | Bill reading and line-by-line checks |
 | `unit-stats.js` | More Stats |

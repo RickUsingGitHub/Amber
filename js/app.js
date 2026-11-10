@@ -1,323 +1,17 @@
 (function (root) {
     const Amber = root.Amber = root.Amber || {};
+    const app = Amber.app;
+    const state = app.state;
+    const $ = app.$;
 
     /*
-     * The page controller for everything except the Solar+? tab (planner-ui.js): start-up (init),
-     * tabs, the Start tab (API key, sites, Amber's fixed charges, Amber CSV and NEM12 imports), the
-     * dates bar, Compare (the plan form, fetchAndCompare, the answer, every plan, month by month),
-     * Usage (charts, calendar, More Stats), Bill?, Free? (the re-scheduling estimate), downloads and
-     * the settings menu. Pricing lives in costs.js / monthly.js; this file reads inputs, calls it
-     * and renders the results. Module state is in `state` (exposed as Amber._appState for tests);
-     * Amber.appApi is what planner-ui.js may use. See docs/ARCHITECTURE.md.
+     * The page controller's top level, loaded last: tabs, the Start tab's welcome and account
+     * fields, the dates bar and Download menu, the Compare run itself (fetchAndCompare reads the
+     * cache, fetches what is missing, prices it and hands the result to app-results.js), and
+     * init(), which starts the page. The rest of the controller is in the app-*.js files (listed
+     * in app-core.js); they share `state` and call each other through Amber.app. Amber.appApi is
+     * what planner-ui.js may use. See docs/ARCHITECTURE.md.
      */
-
-    const state = {
-        templates: Amber.cloneTemplates(),
-        originalTemplates: Amber.cloneTemplates(),
-        cachedChannelData: null,
-        cachedAllChannelData: null,
-        monthly: null,
-        dailySummaries: {},
-        demandInfoForTooltip: null,
-        lastFetchedStartDate: null,
-        lastFetchedEndDate: null,
-        lastFetchTimestamp: null,
-        lastFetchedSiteId: null,
-        usageChart: null,
-        dailyUsageChart: null,
-        currentSiteId: null,
-        sites: [],
-        sitesApiKey: null,
-        lastResultDataPayload: null,
-        amberCostBaseline: null,
-        batteryShift: null,
-        shiftPlan: null,
-        shiftBudget: null,
-        fetching: false,
-        activeTab: null,
-        resultsTab: 'compare',
-        ready: false,
-        pendingBillLoad: false,
-        billLoading: null,
-        billLoadFailed: null
-    };
-
-    function $(id) {
-        return document.getElementById(id);
-    }
-
-    /** JSON saved in the browser, or the fallback when it is missing, damaged or the wrong kind of thing. */
-    function storedJson(key, fallback) {
-        try {
-            const value = JSON.parse(localStorage.getItem(key));
-            if (value == null || typeof value !== 'object' || Array.isArray(value) !== Array.isArray(fallback)) return fallback;
-            return value;
-        } catch (e) {
-            return fallback;
-        }
-    }
-
-    /** Plans the user typed in, by state: { NSW: { 'My plan': { rateType, ... } } }. Damaged entries are left out. */
-    function storedCustomPlans() {
-        const saved = storedJson('customSupplierPlans', {});
-        const out = {};
-        Object.keys(saved).forEach((stateCode) => {
-            const plans = saved[stateCode];
-            if (!plans || typeof plans !== 'object' || Array.isArray(plans)) return;
-            Object.keys(plans).forEach((name) => {
-                const plan = plans[name];
-                if (!plan || typeof plan !== 'object' || (plan.rateType !== 'flat' && plan.rateType !== 'tou')) return;
-                (out[stateCode] || (out[stateCode] = {}))[name] = plan;
-            });
-        });
-        return out;
-    }
-
-    function gstInclusive() {
-        const toggle = $('gstToggle');
-        return !toggle || toggle.checked;
-    }
-
-    const AMBER_CHARGE_FIELDS = ['amberConnectionRate', 'amberSubscriptionRate', 'amberDemandRate', 'amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'];
-
-    /** Fill Setup's Amber charges from storage (the Amber account's own charges). */
-    function loadAmberChargeFields() {
-        let storedConn = localStorage.getItem('amberConnectionRate');
-        const storedSub = localStorage.getItem('amberSubscriptionRate');
-        let storedDemand = localStorage.getItem('amberDemandRate');
-        const storedPrev = ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].map((id) => localStorage.getItem(id));
-        // Before v1.40 there was one set of charges; the old defaults (and bills that matched them)
-        // were 2025-26 charges, so they move to last year and this year starts from the new defaults.
-        if (storedPrev.every((v) => v == null)) {
-            const was = (v, d) => v != null && Math.abs(parseFloat(v) - d) < 0.0005;
-            if (was(storedConn, Amber.PREVIOUS_AMBER_CONNECTION_CENTS) || was(storedDemand, Amber.PREVIOUS_AMBER_DEMAND_CENTS)) {
-                storedPrev[0] = storedConn;
-                storedPrev[1] = storedSub;
-                storedPrev[2] = storedDemand;
-                storedConn = null;
-                storedDemand = null;
-            }
-        }
-        $('amberConnectionRate').value = (!storedConn || storedConn === '109.894')
-            ? Amber.DEFAULT_AMBER_CONNECTION_CENTS
-            : storedConn;
-        $('amberSubscriptionRate').value = (!storedSub || storedSub === '82.203')
-            ? Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS
-            : storedSub;
-        $('amberDemandRate').value = storedDemand || Amber.DEFAULT_AMBER_DEMAND_CENTS;
-        $('amberConnectionRatePrev').value = storedPrev[0] != null && storedPrev[0] !== '' ? storedPrev[0] : Amber.PREVIOUS_AMBER_CONNECTION_CENTS;
-        $('amberSubscriptionRatePrev').value = storedPrev[1] != null && storedPrev[1] !== '' ? storedPrev[1] : Amber.PREVIOUS_AMBER_SUBSCRIPTION_CENTS;
-        $('amberDemandRatePrev').value = storedPrev[2] != null && storedPrev[2] !== '' ? storedPrev[2] : Amber.PREVIOUS_AMBER_DEMAND_CENTS;
-
-    }
-
-    function readAmberRates() {
-        const site = selectedSite();
-        if (site && site.local && site.amberRates) return Object.assign({}, site.amberRates);
-        const prev = (id) => {
-            const v = parseFloat($(id).value);
-            return Number.isFinite(v) && v > 0 ? v : null;
-        };
-        return {
-            connectionCents: parseFloat($('amberConnectionRate').value) || Amber.DEFAULT_AMBER_CONNECTION_CENTS,
-            subscriptionCents: parseFloat($('amberSubscriptionRate').value) || Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS,
-            demandCents: parseFloat($('amberDemandRate').value) || Amber.DEFAULT_AMBER_DEMAND_CENTS,
-            // Days before 1 July use last financial year's charges (blank = same as now).
-            earlier: {
-                until: Amber.AMBER_RATES_CHANGE_DATE,
-                connectionCents: prev('amberConnectionRatePrev'),
-                subscriptionCents: prev('amberSubscriptionRatePrev'),
-                demandCents: prev('amberDemandRatePrev')
-            }
-        };
-    }
-
-    function setAmberBillStatus(message, isError) {
-        const el = $('amberBillStatus');
-        if (!el) return;
-        if (!message) {
-            el.classList.add('hidden');
-            el.textContent = '';
-            return;
-        }
-        el.classList.remove('hidden');
-        el.classList.toggle('text-red-700', !!isError);
-        el.classList.toggle('text-green-700', !isError);
-        el.textContent = message;
-    }
-
-    function loadPdfJs() {
-        if (root.pdfjsLib) return Promise.resolve();
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'pdf.min.js';
-            script.onload = () => {
-                if (root.pdfjsLib && root.pdfjsLib.GlobalWorkerOptions) {
-                    root.pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdf.worker.min.js';
-                }
-                resolve();
-            };
-            script.onerror = () => reject(new Error('Could not load the PDF reader.'));
-            document.head.appendChild(script);
-        });
-    }
-
-    function applyAmberBillRates(parsed) {
-        const billOk = !!(parsed && parsed.check && parsed.check.ok);
-        if (billOk) {
-            state.billCheck = parsed.check;
-            try { localStorage.setItem(BILL_CHECK_KEY, JSON.stringify(parsed.check)); } catch (e) { /* ignore */ }
-            renderBillCheck();
-        }
-        // Show the check and fetch the bill period's meter data straight away.
-        const showBill = () => {
-            if (!billOk) return;
-            if (state.activeTab !== 'bill') selectTab('bill');
-            else ensureBillLoaded();
-        };
-        if (!parsed || !parsed.ok) {
-            setAmberBillStatus('Could not find daily connection, subscription or demand rates in that file. You can type them from the charges page.', true);
-            showBill();
-            return;
-        }
-        // A bill for a period before 1 July carries last financial year's charges.
-        const earlier = !!(parsed.check && parsed.check.end && parsed.check.end < Amber.AMBER_RATES_CHANGE_DATE);
-        $('amberChargesDetails').open = true;
-        const suffix = earlier ? 'Prev' : '';
-        if (parsed.connectionCents != null) $('amberConnectionRate' + suffix).value = parsed.connectionCents.toFixed(3);
-        if (parsed.subscriptionCents != null) $('amberSubscriptionRate' + suffix).value = parsed.subscriptionCents.toFixed(3);
-        if (parsed.demandCents != null) $('amberDemandRate' + suffix).value = parsed.demandCents.toFixed(3);
-        saveAllSettings();
-        const gstNote = parsed.exGst ? ' The bill shows prices without GST, so 10% was added.' : '';
-        const billNote = billOk ? ' The bill is checked on the Bill? tab.' : '';
-        const yearNote = earlier ? ' The bill is from before 1 July 2026, so these went into last year\'s charges.' : '';
-        setAmberBillStatus(`Prefilled from your bill (including GST): ${parsed.found.join(', ')}.${yearNote}${gstNote} Change any box that looks wrong.${billNote}`, false);
-        if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
-        showBill();
-    }
-
-    async function handleAmberBillFile(file) {
-        if (!file) return;
-        const current = selectedSite();
-        if (current && current.local) {
-            setAmberBillStatus('The selected site is a household imported from NEM12. Choose your Amber site above, then load the bill.', true);
-            ['amberBillFile', 'billCheckFile'].forEach((id) => { const input = $(id); if (input) input.value = ''; });
-            return;
-        }
-        setAmberBillStatus('Reading bill…', false);
-        state.billCheckError = null;
-        try {
-            const text = await Amber.readBillFile(file, loadPdfJs);
-            const parsed = Amber.parseAmberBillText(text, file.name);
-            if (!parsed.check || !parsed.check.ok) {
-                state.billCheckError = { name: file.name, check: parsed.check || {}, text: Amber.normalizeBillText(text) };
-                renderBillCheck();
-            }
-            applyAmberBillRates(parsed);
-        } catch (err) {
-            setAmberBillStatus(err && err.message ? err.message : 'Could not read that file.', true);
-            state.billCheckError = { name: file.name, message: err && err.message ? err.message : 'Could not read that file.' };
-            renderBillCheck();
-        } finally {
-            ['amberBillFile', 'billCheckFile'].forEach((id) => { const input = $(id); if (input) input.value = ''; });
-        }
-    }
-
-    function currentStateCode() {
-        return $('stateSelector').value;
-    }
-
-    // TOU periods in the plan form. 'free' and 'superOffpeak' start with no windows (unused).
-    const TOU_PERIODS = ['free', 'superOffpeak', 'peak', 'shoulder', 'offpeak'];
-    const OPTIONAL_TOU_PERIODS = ['free', 'superOffpeak'];
-    const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-    function collectWindows(container, includeRate) {
-        if (!container) return [];
-        return Array.from(container.querySelectorAll('.tou-window')).map((win) => {
-            const row = {
-                start: win.querySelector('.tou-start').value,
-                end: win.querySelector('.tou-end').value,
-                days: Array.from(win.querySelectorAll('input[type="checkbox"]:checked')).map((cb) => parseInt(cb.value, 10))
-            };
-            if (win.dataset.months) {
-                row.months = win.dataset.months.split(',').map((m) => parseInt(m, 10)).filter((m) => m >= 1 && m <= 12);
-            }
-            if (includeRate) {
-                row.rate = parseFloat(win.querySelector('.tou-rate').value) || 0;
-                const cap = parseFloat(win.querySelector('.tou-cap') && win.querySelector('.tou-cap').value);
-                if (cap > 0) {
-                    row.capKwh = cap;
-                    const over = parseFloat(win.querySelector('.tou-over-rate').value);
-                    if (Number.isFinite(over)) row.overRate = over;
-                }
-            }
-            return row;
-        });
-    }
-
-    function addWindowRow(container, windowData, includeRate) {
-        if (!container) return;
-        const windowDiv = document.createElement('div');
-        windowDiv.className = 'tou-window relative bg-white border border-gray-300 p-2 rounded shadow-sm text-sm';
-        const startVal = windowData && windowData.start ? windowData.start : '00:00';
-        const endVal = windowData && windowData.end ? windowData.end : '00:00';
-        const daysArr = windowData && windowData.days ? windowData.days : [1, 2, 3, 4, 5, 6, 0];
-        const rateVal = windowData && windowData.rate != null ? windowData.rate : '';
-        const capVal = windowData && windowData.capKwh != null ? windowData.capKwh : '';
-        const overVal = windowData && windowData.overRate != null ? windowData.overRate : '';
-        const rateField = includeRate
-            ? `<div class="mt-1"><label class="text-xs font-medium text-gray-600">Solar rate at these times (c/kWh)</label><input type="number" step="0.0001" class="tou-rate w-full text-xs p-1 border border-gray-300 rounded" value="${rateVal}"></div>
-               <div class="grid grid-cols-2 gap-2 mt-1">
-                   <div><label class="text-xs font-medium text-gray-600" title="The most kWh a day paid at this rate. Blank = no limit.">Up to (kWh a day)</label><input type="number" step="0.1" min="0" placeholder="none" class="tou-cap w-full text-xs p-1 border border-gray-300 rounded" value="${capVal}"></div>
-                   <div><label class="text-xs font-medium text-gray-600" title="The rate for kWh over that daily limit. Blank = the plan's normal feed-in rate.">Then (c/kWh)</label><input type="number" step="0.0001" placeholder="normal rate" class="tou-over-rate w-full text-xs p-1 border border-gray-300 rounded" value="${overVal}"></div>
-               </div>`
-            : '';
-        const months = (windowData && windowData.months) || [];
-        if (months.length) windowDiv.dataset.months = months.join(',');
-        const monthsNote = months.length
-            ? `<div class="mt-1 text-[10px] text-gray-600" title="This time only applies in these months.">Months: ${months.slice().sort((a, b) => a - b).map((m) => MONTH_ABBR[m - 1]).filter(Boolean).join(', ')}</div>`
-            : '';
-        windowDiv.innerHTML = `
-            <button type="button" class="absolute top-1 right-1 text-gray-400 hover:text-red-500 font-bold px-1" title="Remove these hours" data-remove-window="1" aria-label="Remove these hours">×</button>
-            <div class="grid grid-cols-2 gap-2 pr-6">
-                <div><label class="text-xs font-medium text-gray-600">From</label><input type="time" class="tou-start w-full text-xs p-1 border border-gray-300 rounded" value="${startVal}"></div>
-                <div><label class="text-xs font-medium text-gray-600">To</label><input type="time" class="tou-end w-full text-xs p-1 border border-gray-300 rounded" value="${endVal}"></div>
-            </div>
-            ${rateField}
-            ${monthsNote}
-            <div class="mt-1 text-[10px] font-medium text-gray-600">On these days:</div>
-            <div class="grid grid-cols-7 gap-1 mt-1 text-[10px]">
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="1" ${daysArr.includes(1) ? 'checked' : ''}><span class="mt-0.5">M</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="2" ${daysArr.includes(2) ? 'checked' : ''}><span class="mt-0.5">T</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="3" ${daysArr.includes(3) ? 'checked' : ''}><span class="mt-0.5">W</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="4" ${daysArr.includes(4) ? 'checked' : ''}><span class="mt-0.5">T</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="5" ${daysArr.includes(5) ? 'checked' : ''}><span class="mt-0.5">F</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="6" ${daysArr.includes(6) ? 'checked' : ''}><span class="mt-0.5">S</span></label>
-                <label class="day-checkbox-label flex flex-col items-center"><input type="checkbox" value="0" ${daysArr.includes(0) ? 'checked' : ''}><span class="mt-0.5">S</span></label>
-            </div>
-        `;
-        windowDiv.querySelectorAll('input').forEach((input) => {
-            input.addEventListener('change', saveAllSettings);
-        });
-        windowDiv.querySelector('[data-remove-window]').addEventListener('click', () => {
-            windowDiv.remove();
-            saveAllSettings();
-        });
-        container.appendChild(windowDiv);
-    }
-
-    function addTouWindow(period, windowData) {
-        addWindowRow($(`tou_${period}_windows_container`), windowData, false);
-    }
-
-    function setRatesDetailsOpen(open, persist) {
-        const details = $('ratesDetails');
-        const label = $('ratesDetailsToggleLabel');
-        details.classList.toggle('hidden', !open);
-        label.textContent = open ? 'Hide this plan\'s prices' : 'Show this plan\'s prices';
-        if (persist !== false) localStorage.setItem('ratesDetailsOpen', open ? 'true' : 'false');
-    }
 
     // ---------- Tabs ----------
 
@@ -347,7 +41,7 @@
         [state.usageChart, state.dailyUsageChart].forEach((chart) => {
             if (chart) chart.resize();
         });
-        if (tab === 'bill' && state.ready) ensureBillLoaded({ fromTab: true });
+        if (tab === 'bill' && state.ready) app.ensureBillLoaded({ fromTab: true });
         // The planner uses its own 12 months, so the dates bar and download tools step aside.
         if (tab === 'plan') {
             $('configSection').classList.add('hidden');
@@ -361,7 +55,7 @@
 
     function initialTab() {
         let localSelected = false;
-        try { localSelected = loadLocalSites().some((x) => x.id === localStorage.getItem('selectedSiteId')); } catch (e) { /* ignore */ }
+        try { localSelected = app.loadLocalSites().some((x) => x.id === localStorage.getItem('selectedSiteId')); } catch (e) { /* ignore */ }
         if (!$('apiKey').value.trim() && !localSelected) return 'setup';
         let saved = null;
         try { saved = localStorage.getItem(ACTIVE_TAB_KEY); } catch (e) { /* ignore */ }
@@ -370,7 +64,7 @@
 
     // Connected = an Amber API key, or a household imported from meter readings.
     function isConnected() {
-        return !!$('apiKey').value.trim() || loadLocalSites().length > 0;
+        return !!$('apiKey').value.trim() || app.loadLocalSites().length > 0;
     }
 
     /** Show the welcome until there's something to look at; then the dates bar and results tools. */
@@ -461,415 +155,58 @@
         selectTab(initialTab());
     }
 
-    function updateOtherSupplierHeading() {
-        const planName = $('planName').value.trim();
-        $('otherSupplierHeading').textContent = planName ? `Compare Amber with ${planName}` : 'Compare Amber with…';
+    // ---------- The Start tab's account fields ----------
+
+    async function tryLoadSites(key) {
+        if (!key || key.length < 8) return;
+        if (state.sites.length && state.sitesApiKey === key) return;
+        try {
+            const sites = await Amber.fetchSites(key);
+            app.populateSites(sites);
+            state.sitesApiKey = key;
+            app.updateCacheSummary();
+        } catch (err) {
+            /* ignore until Compare */
+        }
     }
 
-    function currentSiteNetwork() {
-        const site = selectedSite();
-        return site && site.network ? site.network : '';
+    function resetSitesIfKeyChanged(key) {
+        if (state.sitesApiKey && key !== state.sitesApiKey) {
+            Amber.clearSitesCache();
+            state.sitesApiKey = null;
+            app.populateSites([]);
+        }
     }
 
-    function visiblePlanNames(selectedState) {
-        const plans = state.templates[selectedState] || {};
-        const siteNetwork = currentSiteNetwork();
-        return Object.keys(plans).filter((planName) =>
-            Amber.planMatchesNetwork(planName, plans[planName], siteNetwork)
-        );
-    }
-
-    function updatePlanSelector(selectedState) {
-        const planSelector = $('planSelector');
-        const previous = planSelector.value;
-        planSelector.innerHTML = '<option value="">Enter my own rates</option>';
-        const names = visiblePlanNames(selectedState);
-        names.forEach((planName) => {
-            const option = document.createElement('option');
-            option.value = planName;
-            option.textContent = Amber.planListLabel(planName, currentSiteNetwork());
-            if (!state.originalTemplates[selectedState] || !state.originalTemplates[selectedState][planName]) {
-                option.style.color = '#1a56db';
-            }
-            planSelector.appendChild(option);
+    /** Wire up the API key and Amber's fixed charges on the Start tab. */
+    function setupAccount() {
+        // Amber's charges change the results straight away.
+        app.AMBER_CHARGE_FIELDS.forEach((id) => {
+            $(id).addEventListener('change', () => {
+                app.saveAllSettings();
+                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
+            });
         });
-        syncPlanStateNote(selectedState, names);
-        if (previous === '' || names.indexOf(previous) !== -1) {
-            planSelector.value = previous;
-            return;
-        }
-        const hintName = Amber.hintPlanForNetwork(currentSiteNetwork());
-        if (hintName && names.indexOf(hintName) !== -1) {
-            planSelector.value = hintName;
-        } else if (names.length) {
-            planSelector.value = names[0];
-        }
-        if (planSelector.value && planSelector.value !== previous) {
-            applyPlanTemplate();
-        } else if (!planSelector.value) {
-            // The plan that was showing isn't offered here and nothing takes its place: don't
-            // leave its name and prices behind under "Enter my own rates".
-            clearPlanInputs();
-        }
-    }
-
-    /** The state a site's network is in (Ausgrid → NSW), or null when the network isn't known. */
-    function siteNetworkState(site) {
-        const net = site && Amber.NETWORKS && Amber.NETWORKS[Amber.canonicalNetwork(site.network)];
-        return net ? net.state : null;
-    }
-
-    /** Say why the plan list is empty when the state chosen isn't the one the site's network is in. */
-    function syncPlanStateNote(selectedState, names) {
-        const note = $('planStateNote');
-        const site = selectedSite();
-        const home = siteNetworkState(site);
-        const show = !!home && home !== selectedState && !names.length;
-        note.classList.toggle('hidden', !show);
-        note.textContent = show
-            ? `Your meter is on the ${site.network} network, which is in ${home}, so there are no ${selectedState} plans to compare it with. Choose ${home} to see its plans, or enter your own rates.`
-            : '';
-    }
-
-    function isBuiltInPlan(stateCode, planName) {
-        return !!(state.originalTemplates[stateCode] && state.originalTemplates[stateCode][planName]);
-    }
-
-    function createPlanObjectFromForm() {
-        const rateType = document.querySelector('input[name="rateType"]:checked').value;
-        const isDemandEnabled = $('enableDemandTariff').checked;
-        const demandConfig = {
-            e: isDemandEnabled,
-            r: isDemandEnabled ? parseFloat($('demandRate').value) : 0,
-            s: isDemandEnabled ? $('demandWindowStart').value : '16:00',
-            f: isDemandEnabled ? $('demandWindowEnd').value : '21:00',
-            days: isDemandEnabled ? Array.from($('demandDaysContainer').querySelectorAll('input:checked')).map((cb) => parseInt(cb.value, 10)) : []
-        };
-        const feedInWindows = $('enableFeedInTou').checked ? collectWindows($('feedInWindowsContainer'), true) : [];
-        const stateCode = currentStateCode();
-        const selectedPlan = $('planSelector').value;
-        const template = selectedPlan && state.templates[stateCode] ? state.templates[stateCode][selectedPlan] : null;
-        const clock = (template && template.clock) || 'local';
-        const timeZone = (template && template.timeZone) || Amber.STATE_TIMEZONES[stateCode];
-
-        const getPeriodSettings = (period) => {
-            const container = document.querySelector(`[data-tou-period="${period}"]`);
-            if (!container) return {};
-            const rate = parseFloat($(`tou_${period}_rate`).value) || 0;
-            if (period === 'offpeak') return { rate };
-            const settings = { rate, windows: collectWindows(container, false) };
-            if (period === 'free') {
-                const cap = parseFloat($('tou_free_cap').value);
-                if (cap > 0) settings.capKwh = cap;
-            }
-            return settings;
-        };
-
-        if (rateType === 'flat') {
-            return {
-                rateType: 'flat',
-                daily: parseFloat($('dailyConnectionRate').value),
-                flat: parseFloat($('otherSupplierRate').value),
-                cl: parseFloat($('otherSupplierControlledLoadFlat').value) || 0,
-                feedIn: parseFloat($('otherSupplierFeedInRateFlat').value),
-                feedInWindows,
-                demand: demandConfig,
-                clock,
-                timeZone
-            };
-        }
-        return {
-            rateType: 'tou',
-            daily: parseFloat($('dailyConnectionRate').value),
-            feedIn: parseFloat($('otherSupplierFeedInRateTou').value),
-            cl: parseFloat($('tou_controlled_load_rate').value),
-            feedInWindows,
-            tou: TOU_PERIODS.reduce((tou, period) => {
-                const settings = getPeriodSettings(period);
-                if (OPTIONAL_TOU_PERIODS.indexOf(period) === -1 || (settings.windows && settings.windows.length)) {
-                    tou[period] = settings;
-                }
-                return tou;
-            }, {}),
-            demand: demandConfig,
-            clock,
-            timeZone
-        };
-    }
-
-    function applyFeedInWindows(windows) {
-        const container = $('feedInWindowsContainer');
-        container.innerHTML = '';
-        const list = windows || [];
-        $('enableFeedInTou').checked = list.length > 0;
-        $('feedInWindowsSection').classList.toggle('hidden', list.length === 0);
-        list.forEach((win) => addWindowRow(container, win, true));
-    }
-
-    // The fingerprint of the built-in plan the form was last filled from (Amber.templateSignature).
-    const PLAN_SIGNATURE_KEY = 'selectedPlanSig';
-
-    /**
-     * Fill the plan form from the selected plan. opts.planOnly: save just the plan form (used
-     * while the page is still loading, before the site and Amber's charges are in their fields).
-     */
-    function applyPlanTemplate(opts) {
-        const stateCode = $('stateSelector').value;
-        const planName = $('planSelector').value;
-        if (!stateCode || !planName) {
-            if (planName === '') clearPlanInputs();
-            return;
-        }
-        const template = state.templates[stateCode][planName];
-        if (!template) return;
-        localStorage.setItem(PLAN_SIGNATURE_KEY, Amber.templateSignature(template));
-
-        $('planName').value = planName;
-        updateOtherSupplierHeading();
-        document.querySelector(`input[name="rateType"][value="${template.rateType}"]`).checked = true;
-
-        if (template.rateType === 'tou') {
-            $('flatRateSection').classList.add('hidden');
-            $('touRateSection').classList.remove('hidden');
-            $('otherSupplierFeedInRateTou').value = template.feedIn || 0;
-            $('tou_controlled_load_rate').value = template.cl || 0;
-            TOU_PERIODS.forEach((period) => {
-                const periodConfig = template.tou && template.tou[period];
-                if (period !== 'offpeak') {
-                    const windowsContainer = $(`tou_${period}_windows_container`);
-                    if (windowsContainer) windowsContainer.innerHTML = '';
-                }
-                if (period === 'free') {
-                    $('tou_free_cap').value = periodConfig && periodConfig.capKwh ? periodConfig.capKwh : '';
-                }
-                if (!periodConfig) {
-                    $(`tou_${period}_rate`).value = 0;
-                    return;
-                }
-                $(`tou_${period}_rate`).value = periodConfig.rate || 0;
-                if (period !== 'offpeak') {
-                    if (periodConfig.windows && periodConfig.windows.length > 0) {
-                        periodConfig.windows.forEach((win) => addTouWindow(period, win));
-                    } else if (periodConfig.start) {
-                        addTouWindow(period, { start: periodConfig.start, end: periodConfig.end, days: periodConfig.days });
-                    }
-                }
-            });
-        } else {
-            $('flatRateSection').classList.remove('hidden');
-            $('touRateSection').classList.add('hidden');
-            $('otherSupplierRate').value = template.flat || 0;
-            $('otherSupplierFeedInRateFlat').value = template.feedIn || 0;
-            $('otherSupplierControlledLoadFlat').value = template.cl || 0;
-        }
-
-        $('dailyConnectionRate').value = template.daily || 0;
-        applyFeedInWindows(template.feedInWindows || []);
-
-        const demand = template.demand || { e: false };
-        $('enableDemandTariff').checked = demand.e;
-        if (demand.e) {
-            $('demandTariffInputs').classList.remove('hidden');
-            $('demandRate').value = demand.r || 0;
-            $('demandWindowStart').value = demand.s || '16:00';
-            $('demandWindowEnd').value = demand.f || '21:00';
-            $('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-                cb.checked = (demand.days || []).includes(parseInt(cb.value, 10));
-            });
-        } else {
-            $('demandTariffInputs').classList.add('hidden');
-        }
-        if (opts && opts.planOnly) savePlanSettings();
-        else saveAllSettings();
-    }
-
-    function clearPlanInputs() {
-        localStorage.removeItem(PLAN_SIGNATURE_KEY);
-        $('planName').value = '';
-        updateOtherSupplierHeading();
-        document.querySelector('input[name="rateType"][value="flat"]').checked = true;
-        $('flatRateSection').classList.remove('hidden');
-        $('touRateSection').classList.add('hidden');
-        $('otherSupplierRate').value = '';
-        $('otherSupplierFeedInRateFlat').value = '';
-        $('otherSupplierControlledLoadFlat').value = '';
-        $('dailyConnectionRate').value = '';
-        TOU_PERIODS.forEach((period) => {
-            const optional = OPTIONAL_TOU_PERIODS.indexOf(period) !== -1;
-            $(`tou_${period}_rate`).value = optional ? 0 : '';
-            if (period !== 'offpeak') {
-                const windowsContainer = $(`tou_${period}_windows_container`);
-                if (windowsContainer) {
-                    windowsContainer.innerHTML = '';
-                    if (!optional) addTouWindow(period);
-                }
-            }
+        $('rememberApiKey').addEventListener('change', () => {
+            const key = $('apiKey').value.trim();
+            if (key) Amber.setApiKey(key, $('rememberApiKey').checked);
+            else if (!$('rememberApiKey').checked) Amber.clearApiKey();
         });
-        $('tou_free_cap').value = '';
-        $('tou_controlled_load_rate').value = '';
-        $('otherSupplierFeedInRateTou').value = '';
-        applyFeedInWindows([]);
-        $('enableDemandTariff').checked = false;
-        $('demandTariffInputs').classList.add('hidden');
-        $('demandRate').value = '';
-        $('demandWindowStart').value = '16:00';
-        $('demandWindowEnd').value = '21:00';
-        $('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach((cb) => { cb.checked = false; });
-        setRatesDetailsOpen(true);
-        saveAllSettings();
-    }
-
-    function saveAllSettings() {
-        savePlanSettings();
-        if (!state.localChargesShown) AMBER_CHARGE_FIELDS.forEach((id) => localStorage.setItem(id, $(id).value));
-        localStorage.setItem('selectedSiteId', $('siteSelector').value || '');
-    }
-
-    /** The plan form on Compare: state, plan, name and every price and time in it. */
-    function savePlanSettings() {
-        localStorage.setItem('rateType', document.querySelector('input[name="rateType"]:checked').value);
-        localStorage.setItem('flatRate', $('otherSupplierRate').value);
-        localStorage.setItem('flatFeedInRate', $('otherSupplierFeedInRateFlat').value);
-        localStorage.setItem('flatControlledLoad', $('otherSupplierControlledLoadFlat').value);
-        localStorage.setItem('dailyConnectionRate', $('dailyConnectionRate').value);
-
-        const getPeriodSettings = (period) => {
-            const container = document.querySelector(`[data-tou-period="${period}"]`);
-            if (!container) return {};
-            const rate = $(`tou_${period}_rate`).value;
-            if (period === 'offpeak') return { rate };
-            const settings = { rate, windows: collectWindows(container, false) };
-            if (period === 'free') settings.capKwh = $('tou_free_cap').value;
-            return settings;
-        };
-        const touConfig = {
-            controlledLoad: $('tou_controlled_load_rate').value,
-            feedIn: $('otherSupplierFeedInRateTou').value
-        };
-        TOU_PERIODS.forEach((period) => { touConfig[period] = getPeriodSettings(period); });
-        localStorage.setItem('touConfig', JSON.stringify(touConfig));
-        localStorage.setItem('feedInWindows', JSON.stringify(collectWindows($('feedInWindowsContainer'), true)));
-        localStorage.setItem('enableFeedInTou', $('enableFeedInTou').checked ? 'true' : 'false');
-        localStorage.setItem('selectedState', $('stateSelector').value);
-        localStorage.setItem('selectedPlan', $('planSelector').value);
-        localStorage.setItem('planName', $('planName').value);
-        localStorage.setItem('demandSettings', JSON.stringify({
-            enabled: $('enableDemandTariff').checked,
-            rate: $('demandRate').value,
-            start: $('demandWindowStart').value,
-            end: $('demandWindowEnd').value,
-            days: Array.from($('demandDaysContainer').querySelectorAll('input:checked')).map((cb) => parseInt(cb.value, 10))
-        }));
-    }
-
-    function loadAllSettings() {
-        const savedState = localStorage.getItem('selectedState') || 'NSW';
-        $('stateSelector').value = savedState;
-        updatePlanSelector(savedState);
-        const savedPlan = localStorage.getItem('selectedPlan');
-        if (savedPlan) $('planSelector').value = savedPlan;
-        const savedPlanName = localStorage.getItem('planName');
-        if (savedPlanName) {
-            $('planName').value = savedPlanName;
-            updateOtherSupplierHeading();
-        }
-        const savedRateType = localStorage.getItem('rateType');
-        if (savedRateType === 'flat' || savedRateType === 'tou') {
-            document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
-            if (savedRateType === 'tou') {
-                $('flatRateSection').classList.add('hidden');
-                $('touRateSection').classList.remove('hidden');
-            }
-        }
-        const savedFlatRate = localStorage.getItem('flatRate');
-        if (savedFlatRate) $('otherSupplierRate').value = savedFlatRate;
-        const savedFlatFeedIn = localStorage.getItem('flatFeedInRate');
-        if (savedFlatFeedIn) $('otherSupplierFeedInRateFlat').value = savedFlatFeedIn;
-        const savedFlatCl = localStorage.getItem('flatControlledLoad');
-        if (savedFlatCl) $('otherSupplierControlledLoadFlat').value = savedFlatCl;
-
-        // Saved settings that can't be read (damaged, or from a much older version) are skipped,
-        // leaving that part of the form as it starts out, rather than stopping the page loading.
-        const config = storedJson('touConfig', null);
-        if (config) {
-            if (config.feedIn != null) $('otherSupplierFeedInRateTou').value = config.feedIn;
-            if (config.controlledLoad != null) $('tou_controlled_load_rate').value = config.controlledLoad;
-            const setPeriodSettings = (period, settings) => {
-                if (!settings || typeof settings !== 'object') return;
-                $(`tou_${period}_rate`).value = settings.rate || 0;
-                if (period === 'free') $('tou_free_cap').value = settings.capKwh || '';
-                if (period !== 'offpeak') {
-                    const windowsContainer = $(`tou_${period}_windows_container`);
-                    if (windowsContainer) windowsContainer.innerHTML = '';
-                    if (settings.windows && settings.windows.length > 0) {
-                        settings.windows.forEach((win) => addTouWindow(period, win));
-                    } else if (settings.start) {
-                        addTouWindow(period, { start: settings.start, end: settings.end, days: settings.days });
-                    } else if (OPTIONAL_TOU_PERIODS.indexOf(period) === -1) {
-                        addTouWindow(period);
-                    }
-                }
-            };
-            TOU_PERIODS.forEach((period) => setPeriodSettings(period, config[period]));
-        }
-
-        const savedDaily = localStorage.getItem('dailyConnectionRate');
-        if (savedDaily) $('dailyConnectionRate').value = savedDaily;
-        loadAmberChargeFields();
-
-        const settings = storedJson('demandSettings', null);
-        if (settings) {
-            $('enableDemandTariff').checked = !!settings.enabled;
-            if (settings.rate != null) $('demandRate').value = settings.rate;
-            if (settings.start) $('demandWindowStart').value = settings.start;
-            if (settings.end) $('demandWindowEnd').value = settings.end;
-            if (settings.enabled) $('demandTariffInputs').classList.remove('hidden');
-            const days = Array.isArray(settings.days) ? settings.days : [];
-            $('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-                cb.checked = days.includes(parseInt(cb.value, 10));
-            });
-        }
-
-        const feedInWindows = storedJson('feedInWindows', []).filter((win) => win && typeof win === 'object');
-        if (localStorage.getItem('enableFeedInTou') === 'true' || feedInWindows.length) {
-            applyFeedInWindows(feedInWindows);
-        }
-
-        // The saved form was filled from a built-in plan whose published prices have changed since
-        // (a newer version of the app): fill it again, so old prices can't stay under the plan's
-        // name. Prices the user changed themselves are kept until the plan itself changes.
-        const plan = $('planSelector').value;
-        if (plan && isBuiltInPlan(savedState, plan)
-            && localStorage.getItem(PLAN_SIGNATURE_KEY) !== Amber.templateSignature(state.templates[savedState][plan])) {
-            applyPlanTemplate({ planOnly: true });
-        }
-    }
-
-    function mergeCustomPlans() {
-        const customPlans = storedCustomPlans();
-        Object.keys(customPlans).forEach((stateCode) => {
-            if (!state.templates[stateCode]) state.templates[stateCode] = {};
-            Object.keys(customPlans[stateCode]).forEach((planName) => {
-                state.templates[stateCode][planName] = customPlans[stateCode][planName];
-            });
+        let siteFetchTimer = null;
+        $('apiKey').addEventListener('input', () => {
+            resetSitesIfKeyChanged($('apiKey').value.trim());
+            syncConnectedUi();
+        });
+        $('apiKey').addEventListener('blur', () => {
+            const key = $('apiKey').value.trim();
+            Amber.setApiKey(key, $('rememberApiKey').checked);
+            resetSitesIfKeyChanged(key);
+            clearTimeout(siteFetchTimer);
+            siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
         });
     }
 
-    function saveCustomPlan() {
-        const stateCode = $('stateSelector').value;
-        const planName = $('planName').value.trim();
-        if (!stateCode || !planName) return;
-        if (isBuiltInPlan(stateCode, planName)) return;
-        const plan = createPlanObjectFromForm();
-        const customPlans = storedCustomPlans();
-        if (!customPlans[stateCode]) customPlans[stateCode] = {};
-        customPlans[stateCode][planName] = plan;
-        localStorage.setItem('customSupplierPlans', JSON.stringify(customPlans));
-        if (!state.templates[stateCode]) state.templates[stateCode] = {};
-        state.templates[stateCode][planName] = plan;
-        updatePlanSelector(stateCode);
-        $('planSelector').value = planName;
-    }
+    // ---------- Date quick picks ----------
 
     function applyDatePreset(name) {
         const yesterday = Amber.localYesterday();
@@ -914,103 +251,80 @@
         return { start: Amber.formatForInput(first), end: Amber.formatForInput(yesterday) };
     }
 
-    // ---------- Local (non-Amber) households ----------
+    // ---------- The dates bar, GST switch and Download menu ----------
 
-    const LOCAL_SITES_KEY = 'localSites';
-
-    function loadLocalSites() {
-        try {
-            const list = JSON.parse(localStorage.getItem(LOCAL_SITES_KEY) || '[]');
-            return Array.isArray(list) ? list.filter((s) => s && s.id && s.local) : [];
-        } catch (e) {
-            return [];
-        }
-    }
-
-    function saveLocalSites(list) {
-        try { localStorage.setItem(LOCAL_SITES_KEY, JSON.stringify(list)); } catch (e) { /* ignore */ }
-    }
-
-    function populateSites(sites) {
-        state.sites = (sites || []).filter((s) => !s.local).concat(loadLocalSites());
-        const select = $('siteSelector');
-        const row = $('siteSelectorRow');
-        select.innerHTML = '';
-        if (!state.sites.length) {
-            row.classList.add('hidden');
-            syncSiteMode();
-            renderLocalSites();
-            if (state.ready) syncConnectedUi();
-            return;
-        }
-        row.classList.remove('hidden');
-        const saved = localStorage.getItem('selectedSiteId');
-        state.sites.forEach((site) => {
-            const option = document.createElement('option');
-            option.value = site.id;
-            const nmi = site.nmi ? `NMI ${site.nmi}` : site.id;
-            const network = site.network ? ` · ${site.network}` : '';
-            const status = site.local ? ' (not on Amber: estimate)' : (site.status && site.status !== 'active' ? ` (${site.status})` : '');
-            option.textContent = `${nmi}${network}${status}`;
-            select.appendChild(option);
+    /** Wire up the dates bar, the GST switch and the Download menu (which shares its closing with the settings menu). */
+    function setupResultTools() {
+        $('datePresets').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-preset]');
+            if (!btn) return;
+            applyDatePreset(btn.getAttribute('data-preset'));
         });
-        const match = state.sites.find((s) => s.id === saved) || state.sites.find((s) => s.status === 'active') || state.sites[0];
-        select.value = match.id;
-        state.currentSiteId = match.id;
-        syncSiteMode();
-        updatePlanSelector(currentStateCode());
-        renderLocalSites();
-        if (state.ready) syncConnectedUi();
+        $('fetchData').addEventListener('click', fetchAndCompare);
+        $('gstToggle').addEventListener('change', () => {
+            if (state.lastResultDataPayload) {
+                app.displayResults(
+                    state.lastResultDataPayload.channelTotals,
+                    state.lastResultDataPayload.startDateStr,
+                    state.lastResultDataPayload.endDateStr,
+                    state.lastResultDataPayload.numDays,
+                    state.lastResultDataPayload.demandTariffInfo,
+                    state.lastResultDataPayload.otherDemandTariffInfo,
+                    true
+                );
+            }
+        });
+
+        const csvMenu = $('csvDropdownMenu');
+        $('downloadCsvButton').addEventListener('click', (event) => {
+            event.stopPropagation();
+            if (!$('downloadCsvButton').disabled) csvMenu.classList.toggle('hidden');
+        });
+        window.addEventListener('click', (event) => {
+            if (!csvMenu.contains(event.target) && !$('downloadCsvButton').contains(event.target)) csvMenu.classList.add('hidden');
+            if (!$('settingsMenu').contains(event.target) && !$('settingsBtn').contains(event.target)) {
+                $('settingsMenu').classList.add('hidden');
+                $('settingsBtn').setAttribute('aria-expanded', 'false');
+            }
+        });
+        // Escape closes whichever menu is open and hands the keyboard back to its button.
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (!csvMenu.classList.contains('hidden')) {
+                csvMenu.classList.add('hidden');
+                $('downloadCsvButton').focus();
+            }
+            if (!$('settingsMenu').classList.contains('hidden')) {
+                app.closeSettingsMenu();
+                $('settingsBtn').focus();
+            }
+        });
+        $('downloadFullIntervalCsv').addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!state.cachedChannelData) return;
+            Amber.generateFullIntervalCsv(state.cachedChannelData, state.lastFetchedStartDate, state.lastFetchedEndDate);
+            csvMenu.classList.add('hidden');
+        });
+        $('downloadDailySummaryCsv').addEventListener('click', (e) => {
+            e.preventDefault();
+            Amber.generateDailySummariesCsv(state.dailySummaries, {
+                amberRates: app.readAmberRates(),
+                otherDailyCents: parseFloat($('dailyConnectionRate').value) || 0,
+                startDate: state.lastFetchedStartDate,
+                endDate: state.lastFetchedEndDate
+            });
+            csvMenu.classList.add('hidden');
+        });
+        $('downloadResultsTableCsv').addEventListener('click', (e) => {
+            e.preventDefault();
+            const table = document.querySelector('#results-table-container table');
+            if (!table) return;
+            Amber.generateResultsTableCsv(table, state.lastFetchedStartDate, state.lastFetchedEndDate);
+            csvMenu.classList.add('hidden');
+        });
     }
 
-    /** Amber charges and state follow the selected site: an estimated household shows its own. */
-    function syncSiteMode() {
-        const site = selectedSite();
-        const local = !!(site && site.local);
-        const note = $('amberChargesLocalNote');
-        if (local) {
-            const r = site.amberRates || {};
-            state.localChargesShown = true;
-            $('amberConnectionRate').value = r.connectionCents;
-            $('amberSubscriptionRate').value = r.subscriptionCents;
-            $('amberDemandRate').value = r.demandCents || 0;
-            ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => { $(id).value = ''; });
-            AMBER_CHARGE_FIELDS.forEach((id) => { $(id).disabled = true; });
-            const e = site.estimate || {};
-            const seasonal = r.demandByMonth ? ' Demand varies by month (the figure shown is the yearly average).' : '';
-            note.textContent = `NMI ${site.nmi} isn't on Amber: these are Amber's estimated charges for ${site.network} tariff ${e.tariffCode} (network, metering and Amber's subscription), used for every day.${seasonal} Choose an Amber site to edit your own.`;
-            note.classList.remove('hidden');
-            if (e.state && $('stateSelector').value !== e.state) {
-                $('stateSelector').value = e.state;
-            }
-        } else {
-            if (state.localChargesShown) {
-                state.localChargesShown = false;
-                AMBER_CHARGE_FIELDS.forEach((id) => { $(id).disabled = false; });
-                loadAmberChargeFields();
-            }
-            note.classList.add('hidden');
-            // An Amber site in another state than the one showing (a new user starts on NSW), where
-            // that state has no plans for the site's network: show the site's own state instead.
-            // A state the user picked by hand for this site is left alone.
-            const home = siteNetworkState(site);
-            const shown = $('stateSelector').value;
-            if (home && home !== shown && state.templates[home] && !state.stateChosenByHand && !visiblePlanNames(shown).length) {
-                $('stateSelector').value = home;
-                localStorage.setItem('selectedState', home);
-            }
-        }
-    }
-
-    function selectedSite() {
-        const id = $('siteSelector').value;
-        return state.sites.find((s) => s.id === id) || state.sites[0] || null;
-    }
-
-    function destroyCharts() {
-        if (state.dailyUsageChart) { state.dailyUsageChart.destroy(); state.dailyUsageChart = null; }
-        if (state.usageChart) { state.usageChart.destroy(); state.usageChart = null; }
-    }
+    // ---------- Compare ----------
 
     function setFetching(isFetching) {
         state.fetching = isFetching;
@@ -1020,1406 +334,31 @@
         btn.textContent = isFetching ? 'Comparing…' : 'Compare costs';
     }
 
-    function showMessage(text, isError) {
-        const container = $('messageContainer');
-        const el = $('message');
-        container.classList.remove('hidden');
-        el.textContent = text;
-        el.className = isError ? 'text-lg text-red-700' : 'text-lg';
-    }
-
-    function hideMessage() {
-        $('messageContainer').classList.add('hidden');
-    }
-
-    function planTotalsOptions(planConfig, numDays, startDateStr, endDateStr) {
-        return {
-            startDateStr,
-            endDateStr,
-            numDays,
-            state: currentStateCode(),
-            gstInclusive: gstInclusive(),
-            amberRates: readAmberRates(),
-            planConfig
-        };
-    }
-
-    function computeAmberDisplayTotal(channelTotals, demandTariffInfo, startDateStr, endDateStr) {
-        const rates = readAmberRates();
-        const fixed = Amber.amberFixedForPeriod(rates, startDateStr, endDateStr);
-        let total = 0;
-        Object.values(channelTotals).forEach((c) => {
-            total += Amber.adjustForGst(c.totalAmberCost || 0, gstInclusive(), c.type === 'feedIn');
-        });
-        if (demandTariffInfo && demandTariffInfo.cost > 0) {
-            total += Amber.adjustForGst(demandTariffInfo.cost, gstInclusive(), false);
-        }
-        total += Amber.adjustForGst(fixed.connection, gstInclusive(), false);
-        total += Amber.adjustForGst(fixed.subscription, gstInclusive(), false);
-        return total;
-    }
-
-    function renderAllPlansTable(channelTotals, amberTotal, startDateStr, endDateStr, numDays) {
-        const section = $('allPlansSection');
-        const host = $('allPlansTable');
-        const stateCode = currentStateCode();
-        const plans = state.templates[stateCode] || {};
-        const names = Object.keys(plans).filter((planName) =>
-            Amber.planMatchesNetwork(planName, plans[planName], currentSiteNetwork())
-        );
-        if (!names.length) {
-            section.classList.add('hidden');
-            return;
-        }
-        const selectedName = $('planSelector').value;
-        const rows = names.map((name) => {
-            const planConfig = name === selectedName ? createPlanObjectFromForm() : plans[name];
-            const result = Amber.computePlanTotals(channelTotals, planConfig, planTotalsOptions(planConfig, numDays, startDateStr, endDateStr));
-            return { name, total: result.otherTotal, asAt: Amber.templateAsAt(plans[name]) };
-        }).sort((a, b) => a.total - b.total);
-
-        let html = `<table class="min-w-full divide-y divide-gray-200">
-            <thead class="bg-gray-50">
-                <tr>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
-                </tr>
-            </thead><tbody class="bg-white divide-y divide-gray-200">`;
-        rows.forEach((row) => {
-            const diff = amberTotal - row.total;
-            let vs = '≈ no difference';
-            let cls = 'text-gray-600';
-            if (Math.abs(diff) >= 0.01) {
-                if (diff > 0) { vs = `$${diff.toFixed(2)} cheaper than Amber`; cls = 'text-red-700'; }
-                else { vs = `$${Math.abs(diff).toFixed(2)} more than Amber`; cls = 'text-green-700'; }
-            }
-            const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
-            html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Show this plan in full above">
-                <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(Amber.planListLabel(row.name, currentSiteNetwork()))}</td>
-                <td class="px-4 py-2 text-sm text-right">$${row.total.toFixed(2)}</td>
-                <td class="px-4 py-2 text-sm text-right ${cls}">${vs}</td>
-            </tr>`;
-        });
-        html += '</tbody></table>';
-        host.innerHTML = html;
-        host.querySelectorAll('tbody tr').forEach((tr, index) => {
-            const planName = rows[index].name;
-            const activate = () => selectSupplierPlan(planName, { scroll: true });
-            tr.addEventListener('click', activate);
-            tr.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    activate();
-                }
-            });
-        });
-        section.classList.remove('hidden');
-    }
-
-    function selectSupplierPlan(planName, opts) {
-        const options = opts || {};
-        const selector = $('planSelector');
-        const next = planName || '';
-        const unchanged = selector.value === next;
-        selector.value = next;
-        if (unchanged && !options.fromChange) {
-            if (options.scroll && state.cachedChannelData) {
-                $('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-            return;
-        }
-        applyPlanTemplate();
-        saveAllSettings();
-        if (state.cachedChannelData && state.lastFetchedStartDate) {
-            recalculateAndShow(false);
-            if (options.scroll) $('resultsSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        } else {
-            updatePlanSavings();
-        }
-    }
-
-    function updatePlanSavings() {
-        const planSelector = $('planSelector');
-        if (!state.lastResultDataPayload) {
-            for (const option of planSelector.options) {
-                option.textContent = option.value
-                    ? Amber.planListLabel(option.value, currentSiteNetwork())
-                    : 'Enter my own rates';
-            }
-            return;
-        }
-        const payload = state.lastResultDataPayload;
-        const amberTotal = computeAmberDisplayTotal(
-            payload.channelTotals,
-            payload.demandTariffInfo,
-            payload.startDateStr,
-            payload.endDateStr
-        );
-        state.amberCostBaseline = amberTotal;
-        const stateCode = currentStateCode();
-        const selectedName = planSelector.value;
-        for (const option of planSelector.options) {
-            if (!option.value) {
-                option.textContent = 'Enter my own rates';
-                continue;
-            }
-            const planConfig = option.value === selectedName
-                ? createPlanObjectFromForm()
-                : (state.templates[stateCode] && state.templates[stateCode][option.value]);
-            if (!planConfig) {
-                option.textContent = option.value;
-                continue;
-            }
-            const result = Amber.computePlanTotals(
-                payload.channelTotals,
-                planConfig,
-                planTotalsOptions(planConfig, payload.numDays, payload.startDateStr, payload.endDateStr)
-            );
-            const difference = amberTotal - result.otherTotal;
-            let savingsText = ' (~ no difference)';
-            if (Math.abs(difference) >= 0.01) {
-                savingsText = difference > 0
-                    ? ` ($${difference.toFixed(2)} cheaper)`
-                    : ` ($${Math.abs(difference).toFixed(2)} more)`;
-            }
-            option.textContent = Amber.planListLabel(option.value, currentSiteNetwork()) + savingsText;
-        }
-        planSelector.value = selectedName;
-    }
-
-    function renderDailyGraph(dateStr) {
-        const canvas = $('dailyChart');
-        if (!canvas || !state.cachedAllChannelData && !state.cachedChannelData) return;
-        if (state.dailyUsageChart) {
-            state.dailyUsageChart.destroy();
-            state.dailyUsageChart = null;
-        }
-        const data = state.cachedAllChannelData || state.cachedChannelData;
-        state.dailyUsageChart = Amber.displayDailyGraph(canvas.getContext('2d'), data, dateStr, {
-            planConfig: createPlanObjectFromForm(),
-            state: currentStateCode(),
-            onZoom: () => $('resetDailyZoomBtn').classList.remove('hidden')
-        });
-        $('dailyGraphSection').classList.remove('hidden');
-        $('resetDailyZoomBtn').classList.add('hidden');
-    }
-
-    function selectCalendarDay(dateStr) {
-        const selector = $('daySelector');
-        let found = false;
-        for (const option of selector.options) {
-            if (option.value === dateStr) {
-                selector.value = dateStr;
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            const option = document.createElement('option');
-            option.value = dateStr;
-            option.textContent = dateStr;
-            selector.insertBefore(option, selector.firstChild);
-            selector.value = dateStr;
-        }
-        renderDailyGraph(dateStr);
-        $('dailyGraphSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
-        updateDayNavButtons();
-    }
-
-    function updateDayNavButtons() {
-        const selector = $('daySelector');
-        $('prevDayBtn').disabled = selector.selectedIndex <= 0;
-        $('nextDayBtn').disabled = selector.selectedIndex >= selector.options.length - 1;
-    }
-
-    function setupDaySelector(startDateStr, endDateStr) {
-        const selector = $('daySelector');
-        selector.innerHTML = '';
-        const datesArray = [];
-        const currentDate = new Date(startDateStr + 'T00:00:00');
-        const end = new Date(endDateStr + 'T00:00:00');
-        while (currentDate <= end) {
-            datesArray.push(Amber.formatForInput(currentDate));
-            currentDate.setDate(currentDate.getDate() + 1);
-        }
-        datesArray.reverse().forEach((dateValue) => {
-            const option = document.createElement('option');
-            option.value = dateValue;
-            option.textContent = dateValue;
-            selector.appendChild(option);
-        });
-        selector.onchange = () => {
-            renderDailyGraph(selector.value);
-            updateDayNavButtons();
-        };
-        $('prevDayBtn').onclick = () => {
-            if (selector.selectedIndex > 0) {
-                selector.selectedIndex--;
-                selector.dispatchEvent(new Event('change'));
-            }
-        };
-        $('nextDayBtn').onclick = () => {
-            if (selector.selectedIndex < selector.options.length - 1) {
-                selector.selectedIndex++;
-                selector.dispatchEvent(new Event('change'));
-            }
-        };
-        $('resetDailyZoomBtn').onclick = () => {
-            if (state.dailyUsageChart) {
-                $('resetDailyZoomBtn').classList.add('hidden');
-                state.dailyUsageChart.resetZoom();
-            }
-        };
-        if (selector.options.length > 0) {
-            selector.dispatchEvent(new Event('change'));
-        }
-        updateDayNavButtons();
-    }
-
-    /** Per-month demand lines ("Jul: 6.67 kW × 31 d") when a range spans several months. */
-    function demandMonthsHtml(months) {
-        if (!months || months.length < 2) return '';
-        return months.map((m) => {
-            const name = new Date(`${m.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: '2-digit' });
-            return `<div class="text-xs font-normal">${name}: ${(m.maxDemandKwh * 2).toFixed(2)} kW × ${m.days || 0} d</div>`;
-        }).join('');
-    }
-
-    // Plain names for meter channels.
-    function channelName(c) {
-        if (c.type === 'feedIn') return 'Solar sent out';
-        if (c.type === 'controlledLoad') return 'Hot water (controlled load)';
-        return 'Power bought';
-    }
-
-    async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
-        // "$12.34" / "−$6.45" (proper minus sign before the dollar sign).
-        const money = (v) => {
-            const n = Number(v) || 0;
-            return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
-        };
-        const planName = $('planName').value.trim() || 'your plan';
-        const period = `(${fmtDate(startDateStr)} to ${fmtDate(endDateStr)})`;
-        const rates = readAmberRates();
-        state.lastResultDataPayload = {
-            channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo
-        };
-
-        let adjustedAmberTotal = 0;
-        let adjustedOtherTotal = 0;
-        let projectedMonthlyCostData = null;
-        const comparePlan = createPlanObjectFromForm();
-        const daysWithReadings = new Set(Object.values(channelTotals).flatMap((c) => c.usageData.map(Amber.usageDateStr)));
-        const missingDays = Math.max(0, numDays - daysWithReadings.size);
-        const incompleteNotice = missingDays ? `<p role="status" class="text-sm text-amber-800 mb-4">Incomplete comparison: ${missingDays} of ${numDays} days have no readings. Usage costs omit those days; fixed charges and export allowances still cover the full selected period. Savings are provisional. Daily exports and calendar totals cover only days with readings.</p>` : '';
-        let tableHTML = `
-            <p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>${incompleteNotice}
-            <table class="min-w-full divide-y divide-gray-200">
-                <thead class="bg-gray-50">
-                    <tr>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colLine" data-help-label="What">What</span></th>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colPeriod" data-help-label="When">When</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colUsage" data-help-label="kWh">kWh</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colAmber" data-help-label="Amber">Amber</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colOther" data-help-label="${Amber.escapeHTML(planName)}">${Amber.escapeHTML(planName)}</span></th>
-                    </tr>
-                </thead>
-                <tbody class="bg-white divide-y divide-gray-200">`;
-
-        Object.values(channelTotals).forEach((c) => {
-            if (c.totalKWh === 0 && c.totalAmberCost === 0 && c.totalOtherCost === 0) return;
-            const isFeedIn = c.type === 'feedIn';
-            const rows = Amber.channelPeriodBreakdown(c, comparePlan, currentStateCode(), channelTotals);
-            const periodRows = rows.length ? rows : [{
-                period: c.type === 'feedIn' ? 'feedIn' : (c.type === 'controlledLoad' ? 'controlledLoad' : 'anytime'),
-                label: c.type === 'feedIn' ? 'Feed-in' : (c.type === 'controlledLoad' ? 'Controlled load' : 'Anytime'),
-                kwh: c.totalKWh || 0,
-                amberCost: c.totalAmberCost || 0,
-                otherCost: c.totalOtherCost || 0
-            }];
-            let channelKwh = 0;
-            let channelAmber = 0;
-            let channelOther = 0;
-            periodRows.forEach((row) => {
-                const adjustedAmberCost = Amber.adjustForGst(row.amberCost || 0, gstInclusive(), isFeedIn);
-                const adjustedOtherCost = Amber.adjustForGst(row.otherCost || 0, gstInclusive(), isFeedIn);
-                adjustedAmberTotal += adjustedAmberCost;
-                adjustedOtherTotal += adjustedOtherCost;
-                channelKwh += row.kwh || 0;
-                channelAmber += adjustedAmberCost;
-                channelOther += adjustedOtherCost;
-                tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${channelName(c)} <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedAmberCost)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}${money(adjustedOtherCost)}</td>
-                </tr>`;
-            });
-            if (c.amberExportCharge) {
-                const exportAmber = Amber.adjustForGst(c.amberExportCharge, gstInclusive(), false);
-                adjustedAmberTotal += exportAmber;
-                channelAmber += exportAmber;
-                tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Solar sent out <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700"><span data-help="rowExportCharge" data-help-label="Network export charge">Network export charge</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(c.amberExportChargeKwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}${money(exportAmber)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$0.00</td>
-                </tr>`;
-            }
-            if (periodRows.length + (c.amberExportCharge ? 1 : 0) > 1) {
-                tableHTML += `<tr class="bg-gray-50 font-semibold">
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${channelName(c)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Subtotal</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${channelKwh.toFixed(1)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelAmber)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelOther)}</td>
-                </tr>`;
-            }
-        });
-
-        if (demandTariffInfo && demandTariffInfo.cost > 0) {
-            const adjustedDemandCost = Amber.adjustForGst(demandTariffInfo.cost || 0, gstInclusive(), false);
-            adjustedAmberTotal += adjustedDemandCost;
-            const maxDemandKw = ((demandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
-            const maxDemandDateTimeObj = new Date(demandTariffInfo.maxDemandTime + '+10:00');
-            const maxDemandDateTime = Number.isNaN(maxDemandDateTimeObj.getTime())
-                ? demandTariffInfo.maxDemandTime
-                : maxDemandDateTimeObj.toLocaleString('en-AU', { dateStyle: 'short', timeStyle: 'short' });
-            const monthOfMaxDemand = maxDemandDateTimeObj.getMonth();
-            const yearOfMaxDemand = maxDemandDateTimeObj.getFullYear();
-            const daysInMonth = new Date(yearOfMaxDemand, monthOfMaxDemand + 1, 0).getDate();
-            const monthKey = `${yearOfMaxDemand}-${String(monthOfMaxDemand + 1).padStart(2, '0')}`;
-            const projectedMonthlyCost = (demandTariffInfo.maxDemandKwh * 2) * (Amber.demandCentsFor(rates, monthKey) / 100) * daysInMonth;
-            projectedMonthlyCostData = {
-                cost: Amber.adjustForGst(projectedMonthlyCost, gstInclusive(), false),
-                month: maxDemandDateTimeObj.toLocaleString('default', { month: 'long' })
-            };
-            tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">
-                    <span id="amber-demand-tooltip-trigger" class="border-b border-dotted border-gray-500">Amber demand charge</span><span data-help="rowDemand" data-help-label="Amber demand charge"></span>
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
-                    <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    ${demandMonthsHtml(demandTariffInfo.months) || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
-            </tr>`;
-        }
-
-        if (otherDemandTariffInfo && otherDemandTariffInfo.cost > 0) {
-            const adjustedOtherDemandCost = Amber.adjustForGst(otherDemandTariffInfo.cost || 0, gstInclusive(), false);
-            adjustedOtherTotal += adjustedOtherDemandCost;
-            const maxDemandKw = ((otherDemandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
-            const maxDemandDateTime = otherDemandTariffInfo.maxDemandTime || '';
-            const dayCount = otherDemandTariffInfo.applicableDaysCount || numDays;
-            tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} demand charge<span data-help="rowOtherDemand" data-help-label="Demand charge"></span></td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
-                    <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    ${demandMonthsHtml(otherDemandTariffInfo.months) || `<div class="text-xs">× ${dayCount} applicable days</div>`}
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
-            </tr>`;
-        }
-
-        const amberFixed = Amber.amberFixedForPeriod(rates, startDateStr, endDateStr);
-        const amberConnectionCost = Amber.adjustForGst(amberFixed.connection, gstInclusive(), false);
-        const otherDailyConnection = Amber.adjustForGst(((parseFloat($('dailyConnectionRate').value) || 0) * numDays) / 100, gstInclusive(), false);
-        const amberSubscriptionCost = Amber.adjustForGst(amberFixed.subscription, gstInclusive(), false);
-        adjustedAmberTotal += amberConnectionCost + amberSubscriptionCost;
-        adjustedOtherTotal += otherDailyConnection;
-
-        tableHTML += `<tr class="font-semibold border-t">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily supply charge<span data-help="rowDaily" data-help-label="Daily supply charge"></span></td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberConnectionCost)}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(otherDailyConnection)}</td>
-        </tr>
-        <tr class="font-semibold">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber membership fee<span data-help="rowSubscription" data-help-label="Amber membership fee"></span></td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberSubscriptionCost)}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500 text-right">none</td>
-        </tr>
-        <tr class="bg-gray-50 font-bold">
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="3">Total<span data-help="rowTotal" data-help-label="Total"></span></td>
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedAmberTotal)}</td>
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedOtherTotal)}</td>
-        </tr></tbody></table>`;
-
-        const savings = adjustedOtherTotal - adjustedAmberTotal;
-        let savingsSummaryHTML = '<div class="mb-4 p-4 rounded-lg text-center ';
-        if (missingDays) {
-            savingsSummaryHTML += 'bg-amber-50"><p class="text-lg font-medium text-amber-800">Incomplete comparison — savings are provisional.</p>';
-        } else if (savings > 0) {
-            const percent = adjustedOtherTotal > 0 ? ` (${((savings / adjustedOtherTotal) * 100).toFixed(1)}%)` : '';
-            savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber was <span class="font-bold">$${savings.toFixed(2)}${percent}</span> cheaper than <span class="italic">${Amber.escapeHTML(planName)}</span> for these dates.</p>`;
-        } else if (savings < 0) {
-            savingsSummaryHTML += `bg-red-100"><p class="text-lg font-medium text-red-800"><span class="italic">${Amber.escapeHTML(planName)}</span> would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper than Amber for these dates.</p>`;
-        } else {
-            savingsSummaryHTML += 'bg-gray-100"><p class="text-lg font-medium text-gray-800">Amber and this plan cost about the same for these dates.</p>';
-        }
-        if (!$('planSelector').value && !$('planName').value.trim()) {
-            savingsSummaryHTML += '<p class="mt-2 text-sm text-gray-700">That\'s against example prices. For a real answer, choose the plan you\'re on (or type its prices) under <button type="button" data-jump="planChooser" class="text-indigo-600 font-medium hover:underline">Compare Amber with…</button></p>';
-        }
-        savingsSummaryHTML += '</div>';
-        // The answer first; the table (which scrolls sideways on a phone) underneath.
-        const scrollHint = '<p class="sm:hidden text-xs text-gray-500 mb-2">Swipe the table sideways to see every column →</p>';
-        $('results-table-container').innerHTML = savingsSummaryHTML + scrollHint + tableHTML;
-
-        if (projectedMonthlyCostData) {
-            const trigger = $('amber-demand-tooltip-trigger');
-            if (trigger) {
-                trigger.addEventListener('mouseenter', (e) => {
-                    Amber.showAmberDemandTooltip(e.currentTarget, projectedMonthlyCostData.cost, projectedMonthlyCostData.month);
-                });
-                trigger.addEventListener('mouseleave', Amber.hideTooltip);
-            }
-        }
-
-        const asAt = Amber.latestAsAtForState(currentStateCode(), state.templates);
-        const estSite = selectedSite();
-        const banner = $('estimateBanner');
-        if (estSite && estSite.local) {
-            const e = estSite.estimate || {};
-            banner.textContent = `NMI ${estSite.nmi} isn't on Amber, so the Amber column is an estimate of what Amber would have charged: every reading priced at the wholesale price at that moment plus Amber's 2026-27 charges for ${estSite.network} (tariff ${e.tariffCode}${e.exportCode ? `, export tariff ${e.exportCode}` : ''}). It assumes power is used exactly as it was; with a home battery, Amber's automatic battery control (SmartShift) would usually do better. Pick the plan this household is on now under "Compare Amber with…" above.`;
-            banner.classList.remove('hidden');
-        } else {
-            banner.classList.add('hidden');
-        }
-        $('resultsDisclaimer').textContent = `Plan prices are the published ones as at ${asAt}, including GST. Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
-
-        const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
-        const qualityBanner = $('qualityBanner');
-        if (estimatedDays > 0) {
-            qualityBanner.classList.remove('hidden');
-            qualityBanner.textContent = `${estimatedDays} day${estimatedDays === 1 ? '' : 's'} in these dates still ${estimatedDays === 1 ? 'has' : 'have'} estimated meter readings, so the figures may change a little. This is normal for the last few days.`;
-        } else {
-            qualityBanner.classList.add('hidden');
-        }
-
-        $('downloadCsvButton').disabled = false;
-        $('resultsSection').classList.remove('hidden');
-        $('calendarSection').classList.remove('hidden');
-
-        if (!skipGraphs) await Amber.sleep(0);
-        renderAllPlansTable(channelTotals, adjustedAmberTotal, startDateStr, endDateStr, numDays);
-        updatePlanSavings();
-
-        if (!skipGraphs) {
-            await Amber.sleep(0);
-            const avgContainer = $('averageGraphContainer');
-            avgContainer.classList.remove('hidden');
-            if (state.usageChart) { state.usageChart.destroy(); state.usageChart = null; }
-            try {
-                state.usageChart = Amber.displayAverageGraph($('usagePriceChart').getContext('2d'), channelTotals, {
-                    numDays,
-                    startDate: startDateStr,
-                    endDate: endDateStr,
-                    planConfig: createPlanObjectFromForm(),
-                    state: currentStateCode(),
-                    onZoom: () => $('resetAverageZoomBtn').classList.remove('hidden')
-                });
-            } catch (err) {
-                console.error(err);
-            }
-            $('resetAverageZoomBtn').onclick = () => {
-                if (state.usageChart) {
-                    $('resetAverageZoomBtn').classList.add('hidden');
-                    state.usageChart.resetZoom();
-                }
-            };
-            setupDaySelector(startDateStr, endDateStr);
-        }
-
-        Amber.displayCalendar($('calendar-container'), {
-            dailySummaries: state.dailySummaries,
-            demandInfoForTooltip: state.demandInfoForTooltip,
-            startDate: startDateStr,
-            endDate: endDateStr,
-            siteId: state.currentSiteId,
-            planName,
-            otherDailyCents: parseFloat($('dailyConnectionRate').value) || 0,
-            amberRates: rates,
-            onDaySelect: selectCalendarDay
-        });
-
-        try {
-            renderMoreStats();
-        } catch (err) {
-            console.error(err);
-        }
-        try {
-            renderMonthly();
-            renderBillCheck();
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    // ---------- Monthly breakdown ----------
-
-    function periodOpts() {
-        return { site: selectedSite(), planConfig: createPlanObjectFromForm(), state: currentStateCode(), amberRates: readAmberRates() };
-    }
-
-    /**
-     * Channel data for every whole calendar month inside the chosen dates [from, to].
-     * Months outside them are left out (even if cached), so "Last 12 months" lists exactly 12.
-     * rangeItems already holds every usable cached day in the range, so no other cache read is needed.
-     */
-    function loadMonthlyData(channels, rangeItems, from, to) {
-        const byDate = {};
-        rangeItems.forEach((item) => {
-            const dateStr = Amber.usageDateStr(item);
-            if (dateStr < from || dateStr > to) return;
-            (byDate[dateStr] || (byDate[dateStr] = [])).push(item);
-        });
-        const months = Amber.fullMonths(Object.keys(byDate).filter((d) => Amber.coversWholeDay(byDate[d])));
-        const wanted = new Set(months);
-        const channelData = {};
-        channels.forEach((c) => { channelData[c.identifier] = Amber.emptyChannel(c); });
-        Object.keys(byDate).sort().forEach((dateStr) => {
-            if (wanted.has(dateStr.substring(0, 7))) Amber.processUsageData(byDate[dateStr], channelData, false);
-        });
-        Object.values(channelData).forEach((c) => c.usageData.sort((a, b) => (a.nemTime < b.nemTime ? -1 : (a.nemTime > b.nemTime ? 1 : 0))));
-        return { months, channelData };
-    }
-
-    function renderMonthly() {
-        const section = $('monthlySection');
-        const monthly = state.monthly;
-        if (!monthly) { section.classList.add('hidden'); renderBatteryShift(); return; }
-        section.classList.remove('hidden');
-        if (!monthly.months.length) {
-            $('monthlyTable').innerHTML = '<p class="text-sm text-gray-600">No whole calendar months in the dates above. Choose dates that cover a full month (for example Last month) and it will show here.</p>';
-            renderBatteryShift();
-            return;
-        }
-        const opts = periodOpts();
-        const key = JSON.stringify(opts);
-        if (monthly.key !== key) {
-            monthly.breakdown = Amber.monthlyBreakdown(monthly.channelData, monthly.months, opts);
-            monthly.key = key;
-        }
-        const { rows, total } = monthly.breakdown;
-        const gst = gstInclusive();
-        const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
-        const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
-        const planName = $('planName').value.trim() || 'your plan';
-        // The plan's name as the plan list shows it (without the network), for the Difference column.
-        const planShort = Amber.escapeHTML($('planName').value.trim() ? Amber.planListLabel($('planName').value.trim(), currentSiteNetwork()) : 'Your plan');
-        const view = (r) => {
-            const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
-            const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
-            return { amberTotal, otherTotal, diff: otherTotal - amberTotal };
-        };
-        const label = (r) => (r.month === 'Total'
-            ? 'Total'
-            : new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }));
-        const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
-        const th = (t, right, help) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${help ? `<span data-help="${help}" data-help-label="${t}">${t}</span>` : t}</th>`;
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Month')}${th('Days', 1, 'Days in the month. If some show as 25/31, only 25 days had meter readings.')}${th('kWh bought', 1, 'colUsage')}${th('kWh sent out', 1, 'Solar sent to the grid, in kWh.')}${th('Power', 1, 'What Amber charged for the power you bought (including any network export charge).')}${th('Solar credit', 1, 'What Amber paid for solar you sent out (shown with a minus sign).')}${th('Demand', 1, 'rowDemand')}${th('Daily + fees', 1, 'Daily supply charge plus Amber\'s membership fee.')}${th('Amber', 1, 'Everything on Amber for the month.')}${th(Amber.escapeHTML(planName), 1, 'colOther')}${th('Difference', 1, 'Which was cheaper that month, and by how much.')}
-        </tr></thead><tbody class="divide-y divide-gray-200">`;
-        rows.concat([total]).forEach((r) => {
-            const v = view(r);
-            const isTotal = r.month === 'Total';
-            const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
-            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber' : planShort} ${money(Math.abs(v.diff))} cheaper`;
-            const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
-            html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
-                ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
-                ${td(money(adj(r.amberUsage)), 1)}${td(money(r.amberFeedIn || 0), 1)}${td(money(adj(r.amberDemand)), 1)}${td(money(adj(r.amberConnection + r.amberSubscription)), 1)}
-                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, diffCls)}
-            </tr>`;
-        });
-        html += '</tbody></table>';
-        html += `<p class="text-xs text-gray-500 mt-2">${gst ? 'Includes GST' : 'Without GST (solar credits unchanged)'}.</p>`;
-        $('monthlyTable').innerHTML = html;
-        renderBatteryShift();
-    }
-
-    // ---------- Battery re-scheduling estimate ----------
-
-    const SHIFT_SETTINGS_KEY = 'batteryShiftSettings';
-
-    function readShiftParams() {
-        const budgets = String($('shiftBudgets').value || '')
-            .split(/[,\s]+/).map((v) => parseFloat(v)).filter((v) => Number.isFinite(v) && v >= 0);
-        const unique = Array.from(new Set(budgets)).sort((a, b) => a - b).slice(0, 4);
-        return {
-            budgets: unique.length ? unique : Amber.REDISPATCH_DEFAULTS.budgets.slice(),
-            windowKw: parseFloat($('shiftWindowKw').value) || Amber.REDISPATCH_DEFAULTS.windowKw,
-            exportKw: parseFloat($('shiftExportKw').value) >= 0 ? parseFloat($('shiftExportKw').value) : Amber.REDISPATCH_DEFAULTS.exportKw,
-            rte: parseFloat($('shiftRte').value) || Amber.REDISPATCH_DEFAULTS.rte,
-            // Blank = auto (from the meter data); 0 = no battery.
-            batteryKwh: $('shiftBatteryKwh').value.trim() === '' || !(parseFloat($('shiftBatteryKwh').value) >= 0)
-                ? null : parseFloat($('shiftBatteryKwh').value)
-        };
-    }
-
-    function loadShiftSettings() {
-        try {
-            const s = JSON.parse(localStorage.getItem(SHIFT_SETTINGS_KEY) || 'null');
-            if (!s) return;
-            if (Array.isArray(s.budgets) && s.budgets.length) $('shiftBudgets').value = s.budgets.join(', ');
-            if (s.windowKw) $('shiftWindowKw').value = s.windowKw;
-            if (s.exportKw != null) $('shiftExportKw').value = s.exportKw;
-            if (s.rte) $('shiftRte').value = s.rte;
-            if (s.batteryKwh != null) $('shiftBatteryKwh').value = s.batteryKwh;
-            if (s.plan) state.shiftPlan = s.plan;
-            if (s.budget != null) state.shiftBudget = s.budget;
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    function saveShiftSettings() {
-        const p = readShiftParams();
-        localStorage.setItem(SHIFT_SETTINGS_KEY, JSON.stringify(Object.assign({}, p, {
-            plan: state.shiftPlan || null, budget: state.shiftBudget != null ? state.shiftBudget : null
-        })));
-    }
-
-    /** Free-window plans for this state and network (the selected plan uses the form's rates). */
-    function freeWindowPlans() {
-        const stateCode = currentStateCode();
-        const plans = state.templates[stateCode] || {};
-        const selectedName = $('planSelector').value;
-        const out = [];
-        Object.keys(plans).forEach((name) => {
-            if (!Amber.planMatchesNetwork(name, plans[name], currentSiteNetwork())) return;
-            const config = name === selectedName ? createPlanObjectFromForm() : plans[name];
-            if (Amber.planHasFreeWindow(config)) out.push({ name, config });
-        });
-        if (!selectedName) {
-            const custom = createPlanObjectFromForm();
-            if (Amber.planHasFreeWindow(custom)) out.push({ name: $('planName').value.trim() || 'Custom plan', config: custom });
-        }
-        return out;
-    }
-
-    let shiftRun = 0;
-
-    // The Free? tab says why there's nothing to show once results are in.
-    function showFreePowerEmpty(html) {
-        const el = $('freePowerEmpty');
-        const show = !!html && !$('resultsSection').classList.contains('hidden');
-        el.classList.toggle('hidden', !show);
-        if (show) el.innerHTML = html;
-    }
-
-    async function renderBatteryShift() {
-        const section = $('batteryShiftSection');
-        const monthly = state.monthly;
-        const plans = freeWindowPlans();
-        if (!monthly || !monthly.months.length || !plans.length) {
-            section.classList.add('hidden');
-            if (!monthly) showFreePowerEmpty('Press <strong>Compare costs</strong> to work this out for the dates at the top.');
-            else if (!monthly.months.length) showFreePowerEmpty('This works month by month, so it needs at least one whole calendar month within the dates at the top. Pick a longer period (for example <strong>Last month</strong> or <strong>Last 12 months</strong>) and press <strong>Compare costs</strong>.');
-            else showFreePowerEmpty('There are no free-power plans for your network in the app yet. To try one, go to the <button type="button" data-go-tab="compare" class="text-indigo-600 font-medium hover:underline">Compare</button> tab, pick <strong>Enter my own rates</strong> and set its free hours.');
-            return;
-        }
-        showFreePowerEmpty('');
-        section.classList.remove('hidden');
-        const params = readShiftParams();
-        if (!state.batteryDetect || state.batteryDetect.data !== monthly.channelData) {
-            state.batteryDetect = { data: monthly.channelData, result: Amber.detectBattery(monthly.channelData, currentStateCode()) };
-        }
-        const detected = state.batteryDetect.result;
-        const batteryKwh = params.batteryKwh != null ? params.batteryKwh : (detected.likely ? null : 0);
-        showBatteryNote(params.batteryKwh, detected);
-        const opts = {
-            site: selectedSite(), state: currentStateCode(), gstInclusive: gstInclusive(), amberRates: readAmberRates(),
-            budgets: params.budgets, params: { windowKw: params.windowKw, exportKw: params.exportKw, rte: params.rte, batteryKwh }
-        };
-        const key = JSON.stringify([monthly.months, plans, opts]);
-        const run = ++shiftRun;
-        if (!state.batteryShift || state.batteryShift.key !== key || state.batteryShift.data !== monthly.channelData) {
-            $('batteryShiftTable').innerHTML = '<p class="text-sm text-gray-500">Re-timing your meter data…</p>';
-            $('batteryShiftMonthly').innerHTML = '';
-            await Amber.sleep(0);
-            if (run !== shiftRun) return;
-            let table;
-            try {
-                table = await Amber.batteryShiftTableAsync(monthly.channelData, monthly.months, plans, opts, () => run !== shiftRun);
-            } catch (err) {
-                console.error(err);
-                if (run === shiftRun) $('batteryShiftTable').innerHTML = '<p class="text-sm text-red-700">Could not work out the re-scheduling estimate.</p>';
-                return;
-            }
-            if (!table || run !== shiftRun) return;
-            state.batteryShift = { key, data: monthly.channelData, table };
-        }
-        drawBatteryShift(state.batteryShift.table);
-    }
-
-    function showBatteryNote(entered, detected) {
-        const note = $('shiftBatteryNote');
-        let text;
-        if (entered == null && detected.likely) {
-            text = `Home battery: worked out for you. Your readings show power going to the grid after dark on ${detected.darkDays} of ${detected.days} days, which means a battery, so the app assumes yours can hold each amount above. Type its size to be exact (a Tesla Powerwall holds 13.5 kWh); anything over that is then treated as things like an electric car or pool pump.`;
-        } else if (entered == null) {
-            text = 'Home battery: worked out for you. Your readings show no power going to the grid after dark, so the app assumes there is no battery and only moves things like an electric car, pool pump or timer hot water. Type a size if you do have a battery.';
-        } else if (entered === 0) {
-            text = 'No home battery: only things like an electric car, pool pump or timer hot water are moved. If you have none of those, look at the "As you used it" column.';
-        } else {
-            text = `Home battery ${entered} kWh: up to ${entered} kWh a day is moved through the battery (losing a little on the way); the rest is things like an electric car or pool pump.`;
-        }
-        note.textContent = text;
-        note.classList.remove('hidden');
-    }
-
-    function drawBatteryShift(table) {
-        const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
-        const monthLabel = (m) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' });
-        const th = (t, right) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${t}</th>`;
-        const vsAmber = (v, amber) => {
-            const diff = amber - v;
-            if (Math.abs(diff) < 0.005) return '<div class="text-xs text-gray-500">≈ Amber</div>';
-            return diff > 0
-                ? `<div class="text-xs text-green-700">${money(diff)} less than Amber</div>`
-                : `<div class="text-xs text-red-700">${money(-diff)} more than Amber</div>`;
-        };
-        const n = table.months.length;
-        const span = n === 1 ? monthLabel(table.months[0]) : `${monthLabel(table.months[0])} – ${monthLabel(table.months[n - 1])}`;
-        const amber = table.amber;
-        let html = `<p class="text-sm text-gray-700 mb-2">Using ${n} whole month${n === 1 ? '' : 's'} of readings (${span}). Amber cost <span class="font-semibold">${money(amber.total)}</span> over the same months, including ${money(amber.demand)} of demand charges.${n < 12 ? ' That\'s less than a year, so summer and winter aren\'t balanced yet.' : ''}</p>`;
-        html += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Plan')}${th('As you used it', 1)}${table.budgets.map((b) => th(`Move ${b} kWh a day`, 1)).join('')}
-        </tr></thead><tbody class="divide-y divide-gray-200">`;
-        table.plans.slice().sort((a, b) => a.shifted[a.shifted.length - 1] - b.shifted[b.shifted.length - 1]).forEach((row) => {
-            html += `<tr>
-                <td class="px-3 py-2">${Amber.escapeHTML(Amber.planListLabel(row.name, currentSiteNetwork()))}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">${money(row.metered)}${vsAmber(row.metered, amber.total)}</td>
-                ${row.shifted.map((v) => `<td class="px-3 py-2 text-right whitespace-nowrap font-medium">${money(v)}${vsAmber(v, amber.total)}</td>`).join('')}
-            </tr>`;
-        });
-        html += '</tbody></table>';
-        html += `<p class="text-xs text-gray-500 mt-2">An estimate from your meter readings only. It assumes you can move the same amount every day, and limits extra solar or battery exports to the plan's daily feed-in cap and the maximum export. These plans have no demand charge. ${gstInclusive() ? 'Includes GST' : 'Without GST (solar credits unchanged)'}. Check each plan's fact sheet before switching.</p>`;
-        $('batteryShiftTable').innerHTML = html;
-
-        // Month by month for one plan and budget.
-        const names = table.plans.map((p) => p.name);
-        if (!state.shiftPlan || names.indexOf(state.shiftPlan) === -1) {
-            const best = table.plans.slice().sort((a, b) => a.shifted[0] - b.shifted[0])[0];
-            state.shiftPlan = best.name;
-        }
-        if (state.shiftBudget == null || table.budgets.indexOf(state.shiftBudget) === -1) {
-            state.shiftBudget = table.budgets[Math.min(1, table.budgets.length - 1)];
-        }
-        const plan = table.plans.find((p) => p.name === state.shiftPlan);
-        const bi = table.budgets.indexOf(state.shiftBudget);
-        let m = `<div class="flex flex-wrap items-end gap-3 mb-2 text-sm">
-            <h4 class="font-semibold text-gray-800 mr-2">One plan, month by month</h4>
-            <label class="text-xs text-gray-600">Plan <select id="shiftPlanSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
-                ${names.map((nm) => `<option value="${Amber.escapeHTML(nm)}"${nm === state.shiftPlan ? ' selected' : ''}>${Amber.escapeHTML(Amber.planListLabel(nm, currentSiteNetwork()))}</option>`).join('')}
-            </select></label>
-            <label class="text-xs text-gray-600">Move <select id="shiftBudgetSelect" class="ml-1 border border-gray-300 rounded px-1 py-0.5 text-sm">
-                ${table.budgets.map((b) => `<option value="${b}"${b === state.shiftBudget ? ' selected' : ''}>${b} kWh a day</option>`).join('')}
-            </select></label>
-        </div>`;
-        m += `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Month')}${th('Amber', 1)}${th('incl. demand', 1)}${th('Plan as you used it', 1)}${th('Plan with use moved', 1)}${th('Difference', 1)}
-        </tr></thead><tbody class="divide-y divide-gray-200">`;
-        let tot = { amber: 0, demand: 0, metered: 0, shifted: 0 };
-        table.months.forEach((month) => {
-            const a = amber.byMonth[month];
-            const p = plan.byMonth[month];
-            const shifted = p.shifted[bi];
-            tot = { amber: tot.amber + a.total, demand: tot.demand + a.demand, metered: tot.metered + p.metered, shifted: tot.shifted + shifted };
-            m += monthRow(monthLabel(month), a.total, a.demand, p.metered, shifted, money, false);
-        });
-        m += monthRow('Total', tot.amber, tot.demand, tot.metered, tot.shifted, money, true);
-        m += '</tbody></table>';
-        $('batteryShiftMonthly').innerHTML = m;
-
-        $('shiftPlanSelect').addEventListener('change', (e) => {
-            state.shiftPlan = e.target.value;
-            saveShiftSettings();
-            drawBatteryShift(table);
-        });
-        $('shiftBudgetSelect').addEventListener('change', (e) => {
-            state.shiftBudget = parseFloat(e.target.value);
-            saveShiftSettings();
-            drawBatteryShift(table);
-        });
-    }
-
-    function monthRow(label, amber, demand, metered, shifted, money, isTotal) {
-        const diff = amber - shifted;
-        const cls = Math.abs(diff) < 0.005 ? 'text-gray-600' : (diff > 0 ? 'text-green-700' : 'text-red-700');
-        const text = Math.abs(diff) < 0.005 ? '—' : (diff > 0 ? `Plan ${money(diff)} cheaper` : `Amber ${money(-diff)} cheaper`);
-        const td = (c, extra) => `<td class="px-3 py-2 whitespace-nowrap text-right ${extra || ''}">${c}</td>`;
-        return `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
-            <td class="px-3 py-2 whitespace-nowrap">${label}</td>
-            ${td(money(amber))}${td(money(demand))}${td(money(metered))}${td(money(shifted), 'font-medium')}${td(text, cls)}
-        </tr>`;
-    }
-
-    // ---------- Usage CSV import ----------
-
-    function setUsageImportStatus(message, isError) {
-        const el = $('usageImportStatus');
-        el.classList.toggle('hidden', !message);
-        el.classList.toggle('text-red-700', !!isError);
-        el.classList.toggle('text-green-700', !!message && !isError);
-        el.textContent = message || '';
-    }
-
-    function setUsageImportProgress(fraction) {
-        const wrap = $('usageImportProgress');
-        wrap.classList.toggle('hidden', fraction == null);
-        $('usageImportBar').style.width = `${Math.round((fraction || 0) * 100)}%`;
-    }
-
-    async function siteForImport() {
-        const key = $('apiKey').value.trim();
-        if (!key) throw new Error('Add your Amber API key first, so the data can be matched to your site.');
-        if (!state.sites.some((s) => !s.local) || state.sitesApiKey !== key) {
-            const sites = await Amber.fetchSites(key);
-            populateSites(sites);
-            state.sitesApiKey = key;
-        }
-        const site = selectedSite();
-        if (!site) throw new Error('No sites found for this API key.');
-        if (site.local) throw new Error('The selected site is a household imported from NEM12. Choose your Amber site above, then import again.');
-        return site;
-    }
-
-    async function updateCacheSummary() {
-        const el = $('usageCacheSummary');
-        const site = selectedSite();
-        if (!el || !site || !root.indexedDB) return;
-        try {
-            const db = await Amber.openDb();
-            const cache = await Amber.loadAllSiteCache(db, site.id);
-            const days = cache.dates.filter((d) => cache.byDate[d] && cache.byDate[d].length).sort();
-            const imported = days.filter((d) => cache.byDate[d].some((i) => i.source === 'csv')).length;
-            el.textContent = days.length
-                ? `Cached for this site: ${days.length} day${days.length === 1 ? '' : 's'} (${fmtDate(days[0])} – ${fmtDate(days[days.length - 1])})${imported ? `, ${imported} from imports` : ''}.`
-                : '';
-        } catch (err) {
-            console.error(err);
-        }
-    }
-
-    async function handleUsageCsvFile(file) {
-        if (!file) return;
-        if (state.fetching) {
-            setUsageImportStatus('Wait for the Compare in progress to finish, then import again.', true);
-            return;
-        }
-        setUsageImportStatus('Reading the file…', false);
-        setUsageImportProgress(0);
-        try {
-            const site = await siteForImport();
-            const text = await file.text();
-            await Amber.sleep(0);
-            const parsed = Amber.parseAmberUsageCsv(text);
-            if (!parsed.ok) throw new Error(parsed.error);
-            setUsageImportStatus(`Read ${parsed.rows.toLocaleString('en-AU')} intervals over ${parsed.days.length} days. Saving…`, false);
-            await Amber.sleep(0);
-            const db = await Amber.openDb();
-            const cached = await Amber.loadSiteCacheDates(db, site.id, parsed.days);
-            // The last week is left to the API, which may still revise it.
-            const recentCutoff = Amber.addDays(Amber.formatForInput(Amber.localYesterday()), -6);
-            const timeZone = Amber.STATE_TIMEZONES[currentStateCode()] || 'Australia/Sydney';
-            // A tariff without a known demand window: learn it from the days Amber's API flagged.
-            const learnFrom = Amber.demandWindowForSite(site) ? null : (await Amber.loadAllSiteCache(db, site.id)).byDate;
-            const plan = Amber.planUsageImport(parsed, site, cached.byDate, { recentCutoff, timeZone, learnFrom });
-            await Amber.writeUsageImport(db, plan.write, (f) => setUsageImportProgress(f));
-            setUsageImportProgress(null);
-
-            const written = plan.write.map((e) => e.date);
-            const notes = [];
-            if (written.length) notes.push(`Imported ${written.length} day${written.length === 1 ? '' : 's'} of ${parsed.intervalMinutes}-minute data (${fmtDate(written[0])} – ${fmtDate(written[written.length - 1])}).`);
-            else notes.push('No new days to import.');
-            if (plan.kept) notes.push(plan.kept === 1 ? '1 day already cached from Amber\'s API was kept.' : `${plan.kept} days already cached from Amber's API were kept.`);
-            if (plan.recent) notes.push(plan.recent === 1 ? 'The last day is left for Amber\'s API.' : `The last ${plan.recent} days are left for Amber's API.`);
-            if (plan.partial) notes.push(plan.partial === 1 ? '1 part day was skipped.' : `${plan.partial} part days were skipped.`);
-            if (parsed.backup) notes.push('Original interval times, quality and demand flags restored from the backup.');
-            else if (plan.demandRule && plan.demandRule.learned) notes.push(`Demand window for ${plan.demandRule.tariff}, learned from the days Amber's API flagged: ${Amber.describeDemandWindow(plan.demandRule)}.`);
-            else if (plan.demandRule) notes.push(`Demand window flagged for ${plan.demandRule.tariff}: ${Amber.describeDemandWindow(plan.demandRule)}.`);
-            else notes.push('No demand window is known for this site\'s tariff (and none is flagged in the days cached from Amber\'s API), so imported days carry no demand charge.');
-            notes.push(...plan.notes);
-            setUsageImportStatus(notes.join(' '), false);
-            updateCacheSummary();
-
-            // Compare the whole months now available.
-            const span = Amber.wholeMonthSpan(written.concat(parsed.days.filter((d) => cached.byDate[d] && !written.includes(d) && d < recentCutoff)).sort());
-            state.cachedChannelData = null;
-            state.lastFetchTimestamp = null;
-            state.monthly = null;
-            state.batteryShift = null;
-            if (span) {
-                $('startDate').value = span.start;
-                $('endDate').value = span.end;
-                selectTab('compare');
-                fetchAndCompare();
-            }
-        } catch (err) {
-            console.error(err);
-            setUsageImportProgress(null);
-            setUsageImportStatus(err && err.message ? err.message : 'Could not import that file.', true);
-        } finally {
-            const input = $('usageCsvFile');
-            if (input) input.value = '';
-        }
-    }
-
-    // ---------- NEM12 import: households that aren't on Amber ----------
-
-    const ROLE_LABELS = { general: 'General use', controlledLoad: 'Controlled load', feedIn: 'Feed-in (export)', ignore: 'Leave out' };
-
-    function setNem12Status(message, isError) {
-        const el = $('nem12Status');
-        el.classList.toggle('hidden', !message);
-        el.classList.toggle('text-red-700', !!isError);
-        el.classList.toggle('text-gray-700', !isError);
-        el.textContent = message || '';
-    }
-
-    function fillSelect(select, options, value) {
-        select.innerHTML = '';
-        options.forEach((o) => {
-            const opt = document.createElement('option');
-            opt.value = o.value;
-            opt.textContent = o.label;
-            select.appendChild(opt);
-        });
-        if (options.some((o) => o.value === value)) select.value = value;
-    }
-
-    function nem12Selection() {
-        const p = state.nem12;
-        const net = Amber.NETWORKS[$('nem12Network').value];
-        return {
-            networkKey: $('nem12Network').value,
-            tariffCode: $('nem12Tariff').value,
-            exportCode: $('nem12ExportRow').classList.contains('hidden') ? '' : $('nem12Export').value,
-            clCode: $('nem12Controlled').value,
-            greenPower: $('nem12GreenPower').checked,
-            roles: p ? p.roles : {},
-            net
-        };
-    }
-
-    function renderNem12Options(keepTariff) {
-        const p = state.nem12;
-        const box = $('nem12Options');
-        if (!p) { box.classList.add('hidden'); return; }
-        box.classList.remove('hidden');
-        const nmiData = p.parsed.nmis[p.parsed.nmi];
-        // Every interval length in the file (a meter can switch from 30- to 5-minute readings).
-        const lens = Array.from(new Set([].concat(...Object.values(nmiData.channels).map((c) =>
-            Object.values(c.days).map((values) => 1440 / values.length))))).sort((a, b) => a - b);
-        const others = Object.keys(p.parsed.nmis).length - 1;
-        const gaps = (nmiData.incompleteDays || []).length;
-        $('nem12Summary').textContent = `NMI ${nmiData.nmi}: ${nmiData.days.length} days (${fmtDate(nmiData.firstDay)} – ${fmtDate(nmiData.lastDay)}) of ${lens.join('/')}-minute data.`
-            + (gaps ? ` ${gaps} day${gaps === 1 ? '' : 's'} with missing readings left out.` : '')
-            + (others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file left out.` : '');
-        fillSelect($('nem12Network'), [{ value: '', label: 'Choose the network…' }].concat(
-            Object.keys(Amber.NETWORKS).map((k) => ({ value: k, label: `${Amber.NETWORKS[k].name} (${Amber.NETWORKS[k].state})` }))), p.networkKey || '');
-        const net = Amber.NETWORKS[$('nem12Network').value];
-        const tariffSel = $('nem12Tariff');
-        const prevTariff = keepTariff ? tariffSel.value : null;
-        fillSelect(tariffSel, net ? Object.keys(net.tariffs).map((code) => ({ value: code, label: `${code}: ${net.tariffs[code].name}${code === net.defaultTariff ? ' (default)' : ''}` })) : [], prevTariff || (net && net.defaultTariff));
-        tariffSel.disabled = !net;
-        const tariff = net && net.tariffs[tariffSel.value];
-        const hasFeedIn = Object.values(p.roles).includes('feedIn');
-        const hasCl = Object.values(p.roles).includes('controlledLoad');
-        const exportOptions = net ? [{ value: '', label: 'None (feed-in at the wholesale price)' }].concat(
-            Object.keys(net.exportTariffs || {}).map((code) => ({ value: code, label: `${code}: ${net.exportTariffs[code].name}` }))) : [];
-        fillSelect($('nem12Export'), exportOptions, net ? (net.defaultExport || '') : '');
-        $('nem12ExportRow').classList.toggle('hidden', !net || !hasFeedIn || !!(tariff && tariff.export) || exportOptions.length < 2);
-        // A controlled load that also runs in the day is on the second (longer-hours) tariff.
-        const clCodes = net ? Object.keys(net.controlled || {}) : [];
-        const clChannel = Object.values(nmiData.channels).find((c) => p.roles[c.suffix] === 'controlledLoad');
-        const clGuess = clChannel && clCodes.length > 1 && Amber.nem12DaytimeShare(clChannel) > 0.1 ? clCodes[1] : (net && net.defaultControlled);
-        const prevCl = keepTariff ? $('nem12Controlled').value : null;
-        fillSelect($('nem12Controlled'), clCodes.map((code) => ({ value: code, label: `${code}: ${net.controlled[code].name}` })), prevCl && clCodes.includes(prevCl) ? prevCl : clGuess);
-        $('nem12ControlledRow').classList.toggle('hidden', !net || !hasCl || !!(tariff && tariff.controlled));
-        const rows = Object.values(nmiData.channels).map((c) => {
-            const opts = Object.keys(ROLE_LABELS).map((r) => `<option value="${r}"${p.roles[c.suffix] === r ? ' selected' : ''}>${ROLE_LABELS[r]}</option>`).join('');
-            return `<label class="inline-flex items-center gap-2 mr-4 mb-1">${Amber.escapeHTML(c.suffix)} (${Math.round(c.kwh).toLocaleString('en-AU')} kWh) <select data-nem12-role="${Amber.escapeHTML(c.suffix)}" class="border border-gray-300 rounded px-1 py-0.5 text-xs">${opts}</select></label>`;
-        });
-        $('nem12Channels').innerHTML = `<div class="mb-1 font-medium text-gray-700"><span data-help="nem12Channels" data-help-label="What each meter channel is">What each meter channel is</span></div>${rows.join('')}`;
-        document.querySelectorAll('[data-nem12-role]').forEach((sel) => {
-            sel.addEventListener('change', () => {
-                p.roles[sel.getAttribute('data-nem12-role')] = sel.value;
-                renderNem12Options(true);
-            });
-        });
-        $('nem12Build').disabled = !net;
-    }
-
-    async function handleNem12File(file) {
-        if (!file) return;
-        setNem12Status('Reading the file…', false);
-        try {
-            const text = await file.text();
-            await Amber.sleep(0);
-            const parsed = Amber.parseNem12(text);
-            if (!parsed.ok) throw new Error(parsed.error);
-            const nmiData = parsed.nmis[parsed.nmi];
-            state.nem12 = { parsed, roles: Amber.guessNem12Roles(nmiData), networkKey: Amber.networkForNmi(nmiData.nmi) || '' };
-            renderNem12Options();
-            setNem12Status(state.nem12.networkKey
-                ? 'Check the network tariff (it is on their bill, or ask the network), then choose Estimate Amber and compare.'
-                : 'Choose the electricity network and tariff, then Estimate Amber and compare.', false);
-        } catch (err) {
-            console.error(err);
-            state.nem12 = null;
-            renderNem12Options();
-            setNem12Status(err && err.message ? err.message : 'Could not read that file.', true);
-        } finally {
-            $('nem12File').value = '';
-        }
-    }
-
-    async function buildNem12Estimate() {
-        const p = state.nem12;
-        if (!p) return;
-        if (state.fetching) {
-            setNem12Status('Wait for the Compare in progress to finish, then try again.', true);
-            return;
-        }
-        const sel = nem12Selection();
-        if (!sel.net) { setNem12Status('Choose the electricity network first.', true); return; }
-        const nmiData = p.parsed.nmis[p.parsed.nmi];
-        $('nem12Build').disabled = true;
-        try {
-            setNem12Status('Loading wholesale prices…', false);
-            const months = Amber.priceMonthsFor(nmiData.firstDay, Amber.addDays(nmiData.lastDay, 1));
-            let prices;
-            try {
-                prices = await Amber.loadRegionPrices(sel.net.region, months);
-            } catch (err) {
-                throw new Error('Could not load wholesale prices. Open the app from its web address rather than as a file.');
-            }
-            setNem12Status('Pricing every interval…', false);
-            await Amber.sleep(0);
-            const est = Amber.estimateAmberUsage(nmiData, Object.assign({}, sel, { prices }));
-            const dates = Object.keys(est.days).sort();
-            if (!Object.keys(prices).length) throw new Error('Could not load wholesale prices for these dates. If the app was opened as a file, open it from its web address instead.');
-            if (!dates.length) throw new Error('There are no wholesale prices for these dates yet, so nothing could be estimated.');
-            const site = Amber.estimateSite(nmiData, sel);
-            site.firstDay = dates[0];
-            site.lastDay = dates[dates.length - 1];
-            site.capCreditCents = est.summary.capCreditCents;
-
-            const db = await Amber.openDb();
-            await Amber.deleteSiteCache(db, site.id);
-            await Amber.writeUsageImport(db, dates.map((d) => ({ id: `${site.id}_${d}`, data: est.days[d], date: d })));
-            const list = loadLocalSites().filter((s) => s.id !== site.id);
-            list.push(site);
-            saveLocalSites(list);
-            localStorage.setItem('selectedSiteId', site.id);
-            populateSites(state.sites);
-            $('siteSelector').value = site.id;
-            syncSiteMode();
-            updatePlanSelector(currentStateCode());
-            state.cachedChannelData = null;
-            state.lastFetchTimestamp = null;
-            state.monthly = null;
-            state.batteryShift = null;
-            state.batteryDetect = null;
-
-            const notes = [`Estimated Amber's prices for ${dates.length} days (${fmtDate(dates[0])} – ${fmtDate(dates[dates.length - 1])}) on ${sel.net.name} ${sel.tariffCode}.`];
-            if (est.missingPrice.length) notes.push(`${est.missingPrice.length} day${est.missingPrice.length === 1 ? ' has' : 's have'} no wholesale prices yet and ${est.missingPrice.length === 1 ? 'was' : 'were'} left out.`);
-            if (est.summary.capCreditCents > 0) notes.push(`Amber's quarterly wholesale price cap took $${(est.summary.capCreditCents / 100).toFixed(2)} off.`);
-            notes.push('Choose their current plan on the Compare tab.');
-            setNem12Status(notes.join(' '), false);
-
-            const span = Amber.wholeMonthSpan(dates);
-            $('startDate').value = span ? span.start : dates[0];
-            $('endDate').value = span ? span.end : dates[dates.length - 1];
-            selectTab('compare');
-            fetchAndCompare();
-        } catch (err) {
-            console.error(err);
-            setNem12Status(err && err.message ? err.message : 'Could not estimate Amber for that file.', true);
-        } finally {
-            $('nem12Build').disabled = false;
-        }
-    }
-
-    function renderLocalSites() {
-        const box = $('localSitesList');
-        if (!box) return;
-        const list = loadLocalSites();
-        if (!list.length) { box.innerHTML = ''; return; }
-        const current = selectedSite();
-        box.innerHTML = `<div class="font-medium text-gray-800 mb-1">Households imported here</div><ul class="space-y-1">${list.map((s) => {
-            const e = s.estimate || {};
-            const active = current && current.id === s.id;
-            return `<li class="flex flex-wrap items-center gap-2"><span>NMI ${Amber.escapeHTML(s.nmi)} · ${Amber.escapeHTML(s.network)} ${Amber.escapeHTML(e.tariffCode || '')} · ${fmtDate(s.firstDay)} – ${fmtDate(s.lastDay)}</span>
-                ${active ? '<span class="text-xs text-green-700">(selected)</span>' : `<button type="button" data-local-use="${Amber.escapeHTML(s.id)}" class="text-xs text-indigo-600 hover:underline">Use</button>`}
-                <button type="button" data-local-remove="${Amber.escapeHTML(s.id)}" class="text-xs text-red-700 hover:underline">Remove</button></li>`;
-        }).join('')}</ul>`;
-        box.querySelectorAll('[data-local-use]').forEach((btn) => btn.addEventListener('click', () => {
-            $('siteSelector').value = btn.getAttribute('data-local-use');
-            $('siteSelector').dispatchEvent(new Event('change'));
-        }));
-        box.querySelectorAll('[data-local-remove]').forEach((btn) => btn.addEventListener('click', async () => {
-            const id = btn.getAttribute('data-local-remove');
-            const wasSelected = $('siteSelector').value === id;
-            saveLocalSites(loadLocalSites().filter((s) => s.id !== id));
-            populateSites(state.sites);
-            if (wasSelected) {
-                state.cachedChannelData = null;
-                state.lastFetchTimestamp = null;
-                state.monthly = null;
-                state.batteryShift = null;
-            }
-            try { await Amber.deleteSiteCache(await Amber.openDb(), id); } catch (err) { console.error(err); }
-        }));
-    }
-
-    // ---------- Bill check ----------
-
-    const BILL_CHECK_KEY = 'amberBillCheck';
-
-    function fmtDate(iso) {
-        return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-    }
-
-    function billPeriodFinished(bill) {
-        return !!(bill && bill.ok && bill.end <= Amber.formatForInput(Amber.localYesterday()));
-    }
-
-    function billPeriodLoaded(bill) {
-        return !!(bill && state.cachedChannelData && state.lastFetchedStartDate
-            && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end);
-    }
-
-    const billKey = (bill) => (bill ? `${bill.start}|${bill.end}` : '');
-
-    /**
-     * Fetch the saved bill's period (once a Compare in progress finishes) unless it is already
-     * loaded. Opening the tab doesn't retry a bill period that already failed to load.
-     */
-    function ensureBillLoaded(opts) {
-        const bill = state.billCheck;
-        if (!billPeriodFinished(bill) || billPeriodLoaded(bill)) return;
-        if (!$('apiKey').value.trim()) { renderBillCheck(); return; }
-        const fromTab = !!(opts && opts.fromTab);
-        if (fromTab && state.billLoadFailed === billKey(bill)) { renderBillCheck(); return; }
-        if (!fromTab) state.billLoadFailed = null;
-        if (state.fetching) {
-            state.pendingBillLoad = true;
-            renderBillCheck();
-            return;
-        }
-        $('startDate').value = bill.start;
-        $('endDate').value = bill.end;
-        state.billLoading = billKey(bill);
-        fetchAndCompare();
-        renderBillCheck();
-    }
-
-    function renderBillCheck() {
-        const bill = state.billCheck;
-        const body = $('billCheckBody');
-        $('billCheckClear').classList.toggle('hidden', !bill && !state.billCheckError);
-        if (state.billCheckError) {
-            const e = state.billCheckError;
-            $('billCheckPeriod').textContent = '';
-            const found = (e.check && e.check.found) || [];
-            const missing = e.check && !e.check.start ? 'the billing period dates' : 'enough bill lines';
-            body.innerHTML = `<div class="p-3 rounded-md bg-amber-50 text-amber-800 text-sm">
-                <p class="font-medium">Couldn't check ${Amber.escapeHTML(e.name || 'that bill')}.</p>
-                <p>${e.message ? Amber.escapeHTML(e.message) : `Couldn't find ${missing}. Found: ${found.length ? Amber.escapeHTML(found.join(', ')) : 'nothing recognisable'}.`}</p>
-            </div>
-            ${e.text ? `<details class="mt-3 text-xs text-gray-600"><summary class="cursor-pointer">Show the text read from the bill</summary>
-                <p class="mt-2">This stays in your browser. Copying the charges part to the developer helps fix the reader.</p>
-                <pre class="mt-2 p-2 bg-gray-50 border rounded whitespace-pre-wrap break-words max-h-80 overflow-auto">${Amber.escapeHTML(e.text.substring(0, 6000))}</pre></details>` : ''}`;
-            return;
-        }
-        if (!bill || !bill.ok) {
-            $('billCheckPeriod').textContent = '';
-            body.innerHTML = '<p class="text-sm text-gray-600">Choose an Amber bill (the PDF Amber emails you) to check each line against your meter readings for the same dates. It\'s read here in your browser, and it also fills in Amber\'s fixed charges on the Start tab.</p>';
-            return;
-        }
-        const days = Amber.inclusiveDayCount(bill.start, bill.end);
-        $('billCheckPeriod').textContent = `Bill period: ${fmtDate(bill.start)} to ${fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are shown without GST, and so are the figures from your meter readings.`;
-        if (!billPeriodLoaded(bill)) {
-            let msg;
-            if (!billPeriodFinished(bill)) {
-                msg = 'The bill period hasn\'t finished yet, so there is no complete meter data to check against.';
-            } else if (!$('apiKey').value.trim()) {
-                msg = 'Add your Amber API key on the <button type="button" data-go-start class="text-indigo-600 hover:underline font-medium">Start</button> tab to check this bill against your meter data.';
-            } else if (state.fetching || state.pendingBillLoad) {
-                msg = 'Fetching your meter data for the bill period…';
-            } else if (state.billLoadFailed === billKey(bill)) {
-                msg = 'Couldn\'t load meter data for the bill period (see the message above). <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Try again</button>';
-            } else {
-                msg = 'The selected dates don\'t cover this bill. <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Check the bill period</button>';
-            }
-            body.innerHTML = `<p class="text-sm text-gray-600">${msg}</p>`;
-            const reload = body.querySelector('[data-bill-reload]');
-            if (reload) reload.addEventListener('click', () => ensureBillLoaded());
-            return;
-        }
-        // A bill is one settlement of the export allowance, whatever calendar months it covers.
-        const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, Object.assign(periodOpts(), { billPeriod: true }));
-        const rows = Amber.compareBill(bill, totals);
-        const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' || Math.abs(v) < 10 ? 2 : 1)} ${unit}`);
-        const fmtDiff = (v, unit) => {
-            if (Math.abs(v) < (unit === '$' ? 0.005 : 0.05)) return '—';
-            return (v > 0 ? '+' : '−') + fmtVal(Math.abs(v), unit);
-        };
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bill</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Meter data</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Difference</th>
-            <th class="px-3 py-2"></th></tr></thead><tbody class="divide-y divide-gray-200">`;
-        rows.forEach((r) => {
-            html += `<tr class="${r.ok ? '' : 'bg-amber-50'}">
-                <td class="px-3 py-2 text-gray-900">${Amber.escapeHTML(r.label)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.bill, r.unit)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.meter, r.unit)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap ${r.ok ? 'text-gray-600' : 'text-amber-800 font-semibold'}">${fmtDiff(r.diff, r.unit)}</td>
-                <td class="px-3 py-2 text-center">${r.ok ? '<span class="text-green-700" aria-label="matches">✓</span>' : '<span class="text-amber-700" aria-label="check">⚠</span>'}</td>
-            </tr>`;
-        });
-        html += '</tbody></table>';
-
-        const notes = [];
-        const bad = rows.filter((r) => !r.ok).map((r) => r.key);
-        if (!rows.length) notes.push('No matching lines were found on this bill.');
-        if (bad.includes('demandCost') && !bad.includes('demandKw') && totals.demandDays && totals.demandDays !== days) {
-            notes.push(`Peak demand matches but the charge doesn't: the bill charges demand for all ${days} days, while Amber's data marks only ${totals.demandDays} days as demand days.`);
-        }
-        if (totals.dataDays < days) notes.push(`Meter data is missing for ${days - totals.dataDays} day(s) of the bill period.`);
-        const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
-        if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
-        if (bill.otherCost) notes.push(`The charges total includes $${bill.otherCost.toFixed(2)} of other charges from the bill (e.g. a card payment fee) that aren't in meter data.`);
-        if (bill.voucherCredit) notes.push(`Vouchers & concessions of $${bill.voucherCredit.toFixed(2)} (without GST) are credited on the bill but aren't part of this check.`);
-        if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
-        const reward = rows.find((r) => r.key === 'exportRewardKwh');
-        if (reward) {
-            notes.push(reward.ok
-                ? 'Export reward kWh match your 4–9 pm exports: they are part of total exports (not extra), and the reward is already included in Amber\'s feed-in prices.'
-                : 'Export reward kWh don\'t match your 4–9 pm exports, so the reward window may be different.');
-        }
-        notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
-        html += `<ul class="text-xs text-gray-600 mt-3 space-y-1 list-disc pl-5">${notes.map((n) => `<li>${Amber.escapeHTML(n)}</li>`).join('')}</ul>`;
-        body.innerHTML = html;
-    }
-
-    function setupBillCheck() {
-        try {
-            const saved = JSON.parse(localStorage.getItem(BILL_CHECK_KEY) || 'null');
-            if (saved && saved.ok) state.billCheck = saved;
-        } catch (e) { /* ignore */ }
-        $('billCheckFile').addEventListener('change', (e) => handleAmberBillFile(e.target.files[0]));
-        $('billCheckClear').addEventListener('click', () => {
-            state.billCheck = null;
-            state.billCheckError = null;
-            try { localStorage.removeItem(BILL_CHECK_KEY); } catch (e) { /* ignore */ }
-            renderBillCheck();
-        });
-        renderBillCheck();
-    }
-
-    // ---------- More stats ----------
-
-    function currentTimeZone() {
-        return Amber.STATE_TIMEZONES[currentStateCode()] || 'Australia/Sydney';
-    }
-
-    function fmt(n, dp) {
-        return Number.isFinite(n) ? n.toFixed(dp == null ? 1 : dp) : '–';
-    }
-
-    function clearRetiredStatsStorage() {
-        // v1.19 kept Tesla uploads and overnight settings here; v1.20 removed that section.
-        try {
-            localStorage.removeItem('teslaHomeLoad');
-            localStorage.removeItem('nightStatsSettings');
-        } catch (e) { /* ignore */ }
-    }
-
-    function renderMoreStats() {
-        if (!state.cachedChannelData) return;
-        const s = Amber.moreStats(state.cachedChannelData, { timeZone: currentTimeZone() });
-        const section = $('moreStatsSection');
-        if (!s.dayCount) { section.classList.add('hidden'); return; }
-        section.classList.remove('hidden');
-        const money = (v) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
-        const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)}%` : '–');
-        const rows = [
-            ['Average price you paid', s.avgImportCents != null ? `${s.avgImportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.importKwh, 0)} kWh bought for ${money(s.importCost)}`,
-                'Your power cost (not counting daily charges) divided by the kWh you bought. Handy to compare with another plan\'s price per kWh.'],
-            ['Average paid for your solar', s.avgExportCents != null ? `${s.avgExportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.exportKwh, 0)} kWh sent out, ${money(s.exportEarn)} earned`,
-                'What Amber paid on average for each kWh of solar (or battery power) you sent to the grid.'],
-            ['Bought during price spikes (50c+)', `${fmt(s.spikeImportKwh)} kWh`, `${money(s.spikeImportCost)}, ${pct(s.spikeImportCost, s.importCost)} of your power cost`,
-                'Amber\'s price jumps when the market is short of power, sometimes to several dollars per kWh. This is how much you bought while it was 50 c/kWh or more. A battery or shifting use helps avoid these moments.'],
-            ['Sold during price spikes (50c+)', `${fmt(s.spikeExportKwh)} kWh`, `${money(s.spikeExportEarn)}, ${pct(s.spikeExportEarn, s.exportEarn)} of your solar credit`,
-                'Power you sent out while Amber\'s price was 50 c/kWh or more: the best-paid moments, usually on hot evenings.'],
-            ['Bought at negative prices', `${fmt(s.negImportKwh)} kWh`, `${money(s.negImportCredit)} paid to you`,
-                'On very sunny days there can be so much power that the price drops below zero, so you\'re paid to use it.'],
-            ['Sold at negative prices', `${fmt(s.negExportKwh)} kWh`, `${money(s.negExportCost)} cost`,
-                'When the price is below zero, sending solar to the grid costs you a little. Storing it in a battery or turning exports down avoids that.'],
-            ['Evening use (4pm to 9pm)', `${fmt(s.eveningImportKwh)} kWh`, `${pct(s.eveningImportKwh, s.importKwh)} of all power bought`,
-                'Power bought in the evening, when prices are usually highest. Moving use out of these hours saves the most.'],
-            ['Days with almost no grid power', `${s.gridFreeDays} of ${s.dayCount}`, 'under 0.5 kWh bought',
-                'Days you bought less than half a kWh from the grid in total, for example thanks to solar and a battery.'],
-            ['Days you sent out more than you bought', `${s.netExportDays} of ${s.dayCount}`, '',
-                'Days when the solar you sent to the grid was more than the power you bought from it.']
-        ];
-        $('moreStatsTable').innerHTML = `<table class="min-w-full divide-y divide-gray-200 text-sm"><tbody class="divide-y divide-gray-200">${rows.map((r) => `
-            <tr>
-                <td class="px-3 py-2 text-gray-900 font-medium"><span data-help="${Amber.escapeHTML(r[3])}" data-help-label="${Amber.escapeHTML(r[0])}">${Amber.escapeHTML(r[0])}</span></td>
-                <td class="px-3 py-2 text-right text-gray-900 whitespace-nowrap">${Amber.escapeHTML(r[1])}</td>
-                <td class="px-3 py-2 text-gray-500">${Amber.escapeHTML(r[2])}</td>
-            </tr>`).join('')}</tbody></table>`;
-    }
-
-
     async function recalculateAndShow(skipGraphs) {
         if (!state.cachedChannelData) return;
         const startDateStr = state.lastFetchedStartDate;
         const endDateStr = state.lastFetchedEndDate;
         const numDays = Amber.inclusiveDayCount(startDateStr, endDateStr);
-        const planConfig = createPlanObjectFromForm();
-        const rates = readAmberRates();
-        Amber.applyAmberFeedInSettlement(state.cachedChannelData, selectedSite(), numDays, { from: startDateStr, to: endDateStr });
-        Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, currentStateCode());
-        const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, currentStateCode());
+        const planConfig = app.createPlanObjectFromForm();
+        const rates = app.readAmberRates();
+        Amber.applyAmberFeedInSettlement(state.cachedChannelData, app.selectedSite(), numDays, { from: startDateStr, to: endDateStr });
+        Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, app.currentStateCode());
+        const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, app.currentStateCode());
         const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates);
         const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(
-            state.cachedAllChannelData || state.cachedChannelData, planConfig, rates, currentStateCode()
+            state.cachedAllChannelData || state.cachedChannelData, planConfig, rates, app.currentStateCode()
         );
         state.dailySummaries = summaries;
         state.demandInfoForTooltip = monthlyDemandInfo;
-        await displayResults(state.cachedChannelData, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemand, skipGraphs === true);
-    }
-
-    /** Take the results off every tab (before a new Compare, or when the readings are cleared). */
-    function hideResults() {
-        ['resultsSection', 'calendarSection', 'averageGraphContainer', 'dailyGraphSection', 'allPlansSection',
-            'batteryShiftSection', 'freePowerEmpty', 'moreStatsSection'].forEach((id) => $(id).classList.add('hidden'));
-        $('downloadCsvButton').disabled = true;
-        $('results-table-container').innerHTML = '';
-        destroyCharts();
+        await app.displayResults(state.cachedChannelData, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemand, skipGraphs === true);
     }
 
     async function fetchAndCompare() {
         if (state.fetching) return;
-        saveCustomPlan();
-        saveAllSettings();
+        app.saveCustomPlan();
+        app.saveAllSettings();
 
-        hideResults();
+        app.hideResults();
 
         const apiKey = $('apiKey').value.trim();
         const startDateValue = $('startDate').value;
@@ -2428,20 +367,20 @@
         localStorage.setItem('startDate', startDateValue);
         localStorage.setItem('endDate', endDateValue);
 
-        const chosen = selectedSite();
+        const chosen = app.selectedSite();
         const localMode = !!(chosen && chosen.local);
         if (!apiKey && !localMode) {
             selectTab('setup');
             $('apiKey').focus();
-            showMessage('First connect your Amber account (paste your API key below), or import meter readings if you are not with Amber yet.', true);
+            app.showMessage('First connect your Amber account (paste your API key below), or import meter readings if you are not with Amber yet.', true);
             return;
         }
         if (!startDateValue || !endDateValue) {
-            showMessage('Please select a start and end date.', true);
+            app.showMessage('Please select a start and end date.', true);
             return;
         }
         if (endDateValue < startDateValue) {
-            showMessage('End date cannot be before the start date.', true);
+            app.showMessage('End date cannot be before the start date.', true);
             return;
         }
         if (state.activeTab === 'setup') selectTab(state.resultsTab || 'compare');
@@ -2459,15 +398,15 @@
             if (localMode) {
                 // An estimated household: everything comes from its imported days, never the API.
             } else if (sites.some((s) => !s.local) && state.sitesApiKey === apiKey) {
-                populateSites(sites);
+                app.populateSites(sites);
             } else {
-                showMessage('Fetching your site details...');
+                app.showMessage('Fetching your site details...');
                 await Amber.sleep(0);
                 sites = await Amber.fetchSites(apiKey);
-                populateSites(sites);
+                app.populateSites(sites);
                 state.sitesApiKey = apiKey;
             }
-            const site = selectedSite();
+            const site = app.selectedSite();
             if (!site) throw new Error('No sites found for this API key.');
             if (state.currentSiteId !== site.id) state.amberCostBaseline = null;
             state.currentSiteId = site.id;
@@ -2482,13 +421,13 @@
                 && state.lastFetchedSiteId === site.id;
 
             if (cacheFresh) {
-                hideMessage();
+                app.hideMessage();
                 await recalculateAndShow(false);
                 return;
             }
 
             state.monthly = null;
-            showMessage(`Site found: ${site.nmi || site.id}. Preparing to fetch usage data...`);
+            app.showMessage(`Site found: ${site.nmi || site.id}. Preparing to fetch usage data...`);
             await Amber.sleep(0);
             const db = await Amber.openDb();
             const rangeDates = [];
@@ -2527,7 +466,7 @@
 
             const fetchRanges = Amber.buildFetchRanges(datesToFetch);
             const fetchNote = `${cachedDays} of ${numDays} days from cache; fetching ${datesToFetch.length} day(s) from Amber`;
-            if (fetchRanges.length) showMessage(`${fetchNote} (0/${fetchRanges.length} chunks)...`);
+            if (fetchRanges.length) app.showMessage(`${fetchNote} (0/${fetchRanges.length} chunks)...`);
             const chunkErrors = [];
             const failedRanges = [];
             let completedChunks = 0;
@@ -2577,12 +516,12 @@
             chunkResults.forEach((data) => selectedUsageData.push(...data));
 
             if (!selectedUsageData.length) {
-                if (localMode) throw new Error(`No imported meter data for NMI ${site.nmi} in these dates. Its data covers ${fmtDate(site.firstDay || '')} – ${fmtDate(site.lastDay || '')}.`);
+                if (localMode) throw new Error(`No imported meter data for NMI ${site.nmi} in these dates. Its data covers ${app.fmtDate(site.firstDay || '')} – ${app.fmtDate(site.lastDay || '')}.`);
                 const detail = chunkErrors.length ? chunkErrors.join(' ') : 'No usage returned.';
                 throw new Error(detail);
             }
 
-            showMessage('Calculating costs...');
+            app.showMessage('Calculating costs...');
             await Amber.sleep(0);
             const channelTotalsSelectedPeriod = {};
             channels.forEach((c) => {
@@ -2593,12 +532,12 @@
             Object.values(channelTotalsSelectedPeriod).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
             Amber.applyAmberFeedInSettlement(channelTotalsSelectedPeriod, site, numDays, { from: startDateValue, to: clampedEnd });
 
-            const planConfig = createPlanObjectFromForm();
-            const rates = readAmberRates();
-            Amber.calculateOtherSupplierCosts(channelTotalsSelectedPeriod, planConfig, currentStateCode());
-            const otherDemandInfo = Amber.calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, clampedEnd, planConfig, currentStateCode());
+            const planConfig = app.createPlanObjectFromForm();
+            const rates = app.readAmberRates();
+            Amber.calculateOtherSupplierCosts(channelTotalsSelectedPeriod, planConfig, app.currentStateCode());
+            const otherDemandInfo = Amber.calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, clampedEnd, planConfig, app.currentStateCode());
             const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates);
-            const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsSelectedPeriod, planConfig, rates, currentStateCode());
+            const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsSelectedPeriod, planConfig, rates, app.currentStateCode());
 
             state.lastFetchedStartDate = startDateValue;
             state.lastFetchedEndDate = clampedEnd;
@@ -2610,22 +549,22 @@
             state.demandInfoForTooltip = monthlyDemandInfo;
 
             if (chunkErrors.length) {
-                showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
+                app.showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
             } else if (localMode && localMissing) {
-                showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so this comparison is incomplete. Fixed charges still cover the full selected period.`, true);
+                app.showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so this comparison is incomplete. Fixed charges still cover the full selected period.`, true);
             } else if (cacheWriteFailed) {
-                showMessage('Your results are below, but this browser couldn\'t save the meter readings (its storage may be full), so they will download again next time.', true);
+                app.showMessage('Your results are below, but this browser couldn\'t save the meter readings (its storage may be full), so they will download again next time.', true);
             } else {
-                hideMessage();
+                app.hideMessage();
             }
 
-            await displayResults(channelTotalsSelectedPeriod, startDateValue, clampedEnd, numDays, demandTariffInfo, otherDemandInfo, false);
+            await app.displayResults(channelTotalsSelectedPeriod, startDateValue, clampedEnd, numDays, demandTariffInfo, otherDemandInfo, false);
 
             // Month by month loads after the main results so they appear first.
             try {
                 await Amber.sleep(0);
-                state.monthly = loadMonthlyData(channels, selectedUsageData, startDateValue, clampedEnd);
-                renderMonthly();
+                state.monthly = app.loadMonthlyData(channels, selectedUsageData, startDateValue, clampedEnd);
+                app.renderMonthly();
             } catch (err) {
                 console.error(err);
             }
@@ -2634,18 +573,18 @@
             state.cachedChannelData = null;
             state.monthly = null;
             state.dailySummaries = {};
-            showMessage(`Error: ${error.message}`, true);
+            app.showMessage(`Error: ${error.message}`, true);
         } finally {
             setFetching(false);
             if (state.billLoading) {
-                if (!billPeriodLoaded(state.billCheck) && billKey(state.billCheck) === state.billLoading) state.billLoadFailed = state.billLoading;
+                if (!app.billPeriodLoaded(state.billCheck) && app.billKey(state.billCheck) === state.billLoading) state.billLoadFailed = state.billLoading;
                 state.billLoading = null;
             }
             if (state.pendingBillLoad) {
                 state.pendingBillLoad = false;
-                setTimeout(() => ensureBillLoaded(), 0);
+                setTimeout(() => app.ensureBillLoaded(), 0);
             } else {
-                renderBillCheck();
+                app.renderBillCheck();
             }
         }
     }
@@ -2661,103 +600,19 @@
         return `Couldn't load ${days} day(s): ${spans}. ${reason} Totals below leave those days out. Loaded days are cached, so click Compare again in a few minutes to fill the gaps.`;
     }
 
-    // A short note under the page title for the settings menu's actions, so it shows on every tab.
-    let settingsMessageTimer = null;
-    function showSettingsMessage(text, colourClass, clearAfterMs) {
-        const msg = $('cacheMessage');
-        msg.textContent = text;
-        msg.className = `text-sm mt-2 font-medium ${colourClass}`;
-        clearTimeout(settingsMessageTimer);
-        if (clearAfterMs) settingsMessageTimer = setTimeout(() => { msg.textContent = ''; }, clearAfterMs);
-    }
+    // ---------- Start-up ----------
 
-    function closeSettingsMenu() {
-        $('settingsMenu').classList.add('hidden');
-        $('settingsBtn').setAttribute('aria-expanded', 'false');
-    }
-
-    /** "Clear saved meter readings": empty the cache, and everything worked out from it. */
-    async function clearSavedReadings() {
-        closeSettingsMenu();
-        if (state.fetching) {
-            showSettingsMessage('Wait for the Compare in progress to finish, then try again.', 'text-orange-600', 8000);
-            return;
-        }
-        const households = loadLocalSites().length;
-        const question = 'Clear all saved meter readings?\n\n'
-            + 'Readings from Amber download again next time (about the last 3 months). Older readings you imported from a file will need importing again.'
-            + (households ? `\n\n${households === 1 ? 'The household' : `The ${households} households`} imported from NEM12 files will be removed.` : '');
-        if (!window.confirm(question)) return;
-        showSettingsMessage('Clearing saved meter readings…', 'text-yellow-600');
+    function clearRetiredStatsStorage() {
+        // v1.19 kept Tesla uploads and overnight settings here; v1.20 removed that section.
         try {
-            await Amber.deleteDatabase();
-        } catch (err) {
-            // Only a tab still running an older version of the app holds the database open.
-            if (err && err.message === 'blocked') showSettingsMessage('Couldn\'t clear the readings yet: the app is open in another tab or window. Close it there, then try again.', 'text-orange-600', 12000);
-            else showSettingsMessage('Couldn\'t clear the saved meter readings.', 'text-red-600', 12000);
-            return;
-        }
-        // An imported household is only its readings, so it goes too.
-        saveLocalSites([]);
-        state.cachedChannelData = null;
-        state.cachedAllChannelData = null;
-        state.lastResultDataPayload = null;
-        state.monthly = null;
-        state.dailySummaries = {};
-        state.lastFetchedStartDate = null;
-        state.lastFetchedEndDate = null;
-        state.lastFetchTimestamp = null;
-        state.batteryShift = null;
-        state.batteryDetect = null;
-        hideResults();
-        hideMessage();
-        $('calendar-container').innerHTML = '';
-        $('monthlySection').classList.add('hidden');
-        populateSites(state.sites);
-        syncConnectedUi();
-        updatePlanSavings();
-        renderBillCheck();
-        updateCacheSummary();
-        // Solar+? has no dates bar, and shows what it can still work from.
-        if (state.activeTab === 'plan') {
-            $('configSection').classList.add('hidden');
-            $('resultTools').classList.add('hidden');
-            if (Amber.plannerUi) Amber.plannerUi.show();
-        }
-        showSettingsMessage('Saved meter readings cleared.', 'text-green-600', 8000);
-    }
-
-    function buildSettingsMenu() {
-        $('settingsMenu').innerHTML = `
-            <button type="button" id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear saved meter readings<span class="block text-xs text-gray-500">They download again from Amber next time (about the last 3 months only). Imported files need importing again</span></button>
-            <div class="border-t border-gray-100"></div>
-            <button type="button" id="clearCustomPlansBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Delete plans I typed in<span class="block text-xs text-gray-500">The built-in plans stay</span></button>
-        `;
-        $('clearCustomPlansBtn').addEventListener('click', () => {
-            closeSettingsMenu();
-            if (!window.confirm('Delete ALL saved custom plans? This cannot be undone.')) return;
-            const oldCustomPlans = storedCustomPlans();
-            localStorage.removeItem('customSupplierPlans');
-            Object.keys(oldCustomPlans).forEach((stateCode) => {
-                if (!state.templates[stateCode]) return;
-                Object.keys(oldCustomPlans[stateCode]).forEach((planName) => {
-                    if (!isBuiltInPlan(stateCode, planName)) delete state.templates[stateCode][planName];
-                });
-            });
-            const previouslySelected = $('planSelector').value;
-            updatePlanSelector($('stateSelector').value);
-            if (previouslySelected && !(state.templates[$('stateSelector').value] || {})[previouslySelected]) {
-                $('planSelector').value = '';
-                clearPlanInputs();
-            }
-            showSettingsMessage('The plans you typed in were deleted.', 'text-green-600', 8000);
-        });
-        $('clearCacheBtn').addEventListener('click', clearSavedReadings);
+            localStorage.removeItem('teslaHomeLoad');
+            localStorage.removeItem('nightStatsSettings');
+        } catch (e) { /* ignore */ }
     }
 
     function init() {
         Amber.registerChartPlugins();
-        mergeCustomPlans();
+        app.mergeCustomPlans();
         const versionLabel = `Amber Compare & Export v${Amber.APP_VERSION}`;
         document.title = versionLabel;
 
@@ -2788,217 +643,25 @@
             option.textContent = stateCode;
             $('stateSelector').appendChild(option);
         });
-        loadAllSettings();
-        loadShiftSettings();
+        app.loadAllSettings();
+        app.loadShiftSettings();
         clearRetiredStatsStorage();
-        $('usageCsvFile').addEventListener('change', (e) => handleUsageCsvFile(e.target.files[0]));
-        setupBillCheck();
-        if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
-        if (!$('tou_shoulder_windows_container').children.length) addTouWindow('shoulder');
-        setRatesDetailsOpen(localStorage.getItem('ratesDetailsOpen') === 'true', false);
+        app.setupImports();
+        app.setupBillCheck();
+        app.setupPlanForm();
+        app.setupFreeTab();
+        setupAccount();
+        setupResultTools();
+        app.setupSettingsMenu();
 
-        $('ratesDetailsToggle').addEventListener('click', (e) => {
-            e.preventDefault();
-            setRatesDetailsOpen($('ratesDetails').classList.contains('hidden'));
-        });
-        $('amberBillFile').addEventListener('change', (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (file) handleAmberBillFile(file);
-        });
-        $('stateSelector').addEventListener('change', (e) => {
-            // A plan from the old state gives way to the new state's usual plan (or to blank own
-            // rates when the state has none for this network); rates typed in by hand stay.
-            state.stateChosenByHand = true;
-            updatePlanSelector(e.target.value);
-            saveAllSettings();
-            if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(false);
-            else updatePlanSavings();
-        });
-        $('planSelector').addEventListener('change', () => {
-            selectSupplierPlan($('planSelector').value, { fromChange: true });
-        });
-        $('planName').addEventListener('input', () => {
-            updateOtherSupplierHeading();
-            saveAllSettings();
-        });
-        $('enableDemandTariff').addEventListener('change', (e) => {
-            $('demandTariffInputs').classList.toggle('hidden', !e.target.checked);
-            saveAllSettings();
-        });
-        $('enableFeedInTou').addEventListener('change', (e) => {
-            $('feedInWindowsSection').classList.toggle('hidden', !e.target.checked);
-            if (e.target.checked && !$('feedInWindowsContainer').children.length) {
-                addWindowRow($('feedInWindowsContainer'), { start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5, 6, 0], rate: 10 }, true);
-            }
-            saveAllSettings();
-        });
-        $('addFeedInWindowBtn').addEventListener('click', () => {
-            addWindowRow($('feedInWindowsContainer'), { start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5, 6, 0], rate: 10 }, true);
-            saveAllSettings();
-        });
-        ['shiftBudgets', 'shiftBatteryKwh', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
-            $(id).addEventListener('change', () => {
-                saveShiftSettings();
-                renderBatteryShift();
-            });
-        });
-        document.querySelectorAll('[data-add-tou-window]').forEach((btn) => {
-            btn.addEventListener('click', () => addTouWindow(btn.getAttribute('data-add-tou-window')));
-        });
-        document.querySelectorAll('#planChooser input, #planChooser select, #setupSection input').forEach((el) => {
-            if (el.type === 'file' || ['stateSelector', 'planSelector', 'planName', 'apiKey', 'rememberApiKey', 'siteSelector'].includes(el.id)) return;
-            el.addEventListener('input', saveAllSettings);
-        });
-        // Amber's charges change the results straight away.
-        ['amberConnectionRate', 'amberSubscriptionRate', 'amberDemandRate', 'amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => {
-            $(id).addEventListener('change', () => {
-                saveAllSettings();
-                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
-            });
-        });
-        $('rateTypeSelector').addEventListener('change', () => {
-            const selectedType = document.querySelector('input[name="rateType"]:checked').value;
-            $('flatRateSection').classList.toggle('hidden', selectedType !== 'flat');
-            $('touRateSection').classList.toggle('hidden', selectedType !== 'tou');
-            saveAllSettings();
-        });
-        $('datePresets').addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-preset]');
-            if (!btn) return;
-            applyDatePreset(btn.getAttribute('data-preset'));
-        });
-        $('fetchData').addEventListener('click', fetchAndCompare);
-        $('siteSelector').addEventListener('change', () => {
-            state.cachedChannelData = null;
-            state.monthly = null;
-            state.lastFetchTimestamp = null;
-            state.batteryShift = null;
-            state.stateChosenByHand = false;
-            syncSiteMode();
-            updatePlanSelector(currentStateCode());
-            saveAllSettings();
-            renderLocalSites();
-        });
-        $('rememberApiKey').addEventListener('change', () => {
-            const key = $('apiKey').value.trim();
-            if (key) Amber.setApiKey(key, $('rememberApiKey').checked);
-            else if (!$('rememberApiKey').checked) Amber.clearApiKey();
-        });
-        $('gstToggle').addEventListener('change', () => {
-            if (state.lastResultDataPayload) {
-                displayResults(
-                    state.lastResultDataPayload.channelTotals,
-                    state.lastResultDataPayload.startDateStr,
-                    state.lastResultDataPayload.endDateStr,
-                    state.lastResultDataPayload.numDays,
-                    state.lastResultDataPayload.demandTariffInfo,
-                    state.lastResultDataPayload.otherDemandTariffInfo,
-                    true
-                );
-            }
-        });
-
-        const csvMenu = $('csvDropdownMenu');
-        $('downloadCsvButton').addEventListener('click', (event) => {
-            event.stopPropagation();
-            if (!$('downloadCsvButton').disabled) csvMenu.classList.toggle('hidden');
-        });
-        window.addEventListener('click', (event) => {
-            if (!csvMenu.contains(event.target) && !$('downloadCsvButton').contains(event.target)) csvMenu.classList.add('hidden');
-            if (!$('settingsMenu').contains(event.target) && !$('settingsBtn').contains(event.target)) {
-                $('settingsMenu').classList.add('hidden');
-                $('settingsBtn').setAttribute('aria-expanded', 'false');
-            }
-        });
-        // Escape closes whichever menu is open and hands the keyboard back to its button.
-        document.addEventListener('keydown', (event) => {
-            if (event.key !== 'Escape') return;
-            if (!csvMenu.classList.contains('hidden')) {
-                csvMenu.classList.add('hidden');
-                $('downloadCsvButton').focus();
-            }
-            if (!$('settingsMenu').classList.contains('hidden')) {
-                closeSettingsMenu();
-                $('settingsBtn').focus();
-            }
-        });
-        $('downloadFullIntervalCsv').addEventListener('click', (e) => {
-            e.preventDefault();
-            if (!state.cachedChannelData) return;
-            Amber.generateFullIntervalCsv(state.cachedChannelData, state.lastFetchedStartDate, state.lastFetchedEndDate);
-            csvMenu.classList.add('hidden');
-        });
-        $('downloadDailySummaryCsv').addEventListener('click', (e) => {
-            e.preventDefault();
-            Amber.generateDailySummariesCsv(state.dailySummaries, {
-                amberRates: readAmberRates(),
-                otherDailyCents: parseFloat($('dailyConnectionRate').value) || 0,
-                startDate: state.lastFetchedStartDate,
-                endDate: state.lastFetchedEndDate
-            });
-            csvMenu.classList.add('hidden');
-        });
-        $('downloadResultsTableCsv').addEventListener('click', (e) => {
-            e.preventDefault();
-            const table = document.querySelector('#results-table-container table');
-            if (!table) return;
-            Amber.generateResultsTableCsv(table, state.lastFetchedStartDate, state.lastFetchedEndDate);
-            csvMenu.classList.add('hidden');
-        });
-
-        buildSettingsMenu();
-        $('settingsBtn').addEventListener('click', (event) => {
-            event.stopPropagation();
-            const open = $('settingsMenu').classList.toggle('hidden');
-            $('settingsBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
-        });
-
-        async function tryLoadSites(key) {
-            if (!key || key.length < 8) return;
-            if (state.sites.length && state.sitesApiKey === key) return;
-            try {
-                const sites = await Amber.fetchSites(key);
-                populateSites(sites);
-                state.sitesApiKey = key;
-                updateCacheSummary();
-            } catch (err) {
-                /* ignore until Compare */
-            }
-        }
-        function resetSitesIfKeyChanged(key) {
-            if (state.sitesApiKey && key !== state.sitesApiKey) {
-                Amber.clearSitesCache();
-                state.sitesApiKey = null;
-                populateSites([]);
-            }
-        }
-        let siteFetchTimer = null;
-        $('apiKey').addEventListener('input', () => {
-            resetSitesIfKeyChanged($('apiKey').value.trim());
-            syncConnectedUi();
-        });
-        $('apiKey').addEventListener('blur', () => {
-            const key = $('apiKey').value.trim();
-            Amber.setApiKey(key, $('rememberApiKey').checked);
-            resetSitesIfKeyChanged(key);
-            clearTimeout(siteFetchTimer);
-            siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
-        });
-        $('nem12File').addEventListener('change', (e) => handleNem12File(e.target.files && e.target.files[0]));
-        $('nem12Network').addEventListener('change', () => {
-            if (state.nem12) state.nem12.networkKey = $('nem12Network').value;
-            renderNem12Options();
-        });
-        $('nem12Tariff').addEventListener('change', () => renderNem12Options(true));
-        $('nem12Build').addEventListener('click', buildNem12Estimate);
-        populateSites([]);
+        app.populateSites([]);
         syncConnectedUi();
         if (storedKey.key) tryLoadSites(storedKey.key);
         state.ready = true;
-        const localSelected = !!(selectedSite() && selectedSite().local);
+        const localSelected = !!(app.selectedSite() && app.selectedSite().local);
         // With a saved key, open on this month's figures (or the saved bill's period on Bill Check).
         if (localSelected && Amber.AUTO_COMPARE) {
-            const site = selectedSite();
+            const site = app.selectedSite();
             const days = [];
             for (let d = site.firstDay; d && d <= site.lastDay; d = Amber.addDays(d, 1)) days.push(d);
             const span = Amber.wholeMonthSpan(days);
@@ -3008,27 +671,32 @@
             }
             fetchAndCompare();
         } else if (storedKey.key && Amber.AUTO_COMPARE) {
-            if (state.activeTab === 'bill' && billPeriodFinished(state.billCheck)) ensureBillLoaded();
+            if (state.activeTab === 'bill' && app.billPeriodFinished(state.billCheck)) app.ensureBillLoaded();
             else applyDatePreset('thisMonth');
         }
     }
 
+    // What the other app-*.js files use from this one.
+    Object.assign(app, {
+        selectTab, syncConnectedUi, recalculateAndShow, fetchAndCompare
+    });
+
+    // What the Solar & battery tab (planner-ui.js) reads from the rest of the app.
+    Amber.appApi = {
+        selectedSite: app.selectedSite,
+        currentStateCode: app.currentStateCode,
+        readAmberRates: app.readAmberRates,
+        templates: () => state.templates,
+        selectedPlanName: () => $('planSelector').value,
+        selectTab
+    };
+
+    // Every file is loaded by now, so everything on Amber.app is in place before init runs.
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
 
-    // What the Solar & battery tab (planner-ui.js) reads from the rest of the app.
-    Amber.appApi = {
-        selectedSite,
-        currentStateCode,
-        readAmberRates,
-        templates: () => state.templates,
-        selectedPlanName: () => $('planSelector').value,
-        selectTab
-    };
-
-    Amber._appState = state;
     if (typeof module === 'object' && module.exports) module.exports = Amber;
 })(typeof window !== 'undefined' ? window : globalThis);
