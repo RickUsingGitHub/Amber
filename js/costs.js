@@ -126,7 +126,6 @@
         };
         (channel.usageData || []).forEach((item) => {
             const kwh = Amber.absKwh(item.kwh);
-            const perKwh = parseFloat(item.perKwh) || 0;
             const splits = capped && capped.get(item);
             if (splits) {
                 splits.forEach((s) => {
@@ -490,7 +489,7 @@
         if (maxDemandKwh === 0) return empty;
 
         let applicableDaysCount = 0;
-        let currentDate = new Date(startDateStr + 'T00:00:00');
+        const currentDate = new Date(startDateStr + 'T00:00:00');
         const endDate = new Date(endDateStr + 'T00:00:00');
         while (currentDate <= endDate) {
             if (demandDays.includes(currentDate.getDay())) applicableDaysCount++;
@@ -577,11 +576,6 @@
         const numDays = opts.numDays;
         const state = opts.state;
         const gstInclusive = opts.gstInclusive !== false;
-        const amberRates = opts.amberRates || {
-            connectionCents: Amber.DEFAULT_AMBER_CONNECTION_CENTS,
-            subscriptionCents: Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS,
-            demandCents: Amber.DEFAULT_AMBER_DEMAND_CENTS
-        };
 
         const temp = Amber.shallowChannelCopy(channelTotals);
         Amber.calculateOtherSupplierCosts(temp, planConfig, state);
@@ -634,7 +628,6 @@
                 if (!summaries[dateStr]) return;
 
                 const kwh = Amber.absKwh(item.kwh);
-                const perKwh = parseFloat(item.perKwh) || 0;
                 const amberItemCost = Amber.settledFeedInItemCost(channel, item);
                 const otherItemCost = Amber.otherItemCostCents(item, channel.type, planConfig, state, capped) / 100;
 
@@ -734,7 +727,7 @@
                 });
             }
 
-            let loopDate = new Date(monthStartDate);
+            const loopDate = new Date(monthStartDate);
             while (loopDate <= monthEndDate) {
                 const dateStr = Amber.formatForInput(loopDate);
                 if (summaries[dateStr]) {

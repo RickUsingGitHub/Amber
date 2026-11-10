@@ -127,6 +127,7 @@ The app is written for everyday Australian householders:
 
 ```bash
 npm run build:css
+npm run lint
 npm test                       # or: npx playwright test tests/planner.spec.js
 npm run serve                  # then open http://127.0.0.1:4173
 ```

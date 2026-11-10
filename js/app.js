@@ -83,7 +83,7 @@
     /** Fill Setup's Amber charges from storage (the Amber account's own charges). */
     function loadAmberChargeFields() {
         let storedConn = localStorage.getItem('amberConnectionRate');
-        let storedSub = localStorage.getItem('amberSubscriptionRate');
+        const storedSub = localStorage.getItem('amberSubscriptionRate');
         let storedDemand = localStorage.getItem('amberDemandRate');
         const storedPrev = ['amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].map((id) => localStorage.getItem(id));
         // Before v1.40 there was one set of charges; the old defaults (and bills that matched them)
@@ -1237,7 +1237,7 @@
         const selector = $('daySelector');
         selector.innerHTML = '';
         const datesArray = [];
-        let currentDate = new Date(startDateStr + 'T00:00:00');
+        const currentDate = new Date(startDateStr + 'T00:00:00');
         const end = new Date(endDateStr + 'T00:00:00');
         while (currentDate <= end) {
             datesArray.push(Amber.formatForInput(currentDate));
@@ -1286,7 +1286,6 @@
         }).join('');
     }
 
-    /** "$12.34" / "−$6.45" (proper minus sign before the dollar sign). */
     // Plain names for meter channels.
     function channelName(c) {
         if (c.type === 'feedIn') return 'Solar sent out';
@@ -1294,12 +1293,12 @@
         return 'Power bought';
     }
 
-    function money(v) {
-        const n = Number(v) || 0;
-        return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
-    }
-
     async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
+        // "$12.34" / "−$6.45" (proper minus sign before the dollar sign).
+        const money = (v) => {
+            const n = Number(v) || 0;
+            return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
+        };
         const planName = $('planName').value.trim() || 'your plan';
         const period = `(${fmtDate(startDateStr)} to ${fmtDate(endDateStr)})`;
         const rates = readAmberRates();
@@ -1405,7 +1404,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
+                    ${demandMonthsHtml(demandTariffInfo.months) || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
@@ -1423,7 +1422,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">× ${dayCount} applicable days</div>`}
+                    ${demandMonthsHtml(otherDemandTariffInfo.months) || `<div class="text-xs">× ${dayCount} applicable days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
