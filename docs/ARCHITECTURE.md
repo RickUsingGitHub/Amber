@@ -25,7 +25,9 @@ scripts/update-prices.js Downloads AEMO prices into data/prices (run daily by a 
 scripts/update-solar.js  Downloads PVGIS weather into data/solar (run by hand)
 tests/unit-*.js          Node unit checks (no framework: assert + console)
 tests/*.spec.js          Playwright end-to-end tests (Chromium)
-.github/workflows/       test.yml (tests on PRs and main), update-prices.yml (daily price refresh)
+eslint.config.js         ESLint settings (npm run lint)
+eslint-rules/            The project's own ESLint rules (no-extra-arguments)
+.github/workflows/       test.yml (lint and tests on PRs and main), update-prices.yml (daily price refresh)
 chart.umd.min.js, chartjs-plugin-zoom.min.js, pdf.min.js, pdf.worker.min.js   Vendored libraries
 ```
 
@@ -218,9 +220,10 @@ Saved JSON is read through `storedJson` / `storedCustomPlans` in `app.js`: a val
 ## Build, test and CI
 
 - `npm run build:css` rebuilds `css/app.css`. Tailwind scans `index.html` and `js/**/*.js` for class names, and `tailwind.config.js` safelists classes that are only built dynamically. Commit `css/app.css` after changing classes.
-- **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
-- **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 54 tests take about 45 s with two workers.
-- **CI**: `.github/workflows/test.yml` runs `npm ci`, installs Chromium and runs `npm test -- --workers=2` on every pull request and on pushes to `main`. Failed runs upload `test-results/`.
+- **Lint**: `npm run lint` runs ESLint 10 with `eslint.config.js` (a flat config). The files in `js/` are checked as classic browser scripts, and the unit checks, scripts and specs as CommonJS. On top of ESLint's recommended set it reports unused variables, shadowed names, `var`, `==` and a `let` that never changes, and holds the house style (4-space indent, single quotes, semicolons, from `@stylistic/eslint-plugin`). One rule is the project's own: `local/no-extra-arguments` (`eslint-rules/no-extra-arguments.js`) reports a call that passes more arguments than the function takes, for functions and `Amber.*` functions defined in the same file. Rules are tuned to the code rather than the code restyled: the tests keep their own alignment of long asserts, and `preserve-caught-error` is off because network errors are replaced on purpose by plain messages.
+- **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-syntax.js` runs first: it parses every `js/*.js` (no other unit script loads the DOM files such as `help.js` and `app.js`) and checks that `index.html` loads each of them once, with `app.js` last. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
+- **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 66 tests take about a minute with two workers.
+- **CI**: `.github/workflows/test.yml` runs `npm ci`, `npm run lint`, installs Chromium and runs `npm test -- --workers=2` on every pull request and on pushes to `main`. Failed runs upload `test-results/`.
 
 ## Releases
 
@@ -228,4 +231,4 @@ Each change ships as a version:
 
 1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert).
 2. `npm run build:css` if classes changed; update the README and these docs if behaviour changed.
-3. Run `npm test`, open a pull request, and merge once the Tests check passes. GitHub Pages serves `main`.
+3. Run `npm run lint` and `npm test`, open a pull request, and merge once the Tests check passes. GitHub Pages serves `main`.

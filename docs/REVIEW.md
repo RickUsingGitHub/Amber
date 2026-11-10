@@ -7,11 +7,12 @@ Notes for anyone reviewing this codebase: what it must keep doing, where mistake
 ```bash
 npm install
 npm run build:css
-npm test            # ~10 unit scripts, then ~54 Playwright tests (~45 s with --workers=2)
+npm run lint        # ESLint
+npm test            # ~11 unit scripts, then ~66 Playwright tests (~60 s with --workers=2)
 npm run serve       # http://127.0.0.1:4173
 ```
 
-Without an Amber API key, use the "Not with Amber?" path on Start with a NEM12 file. The tests build them in code (`nem12Year()`, `nem12Battery()` in `tests/planner.spec.js`). CI runs the same `npm test` on every pull request (`.github/workflows/test.yml`).
+Without an Amber API key, use the "Not with Amber?" path on Start with a NEM12 file. The tests build them in code (`nem12Year()`, `nem12Battery()` in `tests/planner.spec.js`). CI runs `npm run lint` and the same `npm test` on every pull request (`.github/workflows/test.yml`).
 
 ## Invariants: what must stay true
 
@@ -44,7 +45,7 @@ These are the properties the tests guard and that users rely on. A change that b
 
 - **`app.js` is a monolith.** Tabs, plan form, results, imports, bill check, Free? and settings live in one IIFE sharing a `state` object. Natural seams: the plan form (`createPlanObjectFromForm`, `applyPlanTemplate`, TOU windows), results rendering, imports (CSV, NEM12, local sites), the bill check, the Free? tab and settings.
 - **HTML as strings.** Most results are template strings set with `innerHTML`, with table markup repeated (`th`/`td` helpers exist only in `planner-ui.js`). It's safe while everything is escaped, but verbose and easy to make inconsistent.
-- **No linter, formatter or type checking.** There's no ESLint or Prettier config; the style is 4-space indentation, single quotes and semicolons. JSDoc comments exist on many engine functions but not throughout.
+- **No formatter or type checking.** ESLint (`npm run lint`, run in CI) catches unused and shadowed variables, undefined names and calls with too many arguments within a file, and holds the style (4-space indentation, single quotes, semicolons). There's no Prettier, and nothing checks types or calls between files. JSDoc comments exist on many engine functions but not throughout.
 - **Home-made unit test harness.** `tests/unit-*.js` use their own `assert` and print `ok:`/`FAIL:`. They work, but give no per-test isolation or coverage.
 - **End-to-end tests depend on IDs and wording.** Many assertions match visible text, so copy edits need test edits too.
 - **Yearly maintenance is manual.** Each 1 July: the default offers and VDO in `templates.js`, Amber's network tariffs in `networks.js` (FY2026-27 today), Amber's default fixed charges and `AMBER_RATES_CHANGE_DATE` in `constants.js`, rebate and hardware defaults in `PLANNER_FINANCE_DEFAULTS`, and `TEMPLATES_AS_AT`. Market offers drift during the year.
@@ -57,7 +58,7 @@ These are the properties the tests guard and that users rely on. A change that b
 
 1. Is it worth splitting `app.js` along the seams above before a frontend refresh, so the refresh doesn't have to touch pricing code?
 2. Should HTML building move to small render helpers (or `<template>` elements in `index.html`) to cut repetition, while staying build-free and within the CSP?
-3. Would a lint/format setup (ESLint + Prettier, run in CI) be welcome, given the no-build constraint?
+3. ESLint now runs in CI. Would a formatter (Prettier) or type checking of the JSDoc (`tsc --checkJs`) be welcome too, given the no-build constraint?
 4. Is the planner's battery heuristic good enough, or should it be compared against a simple linear-programming optimum for a few test days to measure how optimistic it is?
 5. Should the Solar+? search move to a Web Worker (it runs on the main thread today, yielding with `setTimeout(0)`)? The CSP already allows `worker-src 'self'`.
 6. Should the app say explicitly that it's independent of Amber Electric (see FRONTEND.md)?
@@ -67,6 +68,7 @@ These are the properties the tests guard and that users rely on. A change that b
 
 | Test | Covers |
 |---|---|
+| `unit-syntax.js` | Every `js/*.js` parses as a classic script; `index.html` loads each one once, `app.js` last |
 | `unit-time.js` | Dates, NEM vs local time, TOU windows, app version |
 | `unit-bill.js`, `unit-billcheck.js` | Bill reading and line-by-line checks |
 | `unit-stats.js` | More Stats |
