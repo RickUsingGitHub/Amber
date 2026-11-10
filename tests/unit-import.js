@@ -147,6 +147,10 @@ assert(Amber.isCompleteDay(halfHours('E1', 48).concat(halfHours('B1', 48))), 'fu
 assert(!Amber.isCompleteDay(halfHours('E1', 48).concat(halfHours('B1', 1))), 'a full general day with one solar reading is not complete (so not cached)');
 assert(!Amber.coversWholeDay(halfHours('E1', 48).concat(halfHours('B1', 47))), 'nor is it a whole day for Month by month');
 
+// (storage.js) Text is escaped for use inside an element and inside a quoted attribute.
+assert(Amber.escapeHTML('My "special" <b>plan</b> & Tom\'s') === 'My &quot;special&quot; &lt;b&gt;plan&lt;/b&gt; &amp; Tom&#39;s'
+    && Amber.escapeHTML(null) === '' && Amber.escapeHTML(12) === '12', 'escapeHTML escapes quotes as well as tags');
+
 if (failed) {
     console.error(`${failed} import test(s) failed`);
     process.exit(1);

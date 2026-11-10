@@ -555,6 +555,18 @@
         return JSON.parse(JSON.stringify(Amber.supplierTemplates));
     };
 
+    /**
+     * A short fingerprint of a plan's prices and times. The plan form remembers the fingerprint
+     * of the built-in plan it was filled from, so a later version of the app with new prices for
+     * that plan can tell the saved form is out of date (app.js loadAllSettings).
+     */
+    Amber.templateSignature = function (plan) {
+        const text = JSON.stringify(plan || null);
+        let hash = 5381;
+        for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+        return `${text.length}.${hash.toString(36)}`;
+    };
+
     Amber.templateAsAt = function (plan) {
         if (plan && plan.asAt) return plan.asAt;
         return Amber.TEMPLATES_AS_AT;

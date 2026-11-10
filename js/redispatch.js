@@ -57,10 +57,14 @@
             const c = channelTotals[id];
             if (!c || c.type !== 'feedIn') return;
             (c.usageData || []).forEach((item) => {
+                // "After dark" goes by the local clock, but days are counted as everywhere else in
+                // the app (the reading's own date), so a year is 365 days here too: with daylight
+                // saving, local dates would add a day at the end.
                 const parts = Amber.clockPartsForItem(item, null, state);
-                all[parts.dateStr] = true;
+                const date = Amber.usageDateStr(item);
+                all[date] = true;
                 const kwh = Amber.absKwh(item.kwh);
-                if (kwh > 0 && darkExport(parts, item)) dark[parts.dateStr] = (dark[parts.dateStr] || 0) + kwh;
+                if (kwh > 0 && darkExport(parts, item)) dark[date] = (dark[date] || 0) + kwh;
             });
         });
         const days = Object.keys(all).length;

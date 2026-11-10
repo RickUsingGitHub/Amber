@@ -15,7 +15,8 @@ What the UI is today, what any redesign has to keep working, and where it could 
 ## Page structure
 
 ```
-header        title, one-line description, version, settings cog (#settingsBtn → #settingsMenu)
+header        title, one-line description, version, settings cog (#settingsBtn → #settingsMenu),
+              #cacheMessage (what a settings action did; in the header so it shows on every tab)
 #configSection  "Dates to look at": #startDate, #endDate, #fetchData (Compare costs), [data-preset] quick picks,
                 #messageContainer, #progressBar; hidden until there's something to look at
 #mainTabs     role="tablist": #tab-setup … #tab-plan (data-tab), scrolls sideways on a phone, never wraps
@@ -31,7 +32,7 @@ The layout is a single centred column (`max-w-4xl`) of white cards (`bg-white ro
 | Tab | Button / panel | What's on it |
 |---|---|---|
 | Start | `#tab-setup` / `#panel-setup` | `#welcomeCard` (two choice cards: with Amber / thinking about Amber), `#connectedCard`, `#setupSection` (API key `#apiKey`, `#rememberApiKey`, site picker `#siteSelectorRow`, `<details id="amberChargesDetails">` Amber's fixed charges and bill upload), `#usageImportSection` (Amber CSV), NEM12 import (`#nem12File`, `#nem12Build`, `#localSitesList`), `<details id="glossarySection">` jargon buster |
-| Compare | `#tab-compare` / `#panel-compare` | Jump links (`[data-jump]`), `#planChooser` (`#planSelector`, `#ratesDetails`: flat / TOU / feed-in windows / demand forms), `#resultsSection` (`#estimateBanner`, `#qualityBanner`, the answer `#results-table-container`), `#allPlansSection`, `#monthlySection`, `#freePowerPointer` |
+| Compare | `#tab-compare` / `#panel-compare` | Jump links (`[data-jump]`), `#planChooser` (`#stateSelector`, `#planStateNote`, `#planSelector`, `#ratesDetails`: flat / TOU / feed-in windows / demand forms), `#resultsSection` (`#estimateBanner`, `#qualityBanner`, the answer `#results-table-container`), `#allPlansSection`, `#monthlySection`, `#freePowerPointer` |
 | Usage | `#tab-check` / `#panel-check` | `#dailyGraphSection` (`#dailyChart`, day selector), `#averageGraphContainer` (`#usagePriceChart`), `#calendarSection`, `#moreStatsSection` |
 | Bill? | `#tab-bill` / `#panel-bill` | `#billCheckSection` (upload, `#billCheckBody` line-by-line table) |
 | Free? | `#tab-free` / `#panel-free` | `#freePowerEmpty` (nothing to show yet), `#batteryShiftSection` (budgets, battery size, `#batteryShiftTable`, `#batteryShiftMonthly`) |
@@ -80,7 +81,7 @@ Most result content is built as HTML strings and set with `innerHTML`:
   - every plan (`renderAllPlansTable`) and month by month (`renderMonthly`);
   - Free? (`drawBatteryShift`), bill check (`renderBillCheck`) and More Stats (`renderMoreStats`);
   - imported households (`renderLocalSites`);
-  - the settings menu (`buildSettingsMenu`) and the modal (`showModal`).
+  - the settings menu (`buildSettingsMenu`).
 - **`planner-ui.js`**: every Solar+? results card (`renderRecommendation`, `renderExistingCheck`, `renderOptions`, `renderDetail` + `breakdownHtml`, `renderNumbers`, `renderPayback`, `renderAssumptions`), and the company tick panel. Small helpers `th()` and `td()` keep its tables consistent.
 - **`calendar.js`**: the calendar grid and its tooltips (appended to `body`).
 - **`charts.js`** and `planner-ui.js` `renderPayback`: Chart.js charts (`#dailyChart` and `#usagePriceChart` with zoom and pan via chartjs-plugin-zoom, and `#planPaybackChart` with the $0 line drawn darker).
@@ -95,7 +96,7 @@ Text from data or the user goes through `Amber.escapeHTML` (`esc`). Keep that wh
 
 ## Accessibility today
 
-- Skip link to the tabs; ARIA tabs with keyboard support; labelled inputs; the GST switch is a real checkbox; help buttons are buttons with `aria-expanded` and can be opened by keyboard and closed with Escape.
+- Skip link to the tabs; ARIA tabs with keyboard support; labelled inputs; the GST switch is a real checkbox; help buttons are buttons with `aria-expanded` and can be opened by keyboard and closed with Escape. The settings and Download menus also close with Escape, and focus returns to their button.
 - The planner options table rows are `role="button"` with `tabindex="0"`, and Enter/Space select them.
 - Charts have an `aria-label` on the canvas. The numbers are also in nearby tables (month table, payback notes), but there's no table alternative for the Usage charts.
 - The rating dots have `role="img"` and an `aria-label` ("3 of 4").
@@ -119,7 +120,6 @@ The app is written for everyday Australian householders:
 - **Charts**: the payback chart's x labels rotate on narrow screens. The Usage charts would benefit from a legend and colour review. Chart colours are hard-coded hex values in `charts.js` and `planner-ui.js`.
 - **Visual hierarchy**: every card has the same weight; the main answer on each tab could stand out more.
 - **Help bubbles** are everywhere, which helps beginners but adds visual noise. Consider showing them only on hover or focus on wider screens.
-- **The settings menu** mixes user actions (clear cache, clear saved plans) with maintainer tools ("Save custom plans", "Show stats"; IDs `saveCustomPlansForRick`, `showStatsForRick`).
 - **Loading and progress**: Compare and Solar+? each have their own progress bar and message area.
 - **No dark mode**; no print stylesheet, though a print or PDF view of the planner result could be useful to take to installers.
 

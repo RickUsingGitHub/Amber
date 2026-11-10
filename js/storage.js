@@ -16,11 +16,12 @@
 
     Amber.DB_NAME = DB_NAME;
 
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' };
+
+    /** Text made safe for HTML, inside an element or a quoted attribute (so quotes are escaped too). */
     Amber.escapeHTML = function (str) {
         if (str == null) return '';
-        const div = document.createElement('div');
-        div.textContent = String(str);
-        return div.innerHTML;
+        return String(str).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
     };
 
     Amber.obfuscate = function (str) {
@@ -51,7 +52,13 @@
                     db.createObjectStore(STORE_NAME, { keyPath: 'id' });
                 }
             };
-            request.onsuccess = (event) => resolve(event.target.result);
+            request.onsuccess = (event) => {
+                const db = event.target.result;
+                // Connections aren't closed after use, so let go when the database is being deleted
+                // ("Clear saved meter readings"): an open connection would block the delete.
+                db.onversionchange = () => db.close();
+                resolve(db);
+            };
             request.onerror = (event) => {
                 console.error('IndexedDB error:', event.target.error);
                 reject(event.target.error);
@@ -74,6 +81,8 @@
             entries.forEach((entry) => store.put({ id: entry.id, data: entry.data }));
             transaction.oncomplete = () => resolve();
             transaction.onerror = (event) => reject(event.target.error || transaction.error);
+            // A write that runs out of room is aborted, often with no error event first.
+            transaction.onabort = () => reject(transaction.error || new Error('The browser could not save the readings.'));
         });
     };
 
@@ -108,6 +117,7 @@
                 request.onerror = () => done(request.error);
             });
             transaction.onerror = (event) => done(event.target.error || transaction.error);
+            transaction.onabort = () => done(transaction.error || new Error('The saved readings could not be read.'));
         });
     };
 
@@ -175,6 +185,7 @@
                 resolve({ byDate, dates });
             };
             request.onerror = (event) => reject(event.target.error);
+            transaction.onabort = () => reject(transaction.error || new Error('The saved readings could not be read.'));
         });
     };
 
@@ -187,6 +198,7 @@
             transaction.objectStore(STORE_NAME).delete(IDBKeyRange.bound(prefix, `${prefix}￿`));
             transaction.oncomplete = () => resolve();
             transaction.onerror = (event) => reject(event.target.error);
+            transaction.onabort = () => reject(transaction.error || new Error('The saved readings could not be removed.'));
         });
     };
 

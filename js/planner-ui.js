@@ -69,10 +69,15 @@
         try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(out)); } catch (e) { /* ignore */ }
     }
 
+    // Defaults that were saved untouched before they were updated: the battery rebate was $330 a
+    // kWh until v1.62 (the rate before 1 May 2026). A saved 330 moves to the current default.
+    const RETIRED_DEFAULTS = { planBatteryRebatePerKwh: '330' };
+
     function applySettings(saved) {
         FIELDS.forEach((id) => {
             const el = $(id);
             if (!el || saved[id] == null) return;
+            if (RETIRED_DEFAULTS[id] != null && String(saved[id]) === RETIRED_DEFAULTS[id]) return;
             if (el.type === 'checkbox') el.checked = !!saved[id];
             else if (el.tagName !== 'SELECT' || Array.from(el.options).some((o) => o.value === saved[id])) el.value = saved[id];
         });
@@ -93,6 +98,7 @@
     function customPlanNames() {
         try {
             const custom = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}') || {};
+            if (typeof custom !== 'object') return new Set();
             return new Set([].concat(...Object.values(custom).map((byName) => Object.keys(byName || {}))));
         } catch (e) { return new Set(); }
     }
@@ -1006,7 +1012,12 @@
         const f = ui.results.f;
         const parts = [];
         if (x.solarKw > 0) parts.push(`panels ${dollars(f.solarFixed + f.solarPerKw * x.solarKw)} (${dollars(f.solarPerKw)} a kW plus ${dollars(f.solarFixed)}) less a ${dollars(f.stcPerKw * x.solarKw)} rebate`);
-        if (x.batteryKwh > 0) parts.push(`battery ${dollars(f.batteryFixed + f.batteryPerKwh * x.batteryKwh)} (${dollars(f.batteryPerKwh)} a kWh plus ${dollars(f.batteryFixed)}) less a ${dollars(f.batteryRebatePerKwh * x.batteryKwh)} rebate`);
+        if (x.batteryKwh > 0) {
+            // Over 14 kWh the rebate is smaller per kWh: say how it was worked out.
+            const tiers = x.batteryKwh > Amber.BATTERY_REBATE_TIERS[0].upTo
+                ? ` (${dollars(f.batteryRebatePerKwh)} a kWh on the first 14 kWh, 60% of that from 14 to 28 kWh, 15% from 28 to 50 kWh)` : '';
+            parts.push(`battery ${dollars(f.batteryFixed + f.batteryPerKwh * x.batteryKwh)} (${dollars(f.batteryPerKwh)} a kWh plus ${dollars(f.batteryFixed)}) less a ${dollars(x.fin.capex.batteryRebate)} rebate${tiers}`);
+        }
         return `${parts.join('; ')}: ${dollars(x.fin.capex.total)} in all`;
     }
 
