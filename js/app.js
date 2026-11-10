@@ -2322,6 +2322,11 @@
             if (saved && saved.ok) state.billCheck = saved;
         } catch (e) { /* ignore */ }
         $('billCheckFile').addEventListener('change', (e) => handleAmberBillFile(e.target.files[0]));
+        // The same bill can be loaded from the Start tab, under Amber's fixed charges.
+        $('amberBillFile').addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) handleAmberBillFile(file);
+        });
         $('billCheckClear').addEventListener('click', () => {
             state.billCheck = null;
             state.billCheckError = null;
@@ -2755,44 +2760,8 @@
         $('clearCacheBtn').addEventListener('click', clearSavedReadings);
     }
 
-    function init() {
-        Amber.registerChartPlugins();
-        mergeCustomPlans();
-        const versionLabel = `Amber Compare & Export v${Amber.APP_VERSION}`;
-        document.title = versionLabel;
-
-        const storedKey = Amber.getApiKey();
-        $('apiKey').value = storedKey.key;
-        $('rememberApiKey').checked = storedKey.remember;
-        try { localStorage.removeItem('configHidden'); } catch (e) { /* retired */ }
-        setupTabs();
-        setupStartTab();
-
-        const yesterday = Amber.formatForInput(Amber.localYesterday());
-        $('startDate').setAttribute('max', yesterday);
-        $('endDate').setAttribute('max', yesterday);
-        const savedStart = localStorage.getItem('startDate');
-        const savedEnd = localStorage.getItem('endDate');
-        if (savedStart && savedEnd) {
-            $('startDate').value = savedStart;
-            $('endDate').value = savedEnd > yesterday ? yesterday : savedEnd;
-        } else {
-            const range = defaultDateRange();
-            $('startDate').value = range.start;
-            $('endDate').value = range.end;
-        }
-
-        Object.keys(state.templates).forEach((stateCode) => {
-            const option = document.createElement('option');
-            option.value = stateCode;
-            option.textContent = stateCode;
-            $('stateSelector').appendChild(option);
-        });
-        loadAllSettings();
-        loadShiftSettings();
-        clearRetiredStatsStorage();
-        $('usageCsvFile').addEventListener('change', (e) => handleUsageCsvFile(e.target.files[0]));
-        setupBillCheck();
+    /** Wire up the plan form on Compare. Runs once, after loadAllSettings has filled it. */
+    function setupPlanForm() {
         if (!$('tou_peak_windows_container').children.length) addTouWindow('peak');
         if (!$('tou_shoulder_windows_container').children.length) addTouWindow('shoulder');
         setRatesDetailsOpen(localStorage.getItem('ratesDetailsOpen') === 'true', false);
@@ -2800,10 +2769,6 @@
         $('ratesDetailsToggle').addEventListener('click', (e) => {
             e.preventDefault();
             setRatesDetailsOpen($('ratesDetails').classList.contains('hidden'));
-        });
-        $('amberBillFile').addEventListener('change', (e) => {
-            const file = e.target.files && e.target.files[0];
-            if (file) handleAmberBillFile(file);
         });
         $('stateSelector').addEventListener('change', (e) => {
             // A plan from the old state gives way to the new state's usual plan (or to blank own
@@ -2836,25 +2801,13 @@
             addWindowRow($('feedInWindowsContainer'), { start: '15:00', end: '21:00', days: [1, 2, 3, 4, 5, 6, 0], rate: 10 }, true);
             saveAllSettings();
         });
-        ['shiftBudgets', 'shiftBatteryKwh', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
-            $(id).addEventListener('change', () => {
-                saveShiftSettings();
-                renderBatteryShift();
-            });
-        });
         document.querySelectorAll('[data-add-tou-window]').forEach((btn) => {
             btn.addEventListener('click', () => addTouWindow(btn.getAttribute('data-add-tou-window')));
         });
+        // Every other box in the plan form, and on the Start tab's account card, saves as it is typed in.
         document.querySelectorAll('#planChooser input, #planChooser select, #setupSection input').forEach((el) => {
             if (el.type === 'file' || ['stateSelector', 'planSelector', 'planName', 'apiKey', 'rememberApiKey', 'siteSelector'].includes(el.id)) return;
             el.addEventListener('input', saveAllSettings);
-        });
-        // Amber's charges change the results straight away.
-        ['amberConnectionRate', 'amberSubscriptionRate', 'amberDemandRate', 'amberConnectionRatePrev', 'amberSubscriptionRatePrev', 'amberDemandRatePrev'].forEach((id) => {
-            $(id).addEventListener('change', () => {
-                saveAllSettings();
-                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
-            });
         });
         $('rateTypeSelector').addEventListener('change', () => {
             const selectedType = document.querySelector('input[name="rateType"]:checked').value;
@@ -2862,12 +2815,21 @@
             $('touRateSection').classList.toggle('hidden', selectedType !== 'tou');
             saveAllSettings();
         });
-        $('datePresets').addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-preset]');
-            if (!btn) return;
-            applyDatePreset(btn.getAttribute('data-preset'));
+    }
+
+    /** Wire up the Free? tab's settings. */
+    function setupFreeTab() {
+        ['shiftBudgets', 'shiftBatteryKwh', 'shiftWindowKw', 'shiftExportKw', 'shiftRte'].forEach((id) => {
+            $(id).addEventListener('change', () => {
+                saveShiftSettings();
+                renderBatteryShift();
+            });
         });
-        $('fetchData').addEventListener('click', fetchAndCompare);
+    }
+
+    /** Wire up the site picker and the Start tab's imports (Amber CSV, NEM12). */
+    function setupImports() {
+        $('usageCsvFile').addEventListener('change', (e) => handleUsageCsvFile(e.target.files[0]));
         $('siteSelector').addEventListener('change', () => {
             state.cachedChannelData = null;
             state.monthly = null;
@@ -2879,11 +2841,82 @@
             saveAllSettings();
             renderLocalSites();
         });
+        $('nem12File').addEventListener('change', (e) => handleNem12File(e.target.files && e.target.files[0]));
+        $('nem12Network').addEventListener('change', () => {
+            if (state.nem12) state.nem12.networkKey = $('nem12Network').value;
+            renderNem12Options();
+        });
+        $('nem12Tariff').addEventListener('change', () => renderNem12Options(true));
+        $('nem12Build').addEventListener('click', buildNem12Estimate);
+    }
+
+    /** Build the settings menu and wire up its button. */
+    function setupSettingsMenu() {
+        buildSettingsMenu();
+        $('settingsBtn').addEventListener('click', (event) => {
+            event.stopPropagation();
+            const open = $('settingsMenu').classList.toggle('hidden');
+            $('settingsBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
+        });
+    }
+
+    async function tryLoadSites(key) {
+        if (!key || key.length < 8) return;
+        if (state.sites.length && state.sitesApiKey === key) return;
+        try {
+            const sites = await Amber.fetchSites(key);
+            populateSites(sites);
+            state.sitesApiKey = key;
+            updateCacheSummary();
+        } catch (err) {
+            /* ignore until Compare */
+        }
+    }
+
+    function resetSitesIfKeyChanged(key) {
+        if (state.sitesApiKey && key !== state.sitesApiKey) {
+            Amber.clearSitesCache();
+            state.sitesApiKey = null;
+            populateSites([]);
+        }
+    }
+
+    /** Wire up the API key and Amber's fixed charges on the Start tab. */
+    function setupAccount() {
+        // Amber's charges change the results straight away.
+        AMBER_CHARGE_FIELDS.forEach((id) => {
+            $(id).addEventListener('change', () => {
+                saveAllSettings();
+                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
+            });
+        });
         $('rememberApiKey').addEventListener('change', () => {
             const key = $('apiKey').value.trim();
             if (key) Amber.setApiKey(key, $('rememberApiKey').checked);
             else if (!$('rememberApiKey').checked) Amber.clearApiKey();
         });
+        let siteFetchTimer = null;
+        $('apiKey').addEventListener('input', () => {
+            resetSitesIfKeyChanged($('apiKey').value.trim());
+            syncConnectedUi();
+        });
+        $('apiKey').addEventListener('blur', () => {
+            const key = $('apiKey').value.trim();
+            Amber.setApiKey(key, $('rememberApiKey').checked);
+            resetSitesIfKeyChanged(key);
+            clearTimeout(siteFetchTimer);
+            siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
+        });
+    }
+
+    /** Wire up the dates bar, the GST switch and the Download menu (which shares its closing with the settings menu). */
+    function setupResultTools() {
+        $('datePresets').addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-preset]');
+            if (!btn) return;
+            applyDatePreset(btn.getAttribute('data-preset'));
+        });
+        $('fetchData').addEventListener('click', fetchAndCompare);
         $('gstToggle').addEventListener('change', () => {
             if (state.lastResultDataPayload) {
                 displayResults(
@@ -2945,52 +2978,52 @@
             Amber.generateResultsTableCsv(table, state.lastFetchedStartDate, state.lastFetchedEndDate);
             csvMenu.classList.add('hidden');
         });
+    }
 
-        buildSettingsMenu();
-        $('settingsBtn').addEventListener('click', (event) => {
-            event.stopPropagation();
-            const open = $('settingsMenu').classList.toggle('hidden');
-            $('settingsBtn').setAttribute('aria-expanded', open ? 'false' : 'true');
-        });
+    function init() {
+        Amber.registerChartPlugins();
+        mergeCustomPlans();
+        const versionLabel = `Amber Compare & Export v${Amber.APP_VERSION}`;
+        document.title = versionLabel;
 
-        async function tryLoadSites(key) {
-            if (!key || key.length < 8) return;
-            if (state.sites.length && state.sitesApiKey === key) return;
-            try {
-                const sites = await Amber.fetchSites(key);
-                populateSites(sites);
-                state.sitesApiKey = key;
-                updateCacheSummary();
-            } catch (err) {
-                /* ignore until Compare */
-            }
+        const storedKey = Amber.getApiKey();
+        $('apiKey').value = storedKey.key;
+        $('rememberApiKey').checked = storedKey.remember;
+        try { localStorage.removeItem('configHidden'); } catch (e) { /* retired */ }
+        setupTabs();
+        setupStartTab();
+
+        const yesterday = Amber.formatForInput(Amber.localYesterday());
+        $('startDate').setAttribute('max', yesterday);
+        $('endDate').setAttribute('max', yesterday);
+        const savedStart = localStorage.getItem('startDate');
+        const savedEnd = localStorage.getItem('endDate');
+        if (savedStart && savedEnd) {
+            $('startDate').value = savedStart;
+            $('endDate').value = savedEnd > yesterday ? yesterday : savedEnd;
+        } else {
+            const range = defaultDateRange();
+            $('startDate').value = range.start;
+            $('endDate').value = range.end;
         }
-        function resetSitesIfKeyChanged(key) {
-            if (state.sitesApiKey && key !== state.sitesApiKey) {
-                Amber.clearSitesCache();
-                state.sitesApiKey = null;
-                populateSites([]);
-            }
-        }
-        let siteFetchTimer = null;
-        $('apiKey').addEventListener('input', () => {
-            resetSitesIfKeyChanged($('apiKey').value.trim());
-            syncConnectedUi();
+
+        Object.keys(state.templates).forEach((stateCode) => {
+            const option = document.createElement('option');
+            option.value = stateCode;
+            option.textContent = stateCode;
+            $('stateSelector').appendChild(option);
         });
-        $('apiKey').addEventListener('blur', () => {
-            const key = $('apiKey').value.trim();
-            Amber.setApiKey(key, $('rememberApiKey').checked);
-            resetSitesIfKeyChanged(key);
-            clearTimeout(siteFetchTimer);
-            siteFetchTimer = setTimeout(() => tryLoadSites(key), 200);
-        });
-        $('nem12File').addEventListener('change', (e) => handleNem12File(e.target.files && e.target.files[0]));
-        $('nem12Network').addEventListener('change', () => {
-            if (state.nem12) state.nem12.networkKey = $('nem12Network').value;
-            renderNem12Options();
-        });
-        $('nem12Tariff').addEventListener('change', () => renderNem12Options(true));
-        $('nem12Build').addEventListener('click', buildNem12Estimate);
+        loadAllSettings();
+        loadShiftSettings();
+        clearRetiredStatsStorage();
+        setupImports();
+        setupBillCheck();
+        setupPlanForm();
+        setupFreeTab();
+        setupAccount();
+        setupResultTools();
+        setupSettingsMenu();
+
         populateSites([]);
         syncConnectedUi();
         if (storedKey.key) tryLoadSites(storedKey.key);
