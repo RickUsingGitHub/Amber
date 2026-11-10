@@ -32,7 +32,7 @@ The layout is a single centred column (`max-w-4xl`) of white cards (`bg-white ro
 | Tab | Button / panel | What's on it |
 |---|---|---|
 | Start | `#tab-setup` / `#panel-setup` | `#welcomeCard` (two choice cards: with Amber / thinking about Amber), `#connectedCard`, `#setupSection` (API key `#apiKey`, `#rememberApiKey`, site picker `#siteSelectorRow`, `<details id="amberChargesDetails">` Amber's fixed charges and bill upload), `#usageImportSection` (Amber CSV), NEM12 import (`#nem12File`, `#nem12Build`, `#localSitesList`), `<details id="glossarySection">` jargon buster |
-| Compare | `#tab-compare` / `#panel-compare` | Jump links (`[data-jump]`), `#planChooser` (`#planSelector`, `#ratesDetails`: flat / TOU / feed-in windows / demand forms), `#resultsSection` (`#estimateBanner`, `#qualityBanner`, the answer `#results-table-container`), `#allPlansSection`, `#monthlySection`, `#freePowerPointer` |
+| Compare | `#tab-compare` / `#panel-compare` | Jump links (`[data-jump]`), `#planChooser` (`#stateSelector`, `#planStateNote`, `#planSelector`, `#ratesDetails`: flat / TOU / feed-in windows / demand forms), `#resultsSection` (`#estimateBanner`, `#qualityBanner`, the answer `#results-table-container`), `#allPlansSection`, `#monthlySection`, `#freePowerPointer` |
 | Usage | `#tab-check` / `#panel-check` | `#dailyGraphSection` (`#dailyChart`, day selector), `#averageGraphContainer` (`#usagePriceChart`), `#calendarSection`, `#moreStatsSection` |
 | Bill? | `#tab-bill` / `#panel-bill` | `#billCheckSection` (upload, `#billCheckBody` line-by-line table) |
 | Free? | `#tab-free` / `#panel-free` | `#freePowerEmpty` (nothing to show yet), `#batteryShiftSection` (budgets, battery size, `#batteryShiftTable`, `#batteryShiftMonthly`) |

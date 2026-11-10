@@ -155,6 +155,18 @@ assert(Amber.detectBattery(solarOnly, 'NSW').darkDays === 0, 'October 6:30pm exp
 // dayData assumes daylight saving, so '19:30' is 6:30pm in June.
 const winter = channels(dayData('2026-06-14', evening, { '19:30': 0.4 }));
 assert(Amber.detectBattery(winter, 'NSW').darkDays === 1, 'June 6:30pm export is after dark');
+// Days are the readings' own dates: in daylight saving the last hour of a day is already tomorrow
+// on the local clock, which used to make a year "366 days".
+{
+    const items = [];
+    for (let i = 1; i <= 48; i++) {
+        const h = Math.floor(i / 2);
+        const nemTime = i === 48 ? '2026-01-11T00:00:00+10:00' : `2026-01-10T${pad(h)}:${i % 2 ? '30' : '00'}:00+10:00`;
+        items.push({ nemTime, date: '2026-01-10', kwh: 0.5, duration: 30, channelIdentifier: 'B1' });
+    }
+    const found = Amber.detectBattery({ B1: { type: 'feedIn', usageData: items } }, 'NSW');
+    assert(found.days === 1 && found.darkDays === 1, `one day of summer readings counts as one day (${found.darkDays} of ${found.days})`);
+}
 
 assert(Amber.redispatchForPlan(base, nsw['2026-27 DMO (Ausgrid, TOU)'], 'NSW', { budgetKwh: 10 }) === null, 'plans without a free window are skipped');
 assert(Amber.windowHoursOn([{ start: '22:00', end: '02:00', days: [] }], 1, 1) === 4, 'overnight window hours wrap');

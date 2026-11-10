@@ -86,6 +86,7 @@ The solar and battery planner. From the last 12 months of meter readings (Amber'
 - The API key is stored only in this browser (localStorage, or sessionStorage if **Remember key on this device** is unticked). It is obfuscated, not encrypted.
 - Usage data is requested directly from `https://api.amber.com.au` and never sent anywhere else; the page's Content Security Policy allows no other connections. Imported files (Amber CSV, NEM12, bills) are read in the browser and stay there.
 - Meter readings are cached in IndexedDB; settings, saved plans, imported households and the last checked bill (until **Clear**) are in localStorage. The settings menu (cog) can clear the cache and saved plans. Clearing the saved meter readings also removes imported Amber CSV history and households imported from NEM12, which then need importing again.
+- The state follows your Amber site's network when the state showing has no plans for it (a Victorian site opens on VIC, not NSW). Changing state swaps a built-in plan for one from the new state; rates you typed yourself stay. If you pick a state with no plans for your network, a note says which state has them.
 - A built-in plan you've selected keeps any prices you change yourself, but when a new version of the app changes that plan's published prices, the saved form is filled again from the new prices.
 
 ## For developers

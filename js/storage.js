@@ -16,11 +16,12 @@
 
     Amber.DB_NAME = DB_NAME;
 
+    const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', '\'': '&#39;' };
+
+    /** Text made safe for HTML, inside an element or a quoted attribute (so quotes are escaped too). */
     Amber.escapeHTML = function (str) {
         if (str == null) return '';
-        const div = document.createElement('div');
-        div.textContent = String(str);
-        return div.innerHTML;
+        return String(str).replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
     };
 
     Amber.obfuscate = function (str) {
