@@ -466,6 +466,7 @@
             }
             planSelector.appendChild(option);
         });
+        syncPlanStateNote(selectedState, names);
         if (previous === '' || names.indexOf(previous) !== -1) {
             planSelector.value = previous;
             return;
@@ -478,7 +479,29 @@
         }
         if (planSelector.value && planSelector.value !== previous) {
             applyPlanTemplate();
+        } else if (!planSelector.value) {
+            // The plan that was showing isn't offered here and nothing takes its place: don't
+            // leave its name and prices behind under "Enter my own rates".
+            clearPlanInputs();
         }
+    }
+
+    /** The state a site's network is in (Ausgrid → NSW), or null when the network isn't known. */
+    function siteNetworkState(site) {
+        const net = site && Amber.NETWORKS && Amber.NETWORKS[Amber.canonicalNetwork(site.network)];
+        return net ? net.state : null;
+    }
+
+    /** Say why the plan list is empty when the state chosen isn't the one the site's network is in. */
+    function syncPlanStateNote(selectedState, names) {
+        const note = $('planStateNote');
+        const site = selectedSite();
+        const home = siteNetworkState(site);
+        const show = !!home && home !== selectedState && !names.length;
+        note.classList.toggle('hidden', !show);
+        note.textContent = show
+            ? `Your meter is on the ${site.network} network, which is in ${home}, so there are no ${selectedState} plans to compare it with. Choose ${home} to see its plans, or enter your own rates.`
+            : '';
     }
 
     function isBuiltInPlan(stateCode, planName) {
@@ -939,6 +962,15 @@
                 loadAmberChargeFields();
             }
             note.classList.add('hidden');
+            // An Amber site in another state than the one showing (a new user starts on NSW), where
+            // that state has no plans for the site's network: show the site's own state instead.
+            // A state the user picked by hand for this site is left alone.
+            const home = siteNetworkState(site);
+            const shown = $('stateSelector').value;
+            if (home && home !== shown && state.templates[home] && !state.stateChosenByHand && !visiblePlanNames(shown).length) {
+                $('stateSelector').value = home;
+                localStorage.setItem('selectedState', home);
+            }
         }
     }
 
@@ -2194,7 +2226,7 @@
             if (!billPeriodFinished(bill)) {
                 msg = 'The bill period hasn\'t finished yet, so there is no complete meter data to check against.';
             } else if (!$('apiKey').value.trim()) {
-                msg = 'Add your Amber API key on the Setup tab to check this bill against your meter data.';
+                msg = 'Add your Amber API key on the <button type="button" data-go-start class="text-indigo-600 hover:underline font-medium">Start</button> tab to check this bill against your meter data.';
             } else if (state.fetching || state.pendingBillLoad) {
                 msg = 'Fetching your meter data for the bill period…';
             } else if (state.billLoadFailed === billKey(bill)) {
@@ -2733,9 +2765,13 @@
             if (file) handleAmberBillFile(file);
         });
         $('stateSelector').addEventListener('change', (e) => {
+            // A plan from the old state gives way to the new state's usual plan (or to blank own
+            // rates when the state has none for this network); rates typed in by hand stay.
+            state.stateChosenByHand = true;
             updatePlanSelector(e.target.value);
-            $('planSelector').value = '';
             saveAllSettings();
+            if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(false);
+            else updatePlanSavings();
         });
         $('planSelector').addEventListener('change', () => {
             selectSupplierPlan($('planSelector').value, { fromChange: true });
@@ -2796,6 +2832,7 @@
             state.monthly = null;
             state.lastFetchTimestamp = null;
             state.batteryShift = null;
+            state.stateChosenByHand = false;
             syncSiteMode();
             updatePlanSelector(currentStateCode());
             saveAllSettings();

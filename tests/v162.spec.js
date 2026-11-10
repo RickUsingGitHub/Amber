@@ -20,7 +20,12 @@ function usageFor(start, end) {
     return out;
 }
 
-async function amberCustomer(page) {
+const AUSGRID_SITE = {
+    id: 'site123', nmi: '4102000000', network: 'Ausgrid', status: 'active',
+    channels: [{ identifier: 'E1', type: 'general', tariff: 'EA116' }, { identifier: 'B1', type: 'feedIn', tariff: 'EA029' }]
+};
+
+async function amberCustomer(page, site) {
     const calls = { usage: 0 };
     await page.addInitScript(() => {
         const key = 'amber-compare-export-secure-key';
@@ -30,10 +35,7 @@ async function amberCustomer(page) {
     });
     await page.route('**/sites', (route) => route.fulfill({
         status: 200, contentType: 'application/json',
-        body: JSON.stringify([{
-            id: 'site123', nmi: '4102000000', network: 'Ausgrid', status: 'active',
-            channels: [{ identifier: 'E1', type: 'general', tariff: 'EA116' }, { identifier: 'B1', type: 'feedIn', tariff: 'EA029' }]
-        }])
+        body: JSON.stringify([site || AUSGRID_SITE])
     }));
     await page.route('**/usage*', (route) => {
         calls.usage += 1;
@@ -164,4 +166,106 @@ test('the settings menu has no maintainer tools, whatever the address says', asy
     await expect(page.locator('#settingsMenu [role="menuitem"]')).toHaveCount(2);
     await expect(page.locator('#clearCacheBtn')).toBeVisible();
     await expect(page.locator('#clearCustomPlansBtn')).toBeVisible();
+});
+
+test('a plan name with quotes or tags in it stays text everywhere it is shown', async ({ page }) => {
+    test.setTimeout(90000);
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await amberCustomer(page);
+    await page.goto('/');
+    const name = 'My "special" <b>plan</b> & Tom\'s';
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    await page.selectOption('#planSelector', '');
+    if (await page.locator('#planName').isHidden()) await page.click('#ratesDetailsToggle');
+    await page.fill('#planName', name);
+    await page.fill('#otherSupplierRate', '30');
+    await page.fill('#dailyConnectionRate', '100');
+    await page.fill('#otherSupplierFeedInRateFlat', '5');
+    await page.click('[data-preset="lastMonth"]');
+    await compared(page);
+
+    const shown = await page.evaluate(() => {
+        const answer = document.querySelector('#results-table-container thead th:last-child [data-help]');
+        const month = Array.from(document.querySelectorAll('#monthlyTable thead th [data-help]')).slice(-2)[0];
+        const attrs = (el) => el.getAttributeNames().filter((a) => a !== 'data-help-done').sort().join();
+        return {
+            answerLabel: answer.getAttribute('data-help-label'), answerAttrs: attrs(answer),
+            monthLabel: month.getAttribute('data-help-label'), monthAttrs: attrs(month),
+            boldTags: document.querySelectorAll('#panel-compare b').length
+        };
+    });
+    expect(shown.answerLabel).toBe(name);
+    expect(shown.answerAttrs).toBe('data-help,data-help-label');
+    expect(shown.monthLabel).toBe(name);
+    expect(shown.monthAttrs).toBe('data-help,data-help-label');
+    expect(shown.boldTags).toBe(0);
+    await expect(page.locator('#results-table-container')).toContainText(name);
+    expect(errors).toEqual([]);
+});
+
+test('changing state swaps the plan too, and a state with no plans for the network says why', async ({ page }) => {
+    await amberCustomer(page);
+    await page.goto('/');
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    const plan = await page.evaluate(() => Object.keys(window.Amber.supplierTemplates.NSW).find((name) => /Ausgrid/.test(name)));
+    await page.selectOption('#planSelector', plan);
+    await expect(page.locator('#otherSupplierHeading')).toHaveText(`Compare Amber with ${plan}`);
+    await expect(page.locator('#planStateNote')).toBeHidden();
+
+    // Victoria has no plans for an Ausgrid meter: the old plan's name and prices go, with a reason.
+    await page.selectOption('#stateSelector', 'VIC');
+    await expect(page.locator('#planSelector')).toHaveValue('');
+    await expect(page.locator('#planSelector option')).toHaveCount(1);
+    await expect(page.locator('#otherSupplierHeading')).toHaveText('Compare Amber with…');
+    await expect(page.locator('#planName')).toHaveValue('');
+    await expect(page.locator('#otherSupplierRate')).toHaveValue('');
+    await expect(page.locator('#planStateNote')).toBeVisible();
+    await expect(page.locator('#planStateNote')).toContainText('Ausgrid network, which is in NSW');
+
+    // Back to NSW: its plans return, and the note goes.
+    await page.selectOption('#stateSelector', 'NSW');
+    await expect(page.locator('#planStateNote')).toBeHidden();
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    await page.selectOption('#planSelector', plan);
+    await expect(page.locator('#otherSupplierHeading')).toHaveText(`Compare Amber with ${plan}`);
+
+    // A state with plans of its own: one of them replaces the NSW plan, name and prices together.
+    await page.selectOption('#stateSelector', 'TAS');
+    const chosen = await page.inputValue('#planSelector');
+    expect(Object.keys(await page.evaluate(() => window.Amber.supplierTemplates.TAS))).toContain(chosen);
+    await expect(page.locator('#otherSupplierHeading')).toHaveText(`Compare Amber with ${chosen}`);
+    await expect(page.locator('#planName')).toHaveValue(chosen);
+    await expect(page.locator('#planStateNote')).toBeHidden();
+
+    // Rates typed in by hand are the user's own: a change of state leaves them alone.
+    await page.selectOption('#planSelector', '');
+    await page.fill('#planName', 'My own plan');
+    await page.fill('#otherSupplierRate', '29.5');
+    await page.selectOption('#stateSelector', 'QLD');
+    await expect(page.locator('#planName')).toHaveValue('My own plan');
+    await expect(page.locator('#otherSupplierRate')).toHaveValue('29.5');
+});
+
+test('an Amber site outside NSW opens on its own state\'s plans', async ({ page }) => {
+    await amberCustomer(page, { id: 'vic1', nmi: '6203000000', network: 'Powercor', status: 'active', channels: [{ identifier: 'E1', type: 'general', tariff: 'D1' }] });
+    await page.goto('/');
+    await expect(page.locator('#stateSelector')).toHaveValue('VIC');
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    await expect(page.locator('#planStateNote')).toBeHidden();
+    expect(await page.evaluate(() => localStorage.getItem('selectedState'))).toBe('VIC');
+    const labels = await page.locator('#planSelector option').allTextContents();
+    expect(labels.some((t) => /VDO/.test(t))).toBe(true);
+});
+
+test('the bill check points to the Start tab for the API key', async ({ page }) => {
+    await page.route('**/api.amber.com.au/**', (route) => route.abort());
+    await page.addInitScript(() => {
+        localStorage.setItem('amberBillCheck', JSON.stringify({ ok: true, start: '2026-01-01', end: '2026-01-31', found: [] }));
+    });
+    await page.goto('/');
+    await page.click('#tab-bill');
+    await expect(page.locator('#billCheckBody')).toContainText('Add your Amber API key on the Start tab');
+    await page.click('#billCheckBody [data-go-start]');
+    await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
 });

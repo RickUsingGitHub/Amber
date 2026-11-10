@@ -134,7 +134,7 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 
 ### Start (`app.js`: `setupStartTab`, imports, sites)
 
-- API key: `Amber.setApiKey` stores an obfuscated key in localStorage (or sessionStorage); `Amber.fetchSites` lists sites.
+- API key: `Amber.setApiKey` stores an obfuscated key in localStorage (or sessionStorage); `Amber.fetchSites` lists sites. The state selector follows the site's network (`siteNetworkState`, from `Amber.NETWORKS`) when the state showing has no plans for it, unless the user picked the state by hand for that site.
 - Amber's fixed charges: `loadAmberChargeFields` / `readAmberRates`. The two years' connection, subscription and demand rates are split at `Amber.AMBER_RATES_CHANGE_DATE` (1 July 2026). Uploading a bill (`handleAmberBillFile` → `bill.js`) fills the year it belongs to.
 - Amber CSV import: `handleUsageCsvFile` → `import.js` → `setUsageDataMany`.
 - NEM12: `handleNem12File` → `estimate.js` parses the file and rebuilds Amber's interval prices from `data/prices` and `networks.js`. The result becomes a local site whose days are written to the cache.
@@ -211,7 +211,7 @@ Key pieces:
 
 - The CSP (`index.html` `<meta http-equiv="Content-Security-Policy">`) is `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; …`. This means no inline scripts, no inline `<style>` and no `style="…"` attributes (setting `element.style.x` from JS is fine), and no third-party hosts.
 - All data stays in the browser. The API key is obfuscated (XOR with a fixed key, then base64), not encrypted.
-- Dynamic HTML is built with template strings. Anything from data or user input goes through `Amber.escapeHTML` (aliased `esc` in `planner-ui.js`).
+- Dynamic HTML is built with template strings. Anything from data or user input goes through `Amber.escapeHTML` (aliased `esc` in `planner-ui.js`), which escapes `& < > " '`, so it is safe inside an element and inside a quoted attribute.
 
 ## Build, test and CI
 
