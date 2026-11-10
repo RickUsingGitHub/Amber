@@ -232,15 +232,6 @@
         container.innerHTML = '';
         container.className = 'relative space-y-6 max-h-[80vh] overflow-y-auto pr-2';
         const availableDateSet = new Set(Object.keys(context.dailySummaries));
-        const selectedDateSet = new Set();
-        if (context.startDate && context.endDate) {
-            let d = new Date(context.startDate + 'T00:00:00');
-            const endD = new Date(context.endDate + 'T00:00:00');
-            while (d <= endD) {
-                selectedDateSet.add(Amber.formatForInput(d));
-                d.setDate(d.getDate() + 1);
-            }
-        }
         const allDates = [...availableDateSet].sort();
         if (allDates.length === 0) {
             if (context.siteId) container.innerHTML = '<p class="text-center text-gray-500">No data available to display.</p>';
@@ -320,8 +311,8 @@
             let dayHtml;
             if (availableDateSet.has(dateStr)) {
                 const summary = context.dailySummaries[dateStr];
-                const isSelected = selectedDateSet.has(dateStr);
-                const borderClass = isSelected ? 'border-4 border-indigo-500' : 'border border-gray-200';
+                // Every day shown is inside the chosen dates, so none is marked out from the rest.
+                const borderClass = 'border border-gray-200';
                 const estimatedClass = summary && summary.estimatedCount > 0 ? ' ring-1 ring-amber-400' : '';
                 if (summary && (summary.totalInKwh > 0 || summary.totalOutKwh > 0)) {
                     const totalAmberCost = summary.amberCost + (summary.amberDemandCost || 0) + Amber.amberFixedDaily(context.amberRates, dateStr);

@@ -46,6 +46,33 @@
         return document.getElementById(id);
     }
 
+    /** JSON saved in the browser, or the fallback when it is missing, damaged or the wrong kind of thing. */
+    function storedJson(key, fallback) {
+        try {
+            const value = JSON.parse(localStorage.getItem(key));
+            if (value == null || typeof value !== 'object' || Array.isArray(value) !== Array.isArray(fallback)) return fallback;
+            return value;
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    /** Plans the user typed in, by state: { NSW: { 'My plan': { rateType, ... } } }. Damaged entries are left out. */
+    function storedCustomPlans() {
+        const saved = storedJson('customSupplierPlans', {});
+        const out = {};
+        Object.keys(saved).forEach((stateCode) => {
+            const plans = saved[stateCode];
+            if (!plans || typeof plans !== 'object' || Array.isArray(plans)) return;
+            Object.keys(plans).forEach((name) => {
+                const plan = plans[name];
+                if (!plan || typeof plan !== 'object' || (plan.rateType !== 'flat' && plan.rateType !== 'tou')) return;
+                (out[stateCode] || (out[stateCode] = {}))[name] = plan;
+            });
+        });
+        return out;
+    }
+
     function gstInclusive() {
         const toggle = $('gstToggle');
         return !toggle || toggle.checked;
@@ -466,6 +493,7 @@
             }
             planSelector.appendChild(option);
         });
+        syncPlanStateNote(selectedState, names);
         if (previous === '' || names.indexOf(previous) !== -1) {
             planSelector.value = previous;
             return;
@@ -478,7 +506,29 @@
         }
         if (planSelector.value && planSelector.value !== previous) {
             applyPlanTemplate();
+        } else if (!planSelector.value) {
+            // The plan that was showing isn't offered here and nothing takes its place: don't
+            // leave its name and prices behind under "Enter my own rates".
+            clearPlanInputs();
         }
+    }
+
+    /** The state a site's network is in (Ausgrid → NSW), or null when the network isn't known. */
+    function siteNetworkState(site) {
+        const net = site && Amber.NETWORKS && Amber.NETWORKS[Amber.canonicalNetwork(site.network)];
+        return net ? net.state : null;
+    }
+
+    /** Say why the plan list is empty when the state chosen isn't the one the site's network is in. */
+    function syncPlanStateNote(selectedState, names) {
+        const note = $('planStateNote');
+        const site = selectedSite();
+        const home = siteNetworkState(site);
+        const show = !!home && home !== selectedState && !names.length;
+        note.classList.toggle('hidden', !show);
+        note.textContent = show
+            ? `Your meter is on the ${site.network} network, which is in ${home}, so there are no ${selectedState} plans to compare it with. Choose ${home} to see its plans, or enter your own rates.`
+            : '';
     }
 
     function isBuiltInPlan(stateCode, planName) {
@@ -556,7 +606,14 @@
         list.forEach((win) => addWindowRow(container, win, true));
     }
 
-    function applyPlanTemplate() {
+    // The fingerprint of the built-in plan the form was last filled from (Amber.templateSignature).
+    const PLAN_SIGNATURE_KEY = 'selectedPlanSig';
+
+    /**
+     * Fill the plan form from the selected plan. opts.planOnly: save just the plan form (used
+     * while the page is still loading, before the site and Amber's charges are in their fields).
+     */
+    function applyPlanTemplate(opts) {
         const stateCode = $('stateSelector').value;
         const planName = $('planSelector').value;
         if (!stateCode || !planName) {
@@ -565,6 +622,7 @@
         }
         const template = state.templates[stateCode][planName];
         if (!template) return;
+        localStorage.setItem(PLAN_SIGNATURE_KEY, Amber.templateSignature(template));
 
         $('planName').value = planName;
         updateOtherSupplierHeading();
@@ -621,10 +679,12 @@
         } else {
             $('demandTariffInputs').classList.add('hidden');
         }
-        saveAllSettings();
+        if (opts && opts.planOnly) savePlanSettings();
+        else saveAllSettings();
     }
 
     function clearPlanInputs() {
+        localStorage.removeItem(PLAN_SIGNATURE_KEY);
         $('planName').value = '';
         updateOtherSupplierHeading();
         document.querySelector('input[name="rateType"][value="flat"]').checked = true;
@@ -660,12 +720,18 @@
     }
 
     function saveAllSettings() {
+        savePlanSettings();
+        if (!state.localChargesShown) AMBER_CHARGE_FIELDS.forEach((id) => localStorage.setItem(id, $(id).value));
+        localStorage.setItem('selectedSiteId', $('siteSelector').value || '');
+    }
+
+    /** The plan form on Compare: state, plan, name and every price and time in it. */
+    function savePlanSettings() {
         localStorage.setItem('rateType', document.querySelector('input[name="rateType"]:checked').value);
         localStorage.setItem('flatRate', $('otherSupplierRate').value);
         localStorage.setItem('flatFeedInRate', $('otherSupplierFeedInRateFlat').value);
         localStorage.setItem('flatControlledLoad', $('otherSupplierControlledLoadFlat').value);
         localStorage.setItem('dailyConnectionRate', $('dailyConnectionRate').value);
-        if (!state.localChargesShown) AMBER_CHARGE_FIELDS.forEach((id) => localStorage.setItem(id, $(id).value));
 
         const getPeriodSettings = (period) => {
             const container = document.querySelector(`[data-tou-period="${period}"]`);
@@ -687,7 +753,6 @@
         localStorage.setItem('selectedState', $('stateSelector').value);
         localStorage.setItem('selectedPlan', $('planSelector').value);
         localStorage.setItem('planName', $('planName').value);
-        localStorage.setItem('selectedSiteId', $('siteSelector').value || '');
         localStorage.setItem('demandSettings', JSON.stringify({
             enabled: $('enableDemandTariff').checked,
             rate: $('demandRate').value,
@@ -709,7 +774,7 @@
             updateOtherSupplierHeading();
         }
         const savedRateType = localStorage.getItem('rateType');
-        if (savedRateType) {
+        if (savedRateType === 'flat' || savedRateType === 'tou') {
             document.querySelector(`input[name="rateType"][value="${savedRateType}"]`).checked = true;
             if (savedRateType === 'tou') {
                 $('flatRateSection').classList.add('hidden');
@@ -723,13 +788,14 @@
         const savedFlatCl = localStorage.getItem('flatControlledLoad');
         if (savedFlatCl) $('otherSupplierControlledLoadFlat').value = savedFlatCl;
 
-        const savedTouConfig = localStorage.getItem('touConfig');
-        if (savedTouConfig) {
-            const config = JSON.parse(savedTouConfig);
-            $('otherSupplierFeedInRateTou').value = config.feedIn;
-            $('tou_controlled_load_rate').value = config.controlledLoad;
+        // Saved settings that can't be read (damaged, or from a much older version) are skipped,
+        // leaving that part of the form as it starts out, rather than stopping the page loading.
+        const config = storedJson('touConfig', null);
+        if (config) {
+            if (config.feedIn != null) $('otherSupplierFeedInRateTou').value = config.feedIn;
+            if (config.controlledLoad != null) $('tou_controlled_load_rate').value = config.controlledLoad;
             const setPeriodSettings = (period, settings) => {
-                if (!settings) return;
+                if (!settings || typeof settings !== 'object') return;
                 $(`tou_${period}_rate`).value = settings.rate || 0;
                 if (period === 'free') $('tou_free_cap').value = settings.capKwh || '';
                 if (period !== 'offpeak') {
@@ -751,27 +817,36 @@
         if (savedDaily) $('dailyConnectionRate').value = savedDaily;
         loadAmberChargeFields();
 
-        const savedDemand = localStorage.getItem('demandSettings');
-        if (savedDemand) {
-            const settings = JSON.parse(savedDemand);
-            $('enableDemandTariff').checked = settings.enabled;
-            $('demandRate').value = settings.rate;
-            $('demandWindowStart').value = settings.start;
-            $('demandWindowEnd').value = settings.end;
+        const settings = storedJson('demandSettings', null);
+        if (settings) {
+            $('enableDemandTariff').checked = !!settings.enabled;
+            if (settings.rate != null) $('demandRate').value = settings.rate;
+            if (settings.start) $('demandWindowStart').value = settings.start;
+            if (settings.end) $('demandWindowEnd').value = settings.end;
             if (settings.enabled) $('demandTariffInputs').classList.remove('hidden');
+            const days = Array.isArray(settings.days) ? settings.days : [];
             $('demandDaysContainer').querySelectorAll('input[type="checkbox"]').forEach((cb) => {
-                cb.checked = (settings.days || []).includes(parseInt(cb.value, 10));
+                cb.checked = days.includes(parseInt(cb.value, 10));
             });
         }
 
-        const feedInWindows = JSON.parse(localStorage.getItem('feedInWindows') || '[]');
+        const feedInWindows = storedJson('feedInWindows', []).filter((win) => win && typeof win === 'object');
         if (localStorage.getItem('enableFeedInTou') === 'true' || feedInWindows.length) {
             applyFeedInWindows(feedInWindows);
+        }
+
+        // The saved form was filled from a built-in plan whose published prices have changed since
+        // (a newer version of the app): fill it again, so old prices can't stay under the plan's
+        // name. Prices the user changed themselves are kept until the plan itself changes.
+        const plan = $('planSelector').value;
+        if (plan && isBuiltInPlan(savedState, plan)
+            && localStorage.getItem(PLAN_SIGNATURE_KEY) !== Amber.templateSignature(state.templates[savedState][plan])) {
+            applyPlanTemplate({ planOnly: true });
         }
     }
 
     function mergeCustomPlans() {
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+        const customPlans = storedCustomPlans();
         Object.keys(customPlans).forEach((stateCode) => {
             if (!state.templates[stateCode]) state.templates[stateCode] = {};
             Object.keys(customPlans[stateCode]).forEach((planName) => {
@@ -786,7 +861,7 @@
         if (!stateCode || !planName) return;
         if (isBuiltInPlan(stateCode, planName)) return;
         const plan = createPlanObjectFromForm();
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+        const customPlans = storedCustomPlans();
         if (!customPlans[stateCode]) customPlans[stateCode] = {};
         customPlans[stateCode][planName] = plan;
         localStorage.setItem('customSupplierPlans', JSON.stringify(customPlans));
@@ -915,6 +990,15 @@
                 loadAmberChargeFields();
             }
             note.classList.add('hidden');
+            // An Amber site in another state than the one showing (a new user starts on NSW), where
+            // that state has no plans for the site's network: show the site's own state instead.
+            // A state the user picked by hand for this site is left alone.
+            const home = siteNetworkState(site);
+            const shown = $('stateSelector').value;
+            if (home && home !== shown && state.templates[home] && !state.stateChosenByHand && !visiblePlanNames(shown).length) {
+                $('stateSelector').value = home;
+                localStorage.setItem('selectedState', home);
+            }
         }
     }
 
@@ -946,36 +1030,6 @@
 
     function hideMessage() {
         $('messageContainer').classList.add('hidden');
-    }
-
-    function injectFakeControlledLoad(channels, usageData, startDate, endDate) {
-        let clChannel = channels.find((c) => c.type === 'controlledLoad');
-        if (!clChannel) {
-            clChannel = { identifier: 'C', type: 'controlledLoad' };
-            channels.push(clChannel);
-        }
-        let loopDate = new Date(startDate + 'T00:00:00');
-        const end = new Date(endDate + 'T00:00:00');
-        while (loopDate <= end) {
-            const dateStr = Amber.formatForInput(loopDate);
-            for (let hour = 1; hour < 5; hour++) {
-                for (let minute = 0; minute < 60; minute += 5) {
-                    const endMinute = minute + 5;
-                    const endHour = endMinute >= 60 ? hour + 1 : hour;
-                    const endMin = endMinute >= 60 ? 0 : endMinute;
-                    usageData.push({
-                        nemTime: Amber.toNemIso(dateStr, endHour, endMin, 0),
-                        date: dateStr,
-                        channelIdentifier: clChannel.identifier,
-                        kwh: 0.25,
-                        perKwh: 15,
-                        quality: 'billable',
-                        tariffInformation: { demandWindow: false }
-                    });
-                }
-            }
-            loopDate.setDate(loopDate.getDate() + 1);
-        }
     }
 
     function planTotalsOptions(planConfig, numDays, startDateStr, endDateStr) {
@@ -1351,7 +1405,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">X ${demandTariffInfo.demandDays} days</div>`}
+                    ${demandMonthsHtml(demandTariffInfo.months, 'demandDays') || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
@@ -1369,7 +1423,7 @@
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
                     <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">X ${dayCount} applicable days</div>`}
+                    ${demandMonthsHtml(otherDemandTariffInfo.months, 'applicableDaysCount') || `<div class="text-xs">× ${dayCount} applicable days</div>`}
                 </td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
                 <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
@@ -1559,6 +1613,8 @@
         const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
         const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
         const planName = $('planName').value.trim() || 'your plan';
+        // The plan's name as the plan list shows it (without the network), for the Difference column.
+        const planShort = Amber.escapeHTML($('planName').value.trim() ? Amber.planListLabel($('planName').value.trim(), currentSiteNetwork()) : 'Your plan');
         const view = (r) => {
             const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
             const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
@@ -1576,7 +1632,7 @@
             const v = view(r);
             const isTotal = r.month === 'Total';
             const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
-            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber ' : 'Other plan '}${money(Math.abs(v.diff))} cheaper`;
+            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber' : planShort} ${money(Math.abs(v.diff))} cheaper`;
             const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
             html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
                 ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
@@ -2200,7 +2256,7 @@
             if (!billPeriodFinished(bill)) {
                 msg = 'The bill period hasn\'t finished yet, so there is no complete meter data to check against.';
             } else if (!$('apiKey').value.trim()) {
-                msg = 'Add your Amber API key on the Setup tab to check this bill against your meter data.';
+                msg = 'Add your Amber API key on the <button type="button" data-go-start class="text-indigo-600 hover:underline font-medium">Start</button> tab to check this bill against your meter data.';
             } else if (state.fetching || state.pendingBillLoad) {
                 msg = 'Fetching your meter data for the bill period…';
             } else if (state.billLoadFailed === billKey(bill)) {
@@ -2213,7 +2269,8 @@
             if (reload) reload.addEventListener('click', () => ensureBillLoaded());
             return;
         }
-        const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, periodOpts());
+        // A bill is one settlement of the export allowance, whatever calendar months it covers.
+        const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, Object.assign(periodOpts(), { billPeriod: true }));
         const rows = Amber.compareBill(bill, totals);
         const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' || Math.abs(v) < 10 ? 2 : 1)} ${unit}`);
         const fmtDiff = (v, unit) => {
@@ -2337,7 +2394,7 @@
         const numDays = Amber.inclusiveDayCount(startDateStr, endDateStr);
         const planConfig = createPlanObjectFromForm();
         const rates = readAmberRates();
-        Amber.applyAmberFeedInSettlement(state.cachedChannelData, selectedSite(), numDays);
+        Amber.applyAmberFeedInSettlement(state.cachedChannelData, selectedSite(), numDays, { from: startDateStr, to: endDateStr });
         Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, currentStateCode());
         const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, currentStateCode());
         const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates);
@@ -2349,25 +2406,21 @@
         await displayResults(state.cachedChannelData, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemand, skipGraphs === true);
     }
 
+    /** Take the results off every tab (before a new Compare, or when the readings are cleared). */
+    function hideResults() {
+        ['resultsSection', 'calendarSection', 'averageGraphContainer', 'dailyGraphSection', 'allPlansSection',
+            'batteryShiftSection', 'freePowerEmpty', 'moreStatsSection'].forEach((id) => $(id).classList.add('hidden'));
+        $('downloadCsvButton').disabled = true;
+        $('results-table-container').innerHTML = '';
+        destroyCharts();
+    }
+
     async function fetchAndCompare() {
         if (state.fetching) return;
         saveCustomPlan();
         saveAllSettings();
 
-        const resultsSection = $('resultsSection');
-        const calendarSection = $('calendarSection');
-        const downloadCsvButton = $('downloadCsvButton');
-        resultsSection.classList.add('hidden');
-        calendarSection.classList.add('hidden');
-        $('averageGraphContainer').classList.add('hidden');
-        $('dailyGraphSection').classList.add('hidden');
-        $('allPlansSection').classList.add('hidden');
-        $('batteryShiftSection').classList.add('hidden');
-        $('freePowerEmpty').classList.add('hidden');
-        $('moreStatsSection').classList.add('hidden');
-        downloadCsvButton.disabled = true;
-        $('results-table-container').innerHTML = '';
-        destroyCharts();
+        hideResults();
 
         const apiKey = $('apiKey').value.trim();
         const startDateValue = $('startDate').value;
@@ -2511,13 +2564,18 @@
                     return [];
                 }
             });
-            if (cacheWrites.length) await Amber.setUsageDataMany(db, cacheWrites);
-            chunkResults.forEach((data) => selectedUsageData.push(...data));
-
-            const params = new URLSearchParams(root.location.search);
-            if (params.has('fakeControlledLoad')) {
-                injectFakeControlledLoad(channels, selectedUsageData, startDateValue, clampedEnd);
+            // The readings are in hand either way: if the browser can't save them (its storage is
+            // full, say), compare anyway and say they'll download again next time.
+            let cacheWriteFailed = false;
+            if (cacheWrites.length) {
+                try {
+                    await Amber.setUsageDataMany(db, cacheWrites);
+                } catch (err) {
+                    console.error(err);
+                    cacheWriteFailed = true;
+                }
             }
+            chunkResults.forEach((data) => selectedUsageData.push(...data));
 
             if (!selectedUsageData.length) {
                 if (localMode) throw new Error(`No imported meter data for NMI ${site.nmi} in these dates. Its data covers ${fmtDate(site.firstDay || '')} – ${fmtDate(site.lastDay || '')}.`);
@@ -2534,7 +2592,7 @@
 
             Amber.processUsageData(selectedUsageData, channelTotalsSelectedPeriod, true);
             Object.values(channelTotalsSelectedPeriod).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
-            Amber.applyAmberFeedInSettlement(channelTotalsSelectedPeriod, site, numDays);
+            Amber.applyAmberFeedInSettlement(channelTotalsSelectedPeriod, site, numDays, { from: startDateValue, to: clampedEnd });
 
             const planConfig = createPlanObjectFromForm();
             const rates = readAmberRates();
@@ -2556,6 +2614,8 @@
                 showMessage(failedChunksMessage(failedRanges, chunkErrors), true);
             } else if (localMode && localMissing) {
                 showMessage(`${localMissing} of ${numDays} days have no imported meter data for NMI ${site.nmi}, so this comparison is incomplete. Fixed charges still cover the full selected period.`, true);
+            } else if (cacheWriteFailed) {
+                showMessage('Your results are below, but this browser couldn\'t save the meter readings (its storage may be full), so they will download again next time.', true);
             } else {
                 hideMessage();
             }
@@ -2602,109 +2662,82 @@
         return `Couldn't load ${days} day(s): ${spans}. ${reason} Totals below leave those days out. Loaded days are cached, so click Compare again in a few minutes to fill the gaps.`;
     }
 
-    function formatBytes(bytes, decimals) {
-        if (!+bytes) return '0 Bytes';
-        const k = 1024;
-        const dm = decimals < 0 ? 0 : decimals || 2;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(dm))} ${sizes[i]}`;
+    // A short note under the page title for the settings menu's actions, so it shows on every tab.
+    let settingsMessageTimer = null;
+    function showSettingsMessage(text, colourClass, clearAfterMs) {
+        const msg = $('cacheMessage');
+        msg.textContent = text;
+        msg.className = `text-sm mt-2 font-medium ${colourClass}`;
+        clearTimeout(settingsMessageTimer);
+        if (clearAfterMs) settingsMessageTimer = setTimeout(() => { msg.textContent = ''; }, clearAfterMs);
     }
 
-    function showModal(title, bodyNode) {
-        const modal = document.createElement('div');
-        modal.style.cssText = 'position:fixed;z-index:100;left:0;top:0;width:100%;height:100%;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;';
-        const content = document.createElement('div');
-        content.className = 'bg-white rounded-lg p-5 w-11/12 max-w-xl text-gray-800';
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.textContent = '×';
-        closeBtn.className = 'float-right text-2xl text-gray-500';
-        closeBtn.setAttribute('aria-label', 'Close');
-        closeBtn.onclick = () => document.body.removeChild(modal);
-        const header = document.createElement('h2');
-        header.className = 'text-xl font-bold mb-4';
-        header.textContent = title;
-        content.appendChild(closeBtn);
-        content.appendChild(header);
-        content.appendChild(bodyNode);
-        modal.appendChild(content);
-        modal.addEventListener('click', (e) => { if (e.target === modal) document.body.removeChild(modal); });
-        document.body.appendChild(modal);
+    function closeSettingsMenu() {
+        $('settingsMenu').classList.add('hidden');
+        $('settingsBtn').setAttribute('aria-expanded', 'false');
     }
 
-    async function showStatsForRick() {
-        let totalLocalStorageSize = 0;
-        for (let i = 0; i < localStorage.length; i++) {
-            const key = localStorage.key(i);
-            totalLocalStorageSize += key.length + (localStorage.getItem(key) || '').length;
-        }
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
-        let planCount = 0;
-        Object.keys(customPlans).forEach((s) => { planCount += Object.keys(customPlans[s]).length; });
-        let storageEstimate = { usage: 'N/A', quota: 'N/A' };
-        if (navigator.storage && navigator.storage.estimate) {
-            const estimate = await navigator.storage.estimate();
-            storageEstimate.usage = formatBytes(estimate.usage);
-            storageEstimate.quota = formatBytes(estimate.quota);
-        }
-        const wrap = document.createElement('div');
-        wrap.innerHTML = `<table class="min-w-full text-sm">
-            <tr><td class="py-1 font-medium">LocalStorage</td><td>${formatBytes(totalLocalStorageSize)}</td><td>${localStorage.length} keys, ${planCount} custom plans</td></tr>
-            <tr><td class="py-1 font-medium">Origin storage</td><td>${storageEstimate.usage} of ${storageEstimate.quota}</td><td>Cached daily usage</td></tr>
-        </table>`;
-        showModal('Application storage', wrap);
-    }
-
-    function saveCustomPlansForRick() {
-        const customPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
-        const outputLines = [];
-        Object.keys(customPlans).forEach((stateCode) => {
-            Object.keys(customPlans[stateCode]).forEach((planName) => {
-                outputLines.push(`"${planName}": ${JSON.stringify(customPlans[stateCode][planName])}`);
-            });
-        });
-        if (!outputLines.length) {
-            alert('No custom plans to save.');
+    /** "Clear saved meter readings": empty the cache, and everything worked out from it. */
+    async function clearSavedReadings() {
+        closeSettingsMenu();
+        if (state.fetching) {
+            showSettingsMessage('Wait for the Compare in progress to finish, then try again.', 'text-orange-600', 8000);
             return;
         }
-        const wrap = document.createElement('div');
-        const pre = document.createElement('pre');
-        pre.className = 'bg-gray-100 p-3 text-xs whitespace-pre-wrap break-all';
-        pre.textContent = outputLines.join(',\n');
-        const copy = document.createElement('button');
-        copy.type = 'button';
-        copy.className = 'mt-3 bg-indigo-600 text-white px-3 py-2 rounded';
-        copy.textContent = 'Copy to clipboard';
-        copy.onclick = () => navigator.clipboard.writeText(pre.textContent);
-        wrap.appendChild(pre);
-        wrap.appendChild(copy);
-        showModal('Custom plans for code', wrap);
+        const households = loadLocalSites().length;
+        const question = 'Clear all saved meter readings?\n\n'
+            + 'Readings from Amber download again next time (about the last 3 months). Older readings you imported from a file will need importing again.'
+            + (households ? `\n\n${households === 1 ? 'The household' : `The ${households} households`} imported from NEM12 files will be removed.` : '');
+        if (!window.confirm(question)) return;
+        showSettingsMessage('Clearing saved meter readings…', 'text-yellow-600');
+        try {
+            await Amber.deleteDatabase();
+        } catch (err) {
+            // Only a tab still running an older version of the app holds the database open.
+            if (err && err.message === 'blocked') showSettingsMessage('Couldn\'t clear the readings yet: the app is open in another tab or window. Close it there, then try again.', 'text-orange-600', 12000);
+            else showSettingsMessage('Couldn\'t clear the saved meter readings.', 'text-red-600', 12000);
+            return;
+        }
+        // An imported household is only its readings, so it goes too.
+        saveLocalSites([]);
+        state.cachedChannelData = null;
+        state.cachedAllChannelData = null;
+        state.lastResultDataPayload = null;
+        state.monthly = null;
+        state.dailySummaries = {};
+        state.lastFetchedStartDate = null;
+        state.lastFetchedEndDate = null;
+        state.lastFetchTimestamp = null;
+        state.batteryShift = null;
+        state.batteryDetect = null;
+        hideResults();
+        hideMessage();
+        $('calendar-container').innerHTML = '';
+        $('monthlySection').classList.add('hidden');
+        populateSites(state.sites);
+        syncConnectedUi();
+        updatePlanSavings();
+        renderBillCheck();
+        updateCacheSummary();
+        // Solar+? has no dates bar, and shows what it can still work from.
+        if (state.activeTab === 'plan') {
+            $('configSection').classList.add('hidden');
+            $('resultTools').classList.add('hidden');
+            if (Amber.plannerUi) Amber.plannerUi.show();
+        }
+        showSettingsMessage('Saved meter readings cleared.', 'text-green-600', 8000);
     }
 
     function buildSettingsMenu() {
-        const settingsMenu = $('settingsMenu');
-        let html = `
-            <button type="button" id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear saved meter readings<span class="block text-xs text-gray-500">They download again from Amber next time (about the last 3 months only)</span></button>
+        $('settingsMenu').innerHTML = `
+            <button type="button" id="clearCacheBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Clear saved meter readings<span class="block text-xs text-gray-500">They download again from Amber next time (about the last 3 months only). Imported files need importing again</span></button>
             <div class="border-t border-gray-100"></div>
             <button type="button" id="clearCustomPlansBtn" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Delete plans I typed in<span class="block text-xs text-gray-500">The built-in plans stay</span></button>
         `;
-        const urlParams = new URLSearchParams(root.location.search);
-        if (urlParams.get('name') === 'Rick') {
-            html += `
-                <div class="border-t border-gray-100"></div>
-                <button type="button" id="saveCustomPlansForRick" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Save custom plans</button>
-                <button type="button" id="showStatsForRick" class="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">Show stats</button>
-            `;
-        }
-        settingsMenu.innerHTML = html;
-        if (urlParams.get('name') === 'Rick') {
-            $('saveCustomPlansForRick').addEventListener('click', saveCustomPlansForRick);
-            $('showStatsForRick').addEventListener('click', showStatsForRick);
-        }
         $('clearCustomPlansBtn').addEventListener('click', () => {
+            closeSettingsMenu();
             if (!window.confirm('Delete ALL saved custom plans? This cannot be undone.')) return;
-            const oldCustomPlans = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}');
+            const oldCustomPlans = storedCustomPlans();
             localStorage.removeItem('customSupplierPlans');
             Object.keys(oldCustomPlans).forEach((stateCode) => {
                 if (!state.templates[stateCode]) return;
@@ -2718,42 +2751,9 @@
                 $('planSelector').value = '';
                 clearPlanInputs();
             }
-            const msg = $('cacheMessage');
-            msg.textContent = 'Custom plans cleared successfully!';
-            msg.className = 'text-sm mt-2 font-medium text-green-600';
-            setTimeout(() => { msg.textContent = ''; }, 3000);
+            showSettingsMessage('The plans you typed in were deleted.', 'text-green-600', 8000);
         });
-        $('clearCacheBtn').addEventListener('click', async () => {
-            if (!window.confirm('Clear all cached usage data? This cannot be undone.')) return;
-            const msg = $('cacheMessage');
-            msg.textContent = 'Clearing cache...';
-            msg.className = 'text-sm mt-2 font-medium text-yellow-600';
-            try {
-                await Amber.deleteDatabase();
-                state.cachedChannelData = null;
-                state.cachedAllChannelData = null;
-                state.monthly = null;
-                state.dailySummaries = {};
-                state.lastFetchedStartDate = null;
-                state.lastFetchedEndDate = null;
-                $('calendar-container').innerHTML = '';
-                $('monthlySection').classList.add('hidden');
-                $('batteryShiftSection').classList.add('hidden');
-                $('freePowerEmpty').classList.add('hidden');
-                state.batteryShift = null;
-                msg.textContent = 'Cache cleared successfully!';
-                msg.className = 'text-sm mt-2 font-medium text-green-600';
-            } catch (err) {
-                if (err && err.message === 'blocked') {
-                    msg.textContent = 'Cache is busy. Refresh the page and try again.';
-                    msg.className = 'text-sm mt-2 font-medium text-orange-600';
-                } else {
-                    msg.textContent = 'Error clearing cache.';
-                    msg.className = 'text-sm mt-2 font-medium text-red-600';
-                }
-            }
-            setTimeout(() => { msg.textContent = ''; }, 4000);
-        });
+        $('clearCacheBtn').addEventListener('click', clearSavedReadings);
     }
 
     function init() {
@@ -2807,9 +2807,13 @@
             if (file) handleAmberBillFile(file);
         });
         $('stateSelector').addEventListener('change', (e) => {
+            // A plan from the old state gives way to the new state's usual plan (or to blank own
+            // rates when the state has none for this network); rates typed in by hand stay.
+            state.stateChosenByHand = true;
             updatePlanSelector(e.target.value);
-            $('planSelector').value = '';
             saveAllSettings();
+            if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(false);
+            else updatePlanSavings();
         });
         $('planSelector').addEventListener('change', () => {
             selectSupplierPlan($('planSelector').value, { fromChange: true });
@@ -2870,6 +2874,7 @@
             state.monthly = null;
             state.lastFetchTimestamp = null;
             state.batteryShift = null;
+            state.stateChosenByHand = false;
             syncSiteMode();
             updatePlanSelector(currentStateCode());
             saveAllSettings();
@@ -2904,6 +2909,18 @@
             if (!$('settingsMenu').contains(event.target) && !$('settingsBtn').contains(event.target)) {
                 $('settingsMenu').classList.add('hidden');
                 $('settingsBtn').setAttribute('aria-expanded', 'false');
+            }
+        });
+        // Escape closes whichever menu is open and hands the keyboard back to its button.
+        document.addEventListener('keydown', (event) => {
+            if (event.key !== 'Escape') return;
+            if (!csvMenu.classList.contains('hidden')) {
+                csvMenu.classList.add('hidden');
+                $('downloadCsvButton').focus();
+            }
+            if (!$('settingsMenu').classList.contains('hidden')) {
+                closeSettingsMenu();
+                $('settingsBtn').focus();
             }
         });
         $('downloadFullIntervalCsv').addEventListener('click', (e) => {

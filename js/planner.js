@@ -367,36 +367,42 @@
 
     /**
      * Amber's cost ($, inc GST) for half-hourly kWh: interval prices, the export settlement,
-     * monthly network demand and the daily charges. Matches Amber.periodTotals on the same readings.
+     * monthly network demand and the daily charges. Matches Amber.periodTotals on the same readings
+     * (the export allowance and demand are both settled per calendar month).
      * Returns { total, usage, controlled, feedIn, exportCharge, demand, connection, subscription }.
      */
     Amber.amberCardCost = function (year, model, imp, exp, cl, range) {
         const r = rangeOf(year, range);
-        const days = r.to - r.from + 1;
         let usage = 0;
         let controlled = 0;
         let feedIn = 0;
-        let midday = 0;
         for (let i = r.from * SLOTS; i < (r.to + 1) * SLOTS; i++) {
             usage += imp[i] * year.amberImp[i];
             if (cl) controlled += cl[i] * year.amberCl[i];
             feedIn += exp[i] * year.amberExp[i];
-            if (model.midday && model.midday[i]) midday += exp[i];
         }
         usage /= 100;
         controlled /= 100;
         feedIn /= 100;
+        const months = monthsOf(year).filter((m) => m.endDay >= r.from && m.startDay <= r.to);
         let exportCharge = 0;
         if (model.tariff) {
+            // Each calendar month is settled on its own (as Amber bills it): its midday exports
+            // against the free allowance for its days in the range.
             const t = model.tariff;
             const exRate = t.chargeExGst != null ? t.chargeExGst : (t.chargeIncGst || 0) / 1.1;
             const rate = t.chargeIncGst != null ? t.chargeIncGst : exRate * 1.1;
-            const charged = Math.max(0, midday - (t.belKwhPerDay || 0) * days);
-            feedIn -= midday * exRate / 100;
-            exportCharge = charged * rate / 100;
+            months.forEach((m) => {
+                const from = Math.max(m.startDay, r.from);
+                const to = Math.min(m.endDay, r.to);
+                let midday = 0;
+                for (let i = from * SLOTS; i < (to + 1) * SLOTS; i++) if (model.midday[i]) midday += exp[i];
+                feedIn -= midday * exRate / 100;
+                exportCharge += Math.max(0, midday - (t.belKwhPerDay || 0) * (to - from + 1)) * rate / 100;
+            });
         }
         let demand = 0;
-        monthsOf(year).filter((m) => m.endDay >= r.from && m.startDay <= r.to).forEach((m) => {
+        months.forEach((m) => {
             let peak = 0;
             const demandDays = new Set();
             for (let i = m.startDay * SLOTS; i < (m.endDay + 1) * SLOTS; i++) {
@@ -1328,23 +1334,45 @@
 
     // ---------- Money over the years ----------
 
+    // batteryRebatePerKwh: the federal Cheaper Home Batteries rebate on the first 14 kWh. From
+    // 1 May 2026 it is 6.8 certificates per usable kWh (8.4 before, which was about $330), at
+    // about $37.50 a certificate after fees. It steps down again each January and July.
     Amber.PLANNER_FINANCE_DEFAULTS = {
         solarPerKw: 1150, solarFixed: 1500, stcPerKw: 280,
-        batteryPerKwh: 900, batteryFixed: 1500, batteryRebatePerKwh: 330,
+        batteryPerKwh: 900, batteryFixed: 1500, batteryRebatePerKwh: 255,
         rebateStepDown: 10, hardwareDecline: 4,
         escalation: 3, discount: 5, years: 20,
         solarDegradation: 0.5, batteryFade: 2, batteryLife: 12, batteryCostDecline: 4,
         inverterLife: 12, inverterCost: 2000
     };
 
-    /** Up-front cost of a system after rebates: { solar, battery, total, rebates, gross }. */
+    // Since 1 May 2026 the battery rebate is tiered by usable size: the full rate on the first
+    // 14 kWh, 60 % of it from 14 to 28 kWh, 15 % from 28 to 50 kWh and nothing above that.
+    Amber.BATTERY_REBATE_TIERS = [{ upTo: 14, share: 1 }, { upTo: 28, share: 0.6 }, { upTo: 50, share: 0.15 }];
+
+    /** The kWh of a new battery that earn the full per-kWh rebate, after the size tiers. */
+    Amber.batteryRebateKwh = function (batteryKwh) {
+        let from = 0;
+        let counted = 0;
+        Amber.BATTERY_REBATE_TIERS.forEach((tier) => {
+            if (batteryKwh > from) counted += (Math.min(batteryKwh, tier.upTo) - from) * tier.share;
+            from = tier.upTo;
+        });
+        return counted;
+    };
+
+    /**
+     * Up-front cost of a system after rebates: { solar, battery, total, rebates, gross,
+     * solarRebate, batteryRebate }. The battery rebate follows the size tiers above.
+     */
     Amber.plannerCapex = function (solarKw, batteryKwh, f) {
         const solarGross = solarKw > 0 ? f.solarFixed + f.solarPerKw * solarKw : 0;
         const solarRebate = solarKw > 0 ? f.stcPerKw * solarKw : 0;
         const batteryGross = batteryKwh > 0 ? f.batteryFixed + f.batteryPerKwh * batteryKwh : 0;
-        const batteryRebate = batteryKwh > 0 ? f.batteryRebatePerKwh * batteryKwh : 0;
+        const batteryRebate = batteryKwh > 0 ? f.batteryRebatePerKwh * Amber.batteryRebateKwh(batteryKwh) : 0;
         return {
             solar: solarGross - solarRebate, battery: batteryGross - batteryRebate,
+            solarRebate, batteryRebate,
             gross: solarGross + batteryGross, rebates: solarRebate + batteryRebate,
             total: solarGross + batteryGross - solarRebate - batteryRebate
         };

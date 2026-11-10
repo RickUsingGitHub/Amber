@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.61</title>
+    <title>Amber Compare &amp; Export v1.62</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.61">
+    <link rel="stylesheet" href="css/app.css?v=1.62">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,7 +19,7 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.61.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.62.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -29,6 +29,7 @@
                     <div id="settingsMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200" role="menu"></div>
                 </div>
             </div>
+            <p id="cacheMessage" class="text-sm mt-2 font-medium" role="status"></p>
         </header>
 
         <main>
@@ -275,6 +276,7 @@
                         <div>
                             <label for="stateSelector" class="block text-sm font-medium text-gray-700 mb-1" data-help="state">Your state</label>
                             <select id="stateSelector" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"></select>
+                            <p id="planStateNote" class="hidden mt-2 text-xs text-amber-800" role="status"></p>
                         </div>
                         <div id="planSelectorContainer">
                             <label id="planSelectorLabel" for="planSelector" class="block text-sm font-medium text-gray-700 mb-1" data-help="plan">Plan to compare with</label>
@@ -506,9 +508,6 @@
                     </div>
                     <p class="text-sm text-gray-500 mb-3"><span class="text-blue-600">↓ kWh bought</span> · <span class="text-green-600">↑ kWh of solar sent out</span> · Amber cost that day. Tap a day to see its graph.</p>
                     <div id="calendar-container" class="space-y-6"></div>
-                    <div class="mt-4 pt-4 border-t text-center">
-                        <p id="cacheMessage" class="text-sm mt-2 font-medium"></p>
-                    </div>
                 </div>
 
                 <div id="moreStatsSection" class="hidden bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
@@ -798,26 +797,26 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.61"></script>
-    <script src="js/help.js?v=1.61"></script>
-    <script src="js/time.js?v=1.61"></script>
-    <script src="js/templates.js?v=1.61"></script>
-    <script src="js/storage.js?v=1.61"></script>
-    <script src="js/costs.js?v=1.61"></script>
-    <script src="js/api.js?v=1.61"></script>
-    <script src="js/bill.js?v=1.61"></script>
-    <script src="js/csv.js?v=1.61"></script>
-    <script src="js/charts.js?v=1.61"></script>
-    <script src="js/calendar.js?v=1.61"></script>
-    <script src="js/stats.js?v=1.61"></script>
-    <script src="js/monthly.js?v=1.61"></script>
-    <script src="js/redispatch.js?v=1.61"></script>
-    <script src="js/import.js?v=1.61"></script>
-    <script src="js/networks.js?v=1.61"></script>
-    <script src="js/estimate.js?v=1.61"></script>
-    <script src="js/solar.js?v=1.61"></script>
-    <script src="js/planner.js?v=1.61"></script>
-    <script src="js/planner-ui.js?v=1.61"></script>
-    <script src="js/app.js?v=1.61"></script>
+    <script src="js/constants.js?v=1.62"></script>
+    <script src="js/help.js?v=1.62"></script>
+    <script src="js/time.js?v=1.62"></script>
+    <script src="js/templates.js?v=1.62"></script>
+    <script src="js/storage.js?v=1.62"></script>
+    <script src="js/costs.js?v=1.62"></script>
+    <script src="js/api.js?v=1.62"></script>
+    <script src="js/bill.js?v=1.62"></script>
+    <script src="js/csv.js?v=1.62"></script>
+    <script src="js/charts.js?v=1.62"></script>
+    <script src="js/calendar.js?v=1.62"></script>
+    <script src="js/stats.js?v=1.62"></script>
+    <script src="js/monthly.js?v=1.62"></script>
+    <script src="js/redispatch.js?v=1.62"></script>
+    <script src="js/import.js?v=1.62"></script>
+    <script src="js/networks.js?v=1.62"></script>
+    <script src="js/estimate.js?v=1.62"></script>
+    <script src="js/solar.js?v=1.62"></script>
+    <script src="js/planner.js?v=1.62"></script>
+    <script src="js/planner-ui.js?v=1.62"></script>
+    <script src="js/app.js?v=1.62"></script>
 </body>
 </html>

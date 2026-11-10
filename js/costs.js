@@ -668,20 +668,19 @@
             });
         });
 
-        // Allocate the period's export charge in proportion to midday exports.
-        // Keep it on general usage, just as the comparison and bill settlement do.
+        // Allocate each settlement's export charge (each calendar month's, in Compare) in proportion
+        // to its midday exports. Keep it on general usage, just as the comparison and bill do.
         const general = Object.values(channelData).find((c) => c.type === 'general');
         if (general) Object.values(channelData).forEach((channel) => {
             const settled = channel.amberFeedInSettlement;
             if (!settled || !settled.charge) return;
             channel.usageData.forEach((item) => {
-                const share = Amber.exportSettlementShare(channel, item);
+                const charge = Amber.exportChargeForItem(channel, item);
                 const day = summaries[Amber.usageDateStr(item)];
-                if (!share || !day) return;
+                if (!charge || !day) return;
                 const line = day.channels[general.identifier] || (day.channels[general.identifier] = {
                     type: 'general', kwh: 0, amberCost: 0, otherCost: 0
                 });
-                const charge = settled.charge * share;
                 day.amberCost += charge;
                 line.amberCost += charge;
             });
@@ -795,12 +794,20 @@
         return null;
     };
 
-    Amber.settleAmberFeedIn = function (channel, site, numDays) {
+    /**
+     * Settle a feed-in channel's export tariff the way the bill does. With range ({ from, to },
+     * inclusive dates) each calendar month is settled on its own, as Amber bills it: that month's
+     * midday exports against the free allowance for its days in the range (months: { 'YYYY-MM':
+     * { days, middayKwh, chargedKwh, charge } }). Without a range the whole period is one
+     * settlement over numDays (one bill, or one month).
+     */
+    Amber.settleAmberFeedIn = function (channel, site, numDays, range) {
         if (!channel || channel.type !== 'feedIn') return null;
         const tariff = Amber.resolveExportTariff(site, channel);
         if (!tariff) return null;
         const days = Number(numDays) || 0;
         const opts = { clock: tariff.clock || 'local', timeZone: tariff.timeZone || 'Australia/Sydney' };
+        const byMonth = range && range.from && range.to ? Object.create(null) : null;
         let intervalCost = 0;
         let middayKwh = 0;
         let rewardKwh = 0;
@@ -811,6 +818,10 @@
             const parts = Amber.itemClockParts(item, opts);
             if (Amber.intervalEndInWindow(parts, tariff.middayStart, tariff.middayEnd)) {
                 middayKwh += kwh;
+                if (byMonth) {
+                    const key = Amber.usageDateStr(item).substring(0, 7);
+                    byMonth[key] = (byMonth[key] || 0) + kwh;
+                }
             }
             if (tariff.rewardStart && Amber.intervalEndInWindow(parts, tariff.rewardStart, tariff.rewardEnd)) {
                 rewardKwh += kwh;
@@ -823,11 +834,27 @@
          * embedded charge back onto the credit for all midday kWh, and charge the kWh above BEL
          * on usage. Checked against an Amber bill: credit $6.70, export charge $0.26 ex GST.
          */
-        const bel = (tariff.belKwhPerDay || 0) * days;
-        const freeKwh = Math.min(middayKwh, bel);
-        const chargedKwh = Math.max(0, middayKwh - bel);
+        const belPerDay = tariff.belKwhPerDay || 0;
         const exRate = tariff.chargeExGst != null ? tariff.chargeExGst : (tariff.chargeIncGst || 0) / 1.1;
         const rate = tariff.chargeIncGst != null ? tariff.chargeIncGst : exRate * 1.1;
+        let chargedKwh;
+        let months = null;
+        if (byMonth) {
+            months = {};
+            chargedKwh = 0;
+            const add = (key, monthDays) => {
+                const kwh = byMonth[key] || 0;
+                const over = Math.max(0, kwh - belPerDay * monthDays);
+                months[key] = { days: monthDays, middayKwh: kwh, chargedKwh: over, charge: over * rate / 100 };
+                chargedKwh += over;
+            };
+            Amber.monthsInRange(range.from, range.to).forEach((m) => add(m.key, m.days));
+            // Readings outside the range (there shouldn't be any) get no allowance.
+            Object.keys(byMonth).forEach((key) => { if (!months[key]) add(key, 0); });
+        } else {
+            chargedKwh = Math.max(0, middayKwh - belPerDay * days);
+        }
+        const freeKwh = middayKwh - chargedKwh;
         const addBack = middayKwh * exRate / 100;
         const charge = chargedKwh * rate / 100;
         return {
@@ -840,7 +867,8 @@
             chargedKwh,
             charge,
             addBack,
-            chargeRate: rate
+            chargeRate: rate,
+            months
         };
     };
 
@@ -852,13 +880,29 @@
         return Amber.intervalEndInWindow(parts, t.middayStart, t.middayEnd) ? Amber.absKwh(item.kwh) / s.middayKwh : 0;
     };
 
+    /** The export charge ($) that falls on one interval: its share of its settlement's midday exports. */
+    Amber.exportChargeForItem = function (channel, item) {
+        const s = channel.amberFeedInSettlement;
+        if (!s || !s.charge) return 0;
+        if (!s.months) return s.charge * Amber.exportSettlementShare(channel, item);
+        const month = s.months[Amber.usageDateStr(item).substring(0, 7)];
+        if (!month || !month.charge || !month.middayKwh) return 0;
+        // exportSettlementShare is the interval's share of every midday kWh; rescale to its month.
+        return month.charge * Amber.exportSettlementShare(channel, item) * s.middayKwh / month.middayKwh;
+    };
+
     Amber.settledFeedInItemCost = function (channel, item) {
         const raw = Amber.absKwh(item.kwh) * (parseFloat(item.perKwh) || 0) / 100;
         const s = channel.type === 'feedIn' && channel.amberFeedInSettlement;
         return s ? raw - s.addBack * Amber.exportSettlementShare(channel, item) : raw;
     };
 
-    Amber.applyAmberFeedInSettlement = function (channelTotals, site, numDays) {
+    /**
+     * Settle every feed-in channel (see settleAmberFeedIn) and book any export charge on general
+     * usage. range ({ from, to }): settle each calendar month in it on its own, as Compare, month
+     * by month and the planner do; leave it out to settle numDays as one period (a bill).
+     */
+    Amber.applyAmberFeedInSettlement = function (channelTotals, site, numDays, range) {
         Object.keys(channelTotals || {}).forEach((id) => {
             const channel = channelTotals[id];
             delete channel.amberFeedInSettlement;
@@ -871,7 +915,7 @@
         });
         Object.keys(channelTotals || {}).forEach((id) => {
             const channel = channelTotals[id];
-            const settled = Amber.settleAmberFeedIn(channel, site, numDays);
+            const settled = Amber.settleAmberFeedIn(channel, site, numDays, range);
             if (!settled) return;
             channel.totalAmberCost = settled.cost;
             channel.amberFeedInSettlement = settled;
