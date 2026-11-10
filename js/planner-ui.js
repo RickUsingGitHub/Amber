@@ -98,6 +98,7 @@
     function customPlanNames() {
         try {
             const custom = JSON.parse(localStorage.getItem('customSupplierPlans') || '{}') || {};
+            if (typeof custom !== 'object') return new Set();
             return new Set([].concat(...Object.values(custom).map((byName) => Object.keys(byName || {}))));
         } catch (e) { return new Set(); }
     }

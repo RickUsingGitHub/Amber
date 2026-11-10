@@ -269,3 +269,75 @@ test('the bill check points to the Start tab for the API key', async ({ page }) 
     await page.click('#billCheckBody [data-go-start]');
     await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
 });
+
+test('damaged saved settings don\'t stop the page loading', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await amberCustomer(page);
+    await page.addInitScript(() => {
+        localStorage.setItem('touConfig', '{"peak": ');
+        localStorage.setItem('demandSettings', 'not json');
+        localStorage.setItem('feedInWindows', '{"oops": true}');
+        localStorage.setItem('customSupplierPlans', JSON.stringify({ NSW: { 'Broken plan': null, 'Half a plan': { flat: 30 }, 'Good plan': { rateType: 'flat', flat: 30, daily: 100, feedIn: 5 } }, VIC: 'nope' }));
+        localStorage.setItem('rateType', 'sideways');
+    });
+    await page.goto('/');
+    await expect(page.locator('#tab-compare')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    const plans = await page.locator('#planSelector option').allTextContents();
+    expect(plans).toContain('Good plan');
+    expect(plans.some((t) => /Broken|Half/.test(t))).toBe(false);
+    await page.click('[data-preset="lastMonth"]');
+    await compared(page);
+    expect(errors).toEqual([]);
+});
+
+test('a Compare still shows its results when the browser can\'t save the readings', async ({ page }) => {
+    test.setTimeout(90000);
+    const calls = await amberCustomer(page);
+    await page.goto('/');
+    await expect(page.locator('#planSelector option')).not.toHaveCount(1);
+    // As when storage is full: every write to the readings store is aborted.
+    await page.evaluate(() => {
+        const put = IDBObjectStore.prototype.put;
+        IDBObjectStore.prototype.put = function (...args) {
+            const request = put.apply(this, args);
+            this.transaction.abort();
+            return request;
+        };
+    });
+    await page.click('[data-preset="lastMonth"]');
+    await compared(page);
+    await expect(page.locator('#message')).toContainText('couldn\'t save the meter readings');
+    await expect(page.locator('#results-table-container')).toContainText('Total');
+    const first = calls.usage;
+    await page.evaluate(() => { window.Amber._appState.lastFetchTimestamp = null; });
+    await page.click('#fetchData');
+    await compared(page);
+    expect(calls.usage).toBe(first * 2); // nothing was saved, so the same days download again
+});
+
+test('Escape closes the settings and Download menus, and no calendar day is marked out', async ({ page }) => {
+    await amberCustomer(page);
+    await page.goto('/');
+    await page.click('[data-preset="lastMonth"]');
+    await compared(page);
+    await page.click('#settingsBtn');
+    await expect(page.locator('#settingsMenu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#settingsMenu')).toBeHidden();
+    await expect(page.locator('#settingsBtn')).toBeFocused();
+    await expect(page.locator('#settingsBtn')).toHaveAttribute('aria-expanded', 'false');
+    await page.click('#downloadCsvButton');
+    await expect(page.locator('#csvDropdownMenu')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('#csvDropdownMenu')).toBeHidden();
+    await expect(page.locator('#downloadCsvButton')).toBeFocused();
+
+    // Month by month names the plan in its Difference column.
+    await expect(page.locator('#monthlyTable')).not.toContainText('Other plan');
+    await page.click('#tab-check');
+    const days = page.locator('#calendar-container [data-date]');
+    expect(await days.count()).toBeGreaterThan(27);
+    expect(await page.evaluate(() => Array.from(document.querySelectorAll('#calendar-container [data-date]')).filter((d) => getComputedStyle(d).borderTopWidth !== '1px').length)).toBe(0);
+});

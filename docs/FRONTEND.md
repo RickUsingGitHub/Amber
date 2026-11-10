@@ -96,7 +96,7 @@ Text from data or the user goes through `Amber.escapeHTML` (`esc`). Keep that wh
 
 ## Accessibility today
 
-- Skip link to the tabs; ARIA tabs with keyboard support; labelled inputs; the GST switch is a real checkbox; help buttons are buttons with `aria-expanded` and can be opened by keyboard and closed with Escape.
+- Skip link to the tabs; ARIA tabs with keyboard support; labelled inputs; the GST switch is a real checkbox; help buttons are buttons with `aria-expanded` and can be opened by keyboard and closed with Escape. The settings and Download menus also close with Escape, and focus returns to their button.
 - The planner options table rows are `role="button"` with `tabindex="0"`, and Enter/Space select them.
 - Charts have an `aria-label` on the canvas. The numbers are also in nearby tables (month table, payback notes), but there's no table alternative for the Usage charts.
 - The rating dots have `role="img"` and an `aria-label` ("3 of 4").

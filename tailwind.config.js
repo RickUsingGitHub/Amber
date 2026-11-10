@@ -23,8 +23,6 @@ module.exports = {
         'text-amber-800',
         'text-orange-600',
         'text-yellow-600',
-        'border-4',
-        'border-indigo-500',
         'ring-1',
         'ring-amber-400',
         'font-semibold',

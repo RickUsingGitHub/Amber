@@ -99,7 +99,7 @@ Imports (Amber CSV, NEM12 estimate) produce the same shape, so every feature wor
 
 ### The cache
 
-IndexedDB `AmberDataCacheDB`, store `dailyUsage`, one record per site and NEM date (`id = "<siteId>_<date>"`). Connections aren't closed after use; each closes itself on `versionchange`, so "Clear saved meter readings" (`deleteDatabase`) isn't blocked. Compare reads the cache first and fetches only missing or stale days, in 7-day chunks, 3 at a time (`Amber.FETCH_CHUNK_DAYS`, `FETCH_CONCURRENCY`). Final whole days are cached. Old days with no data are remembered as empty (`emptyDayCutoff`). Estimated readings stay eligible for refetch (`cachedDayUsable`).
+IndexedDB `AmberDataCacheDB`, store `dailyUsage`, one record per site and NEM date (`id = "<siteId>_<date>"`). Connections aren't closed after use; each closes itself on `versionchange`, so "Clear saved meter readings" (`deleteDatabase`) isn't blocked. Every transaction rejects its promise on `abort` as well as `error` (a full disk aborts without an error event), and a Compare whose readings can't be saved still shows its results. Compare reads the cache first and fetches only missing or stale days, in 7-day chunks, 3 at a time (`Amber.FETCH_CHUNK_DAYS`, `FETCH_CONCURRENCY`). Final whole days are cached. Old days with no data are remembered as empty (`emptyDayCutoff`). Estimated readings stay eligible for refetch (`cachedDayUsable`).
 
 ### Channel totals
 
@@ -200,6 +200,8 @@ Key pieces:
 | localStorage | `batteryShiftSettings` | Free? tab settings |
 | localStorage | `amberBillCheck` | The last bill check |
 | localStorage | `plannerSettings` | Every Solar+? input and the company ticks |
+
+Saved JSON is read through `storedJson` / `storedCustomPlans` in `app.js`: a value that is missing, damaged or the wrong shape falls back to the default instead of stopping `init()`.
 
 ## External data
 
