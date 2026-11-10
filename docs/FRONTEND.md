@@ -69,19 +69,20 @@ Tab behaviour (`app.js` `selectTab`, `setupTabs`): `aria-selected`, roving `tabi
   - `.gst-switch`: a CSS-only toggle;
   - `.help-btn`, `.help-row`, `.help-bubble`: help bubbles, with a bigger tap target on coarse pointers;
   - `.choice-card`, `.step-num`: the Start tab.
-- Everything else is Tailwind utilities written straight into `index.html` and into HTML strings in `app.js` / `planner-ui.js`. Common patterns are repeated rather than shared: card, table (`min-w-full divide-y divide-gray-200 text-sm`, `thead bg-gray-50`, `px-2 py-2` cells), small grey notes (`text-xs text-gray-500`) and buttons (indigo primary, white bordered secondary).
+- Everything else is Tailwind utilities written straight into `index.html` and into HTML strings in `app-*.js` / `planner-ui.js`. Common patterns are repeated rather than shared: card, table (`min-w-full divide-y divide-gray-200 text-sm`, `thead bg-gray-50`, `px-2 py-2` cells), small grey notes (`text-xs text-gray-500`) and buttons (indigo primary, white bordered secondary).
 - There's no dark mode and no design tokens beyond Tailwind's default palette.
 
 ## JS-built UI
 
 Most result content is built as HTML strings and set with `innerHTML`:
 
-- **`app.js`**:
-  - the answer table and banners (`displayResults`);
-  - every plan (`renderAllPlansTable`) and month by month (`renderMonthly`);
-  - Free? (`drawBatteryShift`), bill check (`renderBillCheck`) and More Stats (`renderMoreStats`);
-  - imported households (`renderLocalSites`);
-  - the settings menu (`buildSettingsMenu`).
+- **The page controller** (`app-*.js`):
+  - `app-results.js`: the answer table and banners (`displayResults`), every plan (`renderAllPlansTable`), month by month (`renderMonthly`) and More Stats (`renderMoreStats`);
+  - `app-plan-form.js`: the TOU and feed-in window rows (`addWindowRow`);
+  - `app-free.js`: Free? (`drawBatteryShift`);
+  - `app-bill.js`: the bill check (`renderBillCheck`);
+  - `app-imports.js`: imported households (`renderLocalSites`) and the NEM12 options (`renderNem12Options`);
+  - `app-settings.js`: the settings menu (`buildSettingsMenu`).
 - **`planner-ui.js`**: every Solar+? results card (`renderRecommendation`, `renderExistingCheck`, `renderOptions`, `renderDetail` + `breakdownHtml`, `renderNumbers`, `renderPayback`, `renderAssumptions`), and the company tick panel. Small helpers `th()` and `td()` keep its tables consistent.
 - **`calendar.js`**: the calendar grid and its tooltips (appended to `body`).
 - **`charts.js`** and `planner-ui.js` `renderPayback`: Chart.js charts (`#dailyChart` and `#usagePriceChart` with zoom and pan via chartjs-plugin-zoom, and `#planPaybackChart` with the $0 line drawn darker).
