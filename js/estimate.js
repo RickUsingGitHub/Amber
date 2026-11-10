@@ -32,7 +32,7 @@
      */
     Amber.parseNem12 = function (text) {
         const out = { ok: false, error: null, nmis: {}, nmi: null, skipped: 0 };
-        const src = String(text || '').replace(/^﻿/, '');
+        const src = String(text || '').replace(/^\uFEFF/, '');
         const hasHeader = /(^|\n)\s*"?100"?,\s*"?NEM12/i.test(src);
         if (!hasHeader && !(ROW_200.test(src) && ROW_300.test(src))) {
             out.error = 'This doesn\'t look like a NEM12 file (it should start with a 100,NEM12 row). Ask the retailer or network for your interval data in NEM12 format.';

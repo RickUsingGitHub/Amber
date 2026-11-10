@@ -246,6 +246,7 @@
                 const x = Math.min(exportRoom, budget, room * rte);
                 if (x > 0) {
                     extraExport = x;
+                    // eslint-disable-next-line no-useless-assignment -- keeps the tally right for any step added after this one
                     exportRoom -= x;
                     budget -= x;
                     room -= x / rte;

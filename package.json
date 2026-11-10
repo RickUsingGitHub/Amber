@@ -4,12 +4,17 @@
   "description": "Browser-based Amber Electric usage comparison and export tool",
   "scripts": {
     "build:css": "tailwindcss -i ./css/input.css -o ./css/app.css --minify",
-    "test": "node tests/unit-review.js && node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && node tests/unit-planner.js && playwright test",
-    "test:unit": "node tests/unit-review.js && node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && node tests/unit-planner.js",
+    "lint": "eslint .",
+    "test": "npm run test:unit && playwright test",
+    "test:unit": "node tests/unit-syntax.js && node tests/unit-review.js && node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && node tests/unit-planner.js",
     "serve": "node scripts/static-server.js"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.55.0",
+    "@stylistic/eslint-plugin": "^5.10.0",
+    "eslint": "^10.14.0",
+    "globals": "^17.14.0",
     "tailwindcss": "^3.4.17"
   }
 }
