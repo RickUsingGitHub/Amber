@@ -78,7 +78,11 @@
         table.querySelectorAll('tr').forEach((row) => {
             const rowData = [];
             row.querySelectorAll('td, th').forEach((col) => {
-                rowData.push('"' + col.innerText.replace(/\s+/g, ' ').trim().replace(/"/g, '""') + '"');
+                const cell = col.cloneNode(true);
+                cell.querySelectorAll('[data-compact-only], .help-btn, .help-bubble').forEach((el) => el.remove());
+                // A line break between two parts of a cell (an amount and its rate) becomes a space.
+                cell.querySelectorAll('div').forEach((el) => el.insertAdjacentText('beforebegin', ' '));
+                rowData.push('"' + cell.textContent.replace(/\s+/g, ' ').trim().replace(/"/g, '""') + '"');
             });
             csv.push(rowData.join(','));
         });

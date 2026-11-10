@@ -145,11 +145,22 @@
         return rows;
     };
 
+    /**
+     * Dollars as text, the same everywhere: "$1,234.56", or "−$6.45" with a proper minus sign before
+     * the dollar sign. dp: decimal places (2, or 0 for whole dollars).
+     */
+    Amber.money = function (value, dp) {
+        const n = Number(value) || 0;
+        const digits = dp == null ? 2 : dp;
+        const text = Math.abs(n).toLocaleString('en-AU', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+        // Nothing that rounds to zero is shown as negative.
+        return `${n < 0 && Number(Math.abs(n).toFixed(digits)) > 0 ? '−' : ''}$${text}`;
+    };
+
     Amber.formatCentsPerKwh = function (rate) {
         const n = parseFloat(rate);
         if (!Number.isFinite(n)) return '';
-        const text = String(Number(n.toFixed(4)));
-        return `(${text}c/kWh) `;
+        return `${String(Number(n.toFixed(4)))} c/kWh`;
     };
 
     Amber.getFeedInRate = function (parts, planConfig) {

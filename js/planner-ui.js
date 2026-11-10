@@ -10,7 +10,7 @@
     const SETTINGS_KEY = 'plannerSettings';
     const SOLAR_SIZES = [3, 5, 6.6, 8, 10, 13.2, 15, 20, 25];
     const BATTERY_SIZES = [5, 10, 13.5, 20, 27, 40];
-    const INVERTER_RATIO = 1.33; // panels up to 133 % of the inverter, as most installers fit them
+    const INVERTER_RATIO = 1.33; // panels up to 133% of the inverter, as most installers fit them
     const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
     // Prices and rebates, battery and money settings (ids, defaults from PLANNER_FINANCE_DEFAULTS).
@@ -43,9 +43,9 @@
 
     const $ = (id) => document.getElementById(id);
     const app = () => Amber.appApi;
-    const dollars = (v) => `${v < -0.5 ? '−' : ''}$${Math.abs(Math.round(v)).toLocaleString('en-AU')}`;
+    const dollars = (v) => Amber.money(v, 0);
     const num = (id) => { const v = parseFloat($(id).value); return Number.isFinite(v) ? v : 0; };
-    const fmtDate = (iso) => new Date(`${iso}T00:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+    const fmtDate = (iso) => Amber.formatDate(iso);
     const esc = (s) => Amber.escapeHTML(String(s));
     const kw = (v) => `${Number(v.toFixed(1))} kW`;
     const kwh = (v) => `${Number(v.toFixed(1))} kWh`;
@@ -668,7 +668,7 @@
 
     // ---------- How keen to be ----------
     // A verdict from today's dollars back per $1 up front, whether it still pays with power prices
-    // 20 % lower, and how soon it pays back for good (thresholds in the planEnthusiasm help).
+    // 20% lower, and how soon it pays back for good (thresholds in the planEnthusiasm help).
     const KEEN = [
         { word: 'Not worth it', why: 'at these prices it costs more than it saves', dot: 'bg-red-500', text: 'text-red-700' },
         { word: 'Marginal', why: 'it only just pays for itself, and could easily not', dot: 'bg-orange-500', text: 'text-orange-700' },
@@ -716,12 +716,12 @@
         const l = KEEN[k.level];
         const dots = [1, 2, 3, 4].map((i) => `<span class="inline-block w-2.5 h-2.5 rounded-full ${i <= k.level ? l.dot : 'bg-gray-300'}"></span>`).join('');
         let why = `every $1 up front comes back as about $${Math.max(0, k.back).toFixed(2)} in today's money over ${r.f.years} years`;
-        if (fin.irr != null) why += ` (like ${(fin.irr * 100).toFixed(1)} % a year, against the ${r.f.discount} % you'd otherwise earn)`;
-        if (fin.npv > 0) why += k.low.npv > 0 ? '; it still pays if power prices are 20 % lower than you set' : `; if power prices are 20 % lower than you set, it doesn't pay (${dollars(k.low.npv)})`;
+        if (fin.irr != null) why += ` (like ${(fin.irr * 100).toFixed(1)}% a year, against the ${r.f.discount}% you'd otherwise earn)`;
+        if (fin.npv > 0) why += k.low.npv > 0 ? '; it still pays if power prices are 20% lower than you set' : `; if power prices are 20% lower than you set, it doesn't pay (${dollars(k.low.npv)})`;
         if (fin.npv > 0 && k.day) why += k.day.fin.npv > 0 ? `; if feed-in prices from 10am to 3pm halve, it's still worth ${dollars(k.day.fin.npv)}` : `; if feed-in prices from 10am to 3pm halve, it doesn't pay (${dollars(k.day.fin.npv)})`;
         let timing = '';
         const capex = fin.capex.total;
-        const quiet = k.wait.change > -0.01 * capex; // waiting costs under 1 % of the up-front cost, or pays
+        const quiet = k.wait.change > -0.01 * capex; // waiting costs under 1% of the up-front cost, or pays
         const cost = k.wait.change >= 0 ? `${dollars(k.wait.change)} better off` : `${dollars(-k.wait.change)} worse off`;
         if (k.level > 0 && quiet && k.level <= 2) timing = ` Waiting a year costs next to nothing (${cost}), so it's reasonable to wait and see what prices, rebates and technology do.`;
         else if (k.level > 0 && quiet) timing = ` There's no rush: waiting a year costs next to nothing (${cost}), though it's worth doing either way.`;
@@ -747,7 +747,7 @@
         lines.push(`<p class="text-lg">Next year's bill: <strong>${dollars(best.bill)}</strong>, against <strong>${dollars(r.base)}</strong> with nothing new on ${esc(label(r.compare.plan))}${r.compareWith ? '' : ` (the cheapest plan ${r.allow.size < r.plans.length ? 'you\'d use ' : ''}for you as things are)`}: <strong class="${best.saving >= 0 ? 'text-green-700' : 'text-red-700'}">${dollars(Math.abs(best.saving))} a year ${best.saving >= 0 ? 'less' : 'more'}</strong>.</p>`);
         if (hardware) {
             lines.push(`<p>What to ask installers for: <strong>${esc(orderText(best))}</strong>. <span class="text-sm text-gray-600">${esc(orderNote(best))}</span></p>`);
-            lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)} % interest a year)` : ''}.</p>`);
+            lines.push(`<p>Up front: <strong>${dollars(fin.capex.total)}</strong> after ${dollars(fin.capex.rebates)} of rebates. It ${paybackText(fin)}, and over ${r.f.years} years it's worth <strong>${dollars(fin.npv)}</strong> in today's money${fin.irr != null ? ` (like ${(fin.irr * 100).toFixed(1)}% interest a year)` : ''}.</p>`);
         }
         const curtail = curtailNote(best);
         if (curtail) lines.push(`<p class="text-sm text-gray-700" data-curtail><strong>${esc(curtail.lead)}</strong> ${esc(curtail.text)}</p>`);
@@ -807,7 +807,7 @@
             + row('Bought (kWh)', (x) => k(x.importKwh))
             + row('Sent out (kWh)', (x) => k(x.exportKwh))
             + '</tbody></table>'
-            + `<p class="text-sm mt-3 ${close ? 'text-gray-700' : 'text-amber-800'}">The planner's version of your battery comes to ${dollars(c.modelled.bill)}, ${Math.abs(gap) < 0.005 ? 'the same as' : `${(Math.abs(gap) * 100).toFixed(0)} % ${gap > 0 ? 'more than' : 'less than'}`} your real readings. `
+            + `<p class="text-sm mt-3 ${close ? 'text-gray-700' : 'text-amber-800'}">The planner's version of your battery comes to ${dollars(c.modelled.bill)}, ${Math.abs(gap) < 0.005 ? 'the same as' : `${(Math.abs(gap) * 100).toFixed(0)}% ${gap > 0 ? 'more than' : 'less than'}`} your real readings. `
             + (close ? 'That\'s close, so the comparisons below are on firm ground.' : 'That\'s a sizeable gap: check the battery size and power above (take off any backup reserve), and treat the answers below as rougher than usual.')
             + ` Every option is worked out the same way, so they compare fairly. Without the battery the same year would cost ${dollars(c.without.bill)}, so on this plan it saves you about <strong>${dollars(c.without.bill - c.modelled.bill)}</strong> a year.</p>`;
     }
@@ -901,10 +901,10 @@
             const lost = Math.max(0, lostToLimit(ev) - lostToLimit(base));
             const offNew = Math.max(0, (ev.switchedOff || 0) - (base.switchedOff || 0));
             const sentOut = Math.max(0, f.solarKwh - f.solarSelf - lost - offNew);
-            const parts = [`${k(f.solarSelf)} (${pct(f.solarSelf)} %) is used at home as it's made`, `${k(sentOut)} (${pct(sentOut)} %) goes to the battery or the grid`,
-                `${k(lost)} (${pct(lost)} %) is lost because the ${num('planExportLimit')} kW export limit is already used`];
-            if (offNew > 1) parts.push(`${k(offNew)} (${pct(offNew)} %) isn't sent because the feed-in price is negative then (the panels switch off)`);
-            if (clipped > 1) parts.push(`${k(clipped)} (${pct(clipped)} %) is clipped by the inverter on the sunniest middays`);
+            const parts = [`${k(f.solarSelf)} (${pct(f.solarSelf)}%) is used at home as it's made`, `${k(sentOut)} (${pct(sentOut)}%) goes to the battery or the grid`,
+                `${k(lost)} (${pct(lost)}%) is lost because the ${num('planExportLimit')} kW export limit is already used`];
+            if (offNew > 1) parts.push(`${k(offNew)} (${pct(offNew)}%) isn't sent because the feed-in price is negative then (the panels switch off)`);
+            if (clipped > 1) parts.push(`${k(clipped)} (${pct(clipped)}%) is clipped by the inverter on the sunniest middays`);
             let negative = '';
             if (!r.switchOff) {
                 // Panels that can't switch off: what sending power out at negative prices costs.
@@ -944,7 +944,7 @@
         if (x.solarKw > 0 || x.batteryKwh > 0) facts.push(`What to ask installers for: ${orderText(x)}. ${orderNote(x)}`);
         const curtail = curtailNote(x);
         if (curtail) facts.push(`${curtail.lead} ${curtail.text}`);
-        facts.push(`Power bought from the grid: ${Math.round(nowImport).toLocaleString('en-AU')} → ${Math.round(tot.imp).toLocaleString('en-AU')} kWh a year${change ? ` (${Math.abs(change)} % ${change < 0 ? 'less' : 'more'})` : ''}.${change > 0 && ev.sim ? ' The battery buys extra when power is cheap, to use or sell when it\'s dear, and loses a little on the way.' : ''}`);
+        facts.push(`Power bought from the grid: ${Math.round(nowImport).toLocaleString('en-AU')} → ${Math.round(tot.imp).toLocaleString('en-AU')} kWh a year${change ? ` (${Math.abs(change)}% ${change < 0 ? 'less' : 'more'})` : ''}.${change > 0 && ev.sim ? ' The battery buys extra when power is cheap, to use or sell when it\'s dear, and loses a little on the way.' : ''}`);
         if (x.solarKw > 0) {
             const f = ev.flows;
             const viaBattery = ev.sim ? ev.sim.charged - ev.sim.gridCharged : 0;
@@ -1054,7 +1054,7 @@
         html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">${esc(label(x.plan))}: prices through the day</h4>`
             + `<p class="text-xs text-gray-600 mb-2">The plain average of every half hour in the year, per kWh${plan.amber ? ', from Amber\'s prices over your readings\' year' : `, at the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}. The averages above are weighted by when you actually buy and send out power. Times are the electricity market's clock (Brisbane time), so in daylight saving they're about an hour behind the clock on the wall.</p>`
             + `<table class="min-w-full divide-y divide-gray-200 text-sm" data-numbers="bands"><thead class="bg-gray-50"><tr>${th('Time of day')}${th('Buy (c/kWh)', 1)}${th('Feed-in (c/kWh)', 1)}${anyNeg ? th('Feed-in below zero', 1) : ''}</tr></thead><tbody class="divide-y divide-gray-200">`
-            + bands.map((b, i) => `<tr${i === bands.length - 1 ? ' class="bg-gray-50 font-semibold"' : ''}><td class="px-2 py-2">${b.name}</td>${cell(cents(b.buy))}${cell(cents(b.sell))}${anyNeg ? cell(`${Math.round(b.neg * 100)} %`) : ''}</tr>`).join('')
+            + bands.map((b, i) => `<tr${i === bands.length - 1 ? ' class="bg-gray-50 font-semibold"' : ''}><td class="px-2 py-2">${b.name}</td>${cell(cents(b.buy))}${cell(cents(b.sell))}${anyNeg ? cell(`${Math.round(b.neg * 100)}%`) : ''}</tr>`).join('')
             + '</tbody></table>';
 
         // Rules of thumb: what the new equipment makes and is worth per kWh, against what it costs.
@@ -1062,7 +1062,7 @@
         if (x.solarKw > 0) {
             const clipped = (prep.ctx.solarPerKw && prep.ctx.solarPerKw.clipped || 0) * x.solarKw;
             const made = ev.flows.solarKwh + clipped;
-            notes.push(`Panels: the new ${kw(x.solarKw)} make about ${(made / x.solarKw / days).toFixed(1)} kWh a day for each kW of panels (${k(made / x.solarKw)} a year), facing ${s.facing.toLowerCase()} at ${s.tilt}° with ${s.shading} % shade, in ${s.town}'s typical weather. For panels facing north, installers often quote about 3.5 (Hobart, Melbourne) to 4.4 (Perth, Darwin).`);
+            notes.push(`Panels: the new ${kw(x.solarKw)} make about ${(made / x.solarKw / days).toFixed(1)} kWh a day for each kW of panels (${k(made / x.solarKw)} a year), facing ${s.facing.toLowerCase()} at ${s.tilt}° with ${s.shading}% shade, in ${s.town}'s typical weather. For panels facing north, installers often quote about 3.5 (Hobart, Melbourne) to 4.4 (Perth, Darwin).`);
             if (x.opt && made > 0) {
                 const worth = x.opt.planOnly - x.opt.solarOnly;
                 let lifeKwh = 0;
@@ -1078,12 +1078,12 @@
                 let lifeKwh = 0;
                 for (let y = 0; y < f.batteryLife; y++) lifeKwh += delivered * Math.pow(1 - f.batteryFade / 100, y);
                 const rte = Math.round(((prep.ctx.battery && prep.ctx.battery.rte) || 0.9) * 100);
-                notes.push(`Battery: the new ${kwh(x.batteryKwh)} gives back about ${k(delivered)} kWh a year (about ${(delivered / x.batteryKwh / 365).toFixed(1)} full cycles a day)${r.existing.kwh > 0 ? ' on top of your current battery' : ''}. Each kWh it gives back saves about ${cents((worth / delivered) * 100)}: the gap between the price when it charges (or the feed-in it gives up) and the price when that power is used or sold, less what's lost on the way (${rte} % round trip). It costs ${dollars(x.fin.capex.battery)} after the rebate, about ${cents((x.fin.capex.battery / lifeKwh) * 100)} for each kWh it gives back over ${f.batteryLife} years (before interest). Saving more per kWh than it costs is a good sign.`);
+                notes.push(`Battery: the new ${kwh(x.batteryKwh)} gives back about ${k(delivered)} kWh a year (about ${(delivered / x.batteryKwh / 365).toFixed(1)} full cycles a day)${r.existing.kwh > 0 ? ' on top of your current battery' : ''}. Each kWh it gives back saves about ${cents((worth / delivered) * 100)}: the gap between the price when it charges (or the feed-in it gives up) and the price when that power is used or sold, less what's lost on the way (${rte}% round trip). It costs ${dollars(x.fin.capex.battery)} after the rebate, about ${cents((x.fin.capex.battery / lifeKwh) * 100)} for each kWh it gives back over ${f.batteryLife} years (before interest). Saving more per kWh than it costs is a good sign.`);
             }
         }
         const neg = negativeFeedIn(x.plan);
         if (neg.all > 0) {
-            notes.push(`Feed-in below zero: on ${label(x.plan)} it was below zero for ${k(neg.all / 2)} hours of the year (${Math.round((neg.all / (days * 48)) * 100)} % of the time), ${Math.round((neg.midday / neg.all) * 100)} % of them between 10am and 3pm. `
+            notes.push(`Feed-in below zero: on ${label(x.plan)} it was below zero for ${k(neg.all / 2)} hours of the year (${Math.round((neg.all / (days * 48)) * 100)}% of the time), ${Math.round((neg.midday / neg.all) * 100)}% of them between 10am and 3pm. `
                 + (r.switchOff ? 'The planner assumes the panels switch off then, so nothing is paid to send power out: that needs a "curtailable" inverter.' : 'You\'ve said the panels can\'t switch off, so power sent out then costs you.'));
         }
         const lk = r.loads.kwh;
@@ -1094,17 +1094,17 @@
 
         // The settings this option was worked out with.
         const facts = [];
-        if (x.solarKw > 0) facts.push(['New panels', `${kw(x.solarKw)} facing ${s.facing.toLowerCase()} at ${s.tilt}°, ${s.shading} % shade, losing ${f.solarDegradation} % a year, with ${needsCurtailable(x) ? 'a "curtailable" inverter' : 'an inverter'} of about ${kw(x.solarKw / INVERTER_RATIO)}`]);
+        if (x.solarKw > 0) facts.push(['New panels', `${kw(x.solarKw)} facing ${s.facing.toLowerCase()} at ${s.tilt}°, ${s.shading}% shade, losing ${f.solarDegradation}% a year, with ${needsCurtailable(x) ? 'a "curtailable" inverter' : 'an inverter'} of about ${kw(x.solarKw / INVERTER_RATIO)}`]);
         if (x.batteryKwh > 0) {
             const b = prep.batteryOf(x.batteryKwh);
             const power = Math.min(15, Math.max(2.5, x.batteryKwh * ((prep.ctx.battery && prep.ctx.battery.kwPerKwh) || 0.4)));
-            facts.push(['New battery', `${kwh(x.batteryKwh)} usable, about ${kw(power)} in and out, ${Math.round(b.rte * 100)} % round trip, losing ${f.batteryFade} % of its capacity a year, replaced after ${f.batteryLife} years`]);
+            facts.push(['New battery', `${kwh(x.batteryKwh)} usable, about ${kw(power)} in and out, ${Math.round(b.rte * 100)}% round trip, losing ${f.batteryFade}% of its capacity a year, replaced after ${f.batteryLife} years`]);
         }
         facts.push(['Export limit', `${s.exportLimit} kW`]);
         facts.push(['Feed-in below zero', r.switchOff ? 'the panels switch off (a "curtailable" inverter); a battery soaks up what it can first' : 'the panels keep sending power out, and that costs you']);
         if (x.fin && x.fin.capex.total > 0) facts.push(['Up front', capexText(x)]);
-        facts.push(['Power prices', `${plan.amber ? 'Amber\'s prices over your readings\' year' : `the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}, rising ${f.escalation} % a year`]);
-        facts.push(['Money', `worth is counted in today's money at ${f.discount} % a year over ${f.years} years${hardware ? `; the inverter is replaced every ${f.inverterLife} years for ${dollars(f.inverterCost)}` : ''}`]);
+        facts.push(['Power prices', `${plan.amber ? 'Amber\'s prices over your readings\' year' : `the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}, rising ${f.escalation}% a year`]);
+        facts.push(['Money', `worth is counted in today's money at ${f.discount}% a year over ${f.years} years${hardware ? `; the inverter is replaced every ${f.inverterLife} years for ${dollars(f.inverterCost)}` : ''}`]);
         html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">What it assumes</h4>`
             + `<dl class="grid grid-cols-1 sm:grid-cols-4 gap-x-4 gap-y-1 text-sm" data-numbers="assumes">${facts.map(([a, b]) => `<dt class="font-medium text-gray-800">${esc(a)}</dt><dd class="sm:col-span-3 text-gray-700 mb-1 sm:mb-0">${esc(b)}</dd>`).join('')}</dl>`
             + '<p class="text-xs text-gray-500 mt-2">Change these under "Roof and panels", "Battery" and "Prices and rebates", then run again.</p>';
@@ -1134,8 +1134,8 @@
                     labels,
                     datasets: [
                         { label: 'Today\'s prices', data: series(x.fin), borderColor: '#4f46e5', backgroundColor: '#4f46e5', borderWidth: 2, pointRadius: 0, tension: 0.1 },
-                        { label: 'Prices 20 % higher', data: series(high), borderColor: '#16a34a', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
-                        { label: 'Prices 20 % lower', data: series(low), borderColor: '#dc2626', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.1 }
+                        { label: 'Prices 20% higher', data: series(high), borderColor: '#16a34a', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.1 },
+                        { label: 'Prices 20% lower', data: series(low), borderColor: '#dc2626', borderDash: [5, 4], borderWidth: 1.5, pointRadius: 0, tension: 0.1 }
                     ]
                 },
                 options: {
@@ -1161,8 +1161,8 @@
             const left = r.f.batteryLife - (r.f.years - fin.batteryBought.year + 1);
             repl += ` When the ${r.f.years} years are up, the replacement battery still has ${left} of its ${r.f.batteryLife} years to go, worth about ${dollars(fin.residual.total)} then (with the inverter's). That isn't on the chart, which is cash only, but it counts toward the worth in today's money.`;
         }
-        notes.innerHTML = keenHtml(x) + `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20 % higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20 % lower).${repl}</p>`
-            + `<p class="text-gray-600">Savings here are against nothing new on ${esc(label(r.compare.plan))}${r.compare === r.free ? ', the cheapest plan as things are, so they count only what the panels and battery add' : ', so they include anything gained just by switching plan'}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation} % a year.</p>`;
+        notes.innerHTML = keenHtml(x) + `<p>Paid ${dollars(x.fin.capex.total)} now; the line climbs as the savings come in. It ${paybackText(x.fin)} at today's prices (${high.payback != null ? `${high.payback.toFixed(1)} years` : 'never'} if prices are 20% higher, ${low.payback != null ? `${low.payback.toFixed(1)} years` : 'never'} if 20% lower).${repl}</p>`
+            + `<p class="text-gray-600">Savings here are against nothing new on ${esc(label(r.compare.plan))}${r.compare === r.free ? ', the cheapest plan as things are, so they count only what the panels and battery add' : ', so they include anything gained just by switching plan'}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation}% a year.</p>`;
     }
 
     function renderAssumptions() {
@@ -1172,12 +1172,12 @@
         const items = [
             `Next year is your readings from ${fmtDate(y.first)} to ${fmtDate(y.last)} with the changes you entered, priced at today's plan rates (${r.plans.length - 1} plans for your network, prices as at ${fmtDate(Amber.TEMPLATES_AS_AT)}). Amber uses its prices over those same 12 months: a different year's wholesale prices could make it cheaper or dearer.`,
             'Each option is worked out half hour by half hour, with every plan\'s daily charges, free windows, caps and demand charges, the same way as the Compare tab.',
-            r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')} % shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is assumed to be 75 % of the panel size (panels up to 133 % of the inverter, as most installers fit them); each option shows the sizes to ask for.` : 'No new panels.',
+            r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')}% shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is assumed to be 75% of the panel size (panels up to 133% of the inverter, as most installers fit them); each option shows the sizes to ask for.` : 'No new panels.',
             r.existing.kwh > 0
                 ? `Your ${kwh(r.existing.kwh)} battery is taken out of your readings (an estimate: the meter can't see what it covers at home, so that comes from its size, the days it filled up and ran flat, and your use on nights it was empty), then run again on every plan, together with any new battery. Your panels stay in the readings; new ones are added on top.`
                 : 'New panels are added on top of your meter readings, so panels you already have keep doing what they did.',
             'The battery covers your home when power is dear, soaks up solar that would sell cheaply, charges from the grid in free or cheap hours, and sells when an export pays well. It knows each day\'s prices in the morning (as fixed plans and Amber\'s forecasts allow), so a real battery may do a little worse, especially on Amber\'s price spikes.',
-            `Money: prices rise ${r.f.escalation} % a year; the battery loses ${r.f.batteryFade} % of its capacity a year and is replaced after ${r.f.batteryLife} years; the inverter after ${r.f.inverterLife}; panels lose ${r.f.solarDegradation} % a year. "Worth" is today's money at ${r.f.discount} % a year.`,
+            `Money: prices rise ${r.f.escalation}% a year; the battery loses ${r.f.batteryFade}% of its capacity a year and is replaced after ${r.f.batteryLife} years; the inverter after ${r.f.inverterLife}; panels lose ${r.f.solarDegradation}% a year. "Worth" is today's money at ${r.f.discount}% a year.`,
             r.switchOff
                 ? 'When a feed-in price is negative (on Amber it happens in the middle of sunny days), a battery soaks up what it can and the panels switch off for the rest, so nothing is paid to export. That takes a "curtailable" inverter, one Amber can switch off remotely. Untick "Panels switch off when the feed-in price is negative" if yours can\'t.'
                 : 'Your panels can\'t switch off, so power sent out while the feed-in price is negative costs you (a battery soaks up what it can first).',

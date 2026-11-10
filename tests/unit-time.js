@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.62', 'app version is 1.62');
+assert(Amber.APP_VERSION === '1.63', 'app version is 1.63');
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 125.367 && Amber.PREVIOUS_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection defaults (2026-27 and 2025-26)');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');
 assert(Amber.DEFAULT_AMBER_DEMAND_CENTS === 43.431 && Amber.PREVIOUS_AMBER_DEMAND_CENTS === 42.345, 'Amber demand defaults (2026-27 and 2025-26)');
@@ -127,8 +127,11 @@ const noTariff = Amber.settleAmberFeedIn({
     usageData: [{ nemTime: '2026-08-20T12:00:00+10:00', processedTime: true, kwh: 1, perKwh: -10 }]
 }, { network: 'Unknown' }, 31);
 assert(noTariff == null, 'no two-way tariff leaves interval FIT unchanged');
-assert(Amber.formatCentsPerKwh(60.2) === '(60.2c/kWh) ', 'format peak rate');
-assert(Amber.formatCentsPerKwh(28) === '(28c/kWh) ', 'format whole-cent rate');
+assert(Amber.formatCentsPerKwh(60.2) === '60.2 c/kWh', 'format peak rate');
+assert(Amber.formatCentsPerKwh(28) === '28 c/kWh', 'format whole-cent rate');
+assert(Amber.money(1018.64) === '$1,018.64' && Amber.money(-258.92) === '\u2212$258.92' && Amber.money(-0.004) === '$0.00'
+    && Amber.money(1161.4, 0) === '$1,161' && Amber.money(-0.4, 0) === '$0', 'money: thousands separated, a proper minus, never minus zero');
+assert(Amber.formatDate('2026-10-31') === '31 Oct 2026' && Amber.formatDate('2026-10-31', true) === 'Sat 31 Oct 2026', 'dates as people read them');
 assert(Amber.canonicalNetwork('Ausgrid') === 'ausgrid', 'canonical Ausgrid');
 assert(Amber.canonicalNetwork('Endeavour Energy') === 'endeavour', 'canonical Endeavour');
 assert(Amber.planMatchesNetwork('Red Energy Living Energy Saver (Ausgrid, Flat)', {}, 'Ausgrid') === true, 'Ausgrid plan matches Ausgrid site');
