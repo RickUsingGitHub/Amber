@@ -83,8 +83,8 @@
      */
     Amber.parseAmberUsageCsv = function (text) {
         const out = { ok: false, error: null, rows: 0, channels: {}, byDate: {}, days: [], firstDay: null, lastDay: null, intervalMinutes: null };
-        const src = String(text || '').replace(/^﻿/, '');
-        let pos = src.indexOf('\n');
+        const src = String(text || '').replace(/^\uFEFF/, '');
+        const pos = src.indexOf('\n');
         const headerLine = (pos === -1 ? src : src.substring(0, pos)).replace(/\r$/, '');
         const header = splitCsvLine(headerLine).map((h) => h.trim().toLowerCase());
         const col = (name) => header.indexOf(name);

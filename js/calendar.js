@@ -48,7 +48,7 @@
 
     function channelRowsHtml(channels) {
         let html = '';
-        Object.entries(channels).forEach(([id, data]) => {
+        Object.values(channels).forEach((data) => {
             if (Math.abs(data.amberCost) > 0.001 || Math.abs(data.otherCost) > 0.001 || Math.abs(data.kwh) > 0.01) {
                 html += `<tr>
                     <td class="px-2 py-1 whitespace-nowrap">${data.type === 'feedIn' ? 'Solar sent out' : (data.type === 'controlledLoad' ? 'Hot water' : 'Power bought')}</td>
@@ -254,7 +254,7 @@
             allMonthlyTotals[monthKey].outKwh += summary.totalOutKwh;
         });
 
-        let date = new Date(start.getFullYear(), start.getMonth(), 1);
+        const date = new Date(start.getFullYear(), start.getMonth(), 1);
         const lastDay = new Date(end.getFullYear(), end.getMonth() + 1, 0);
         let currentMonth = -1;
         let monthGrid;

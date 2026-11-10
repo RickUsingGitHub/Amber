@@ -69,7 +69,7 @@
             amberImp: new Float64Array(n), amberCl: new Float64Array(n), amberExp: new Float64Array(n).fill(NaN),
             demandFlag: new Uint8Array(n), hasFeedIn: false, hasCl: false, parts: Object.create(null)
         };
-        const sum = { imp: new Float64Array(n), cl: new Float64Array(n), exp: new Float64Array(n) };
+        const weighted = { imp: new Float64Array(n), cl: new Float64Array(n), exp: new Float64Array(n) };
         const plain = { imp: new Float64Array(n), cl: new Float64Array(n), exp: new Float64Array(n) };
         const count = { imp: new Uint16Array(n), cl: new Uint16Array(n), exp: new Uint16Array(n) };
         const key = { general: 'imp', controlledLoad: 'cl', feedIn: 'exp' };
@@ -95,7 +95,7 @@
                 const price = parseFloat(item.perKwh);
                 y[k][i] += kwh;
                 if (Number.isFinite(price)) {
-                    sum[k][i] += price * kwh;
+                    weighted[k][i] += price * kwh;
                     plain[k][i] += price;
                     count[k][i] += 1;
                 }
@@ -106,7 +106,7 @@
         });
         const price = (k, i) => {
             if (!count[k][i]) return NaN;
-            return y[k][i] > 0 ? sum[k][i] / y[k][i] : plain[k][i] / count[k][i];
+            return y[k][i] > 0 ? weighted[k][i] / y[k][i] : plain[k][i] / count[k][i];
         };
         for (let i = 0; i < n; i++) {
             y.amberImp[i] = price('imp', i);
@@ -950,7 +950,6 @@
      */
     Amber.simulateBattery = function (year, flows, prices, battery) {
         const B = battery && battery.kwh > 0 ? battery.kwh : 0;
-        const n = year.n;
         const imp = Float64Array.from(flows.imp);
         const exp = Float64Array.from(flows.exp);
         const out = { imp, exp, charged: 0, gridCharged: 0, discharged: 0, exported: 0, curtailed: 0, limited: 0, cycles: 0 };

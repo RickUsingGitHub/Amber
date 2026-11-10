@@ -12,7 +12,8 @@ A browser-only tool for Australian electricity bills (Amber Electric vs other pl
 ```bash
 npm install
 npm run build:css     # after changing any Tailwind class in index.html or js/; commit css/app.css
-npm run test:unit     # Node unit checks (fast)
+npm run lint          # ESLint: unused or shadowed variables, undefined names, house style
+npm run test:unit     # Node unit checks (fast), starting with a syntax check of every js/*.js
 npm test              # unit checks + Playwright (starts scripts/static-server.js on :4173)
 npx playwright test tests/planner.spec.js --workers=2   # one spec
 npm run serve         # http://127.0.0.1:4173
@@ -40,5 +41,5 @@ If Playwright can't find its browser, point it at an installed Chromium with `la
    - `js/constants.js`: `Amber.APP_VERSION`;
    - `tests/unit-time.js`: the version assert.
 2. Update `README.md` and `docs/` if behaviour or structure changed.
-3. Run `npm run build:css` if classes changed, then `npm test`.
-4. Open a pull request. Merge only after the GitHub "Tests" check passes (GitHub Pages serves `main`).
+3. Run `npm run build:css` if classes changed, then `npm run lint` and `npm test`.
+4. Open a pull request. Merge only after the GitHub "Tests" check passes: it runs the lint and the tests (GitHub Pages serves `main`).
