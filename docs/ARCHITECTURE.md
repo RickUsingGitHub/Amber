@@ -91,14 +91,14 @@ Two checks keep this honest. ESLint's `no-undef` reports a call to another file'
 | `solar.js` | ~220 | Towns, PVGIS weather loading, sun position, panel output per half hour (tilt, facing, shade, temperature, inverter clipping) |
 | `planner.js` | ~1,480 | Solar+? engine: the half-hourly year, plan rate cards, exact costing, flows, existing-battery detection and unwinding, battery simulation, the search, finance and ratings |
 | `planner-ui.js` | ~1,190 | Solar+? tab UI: inputs and settings, running the search, every results card |
-| `app-core.js` | ~180 | What the page controller's files share: `state`, `Amber.app`, `$`, `storedJson`, the selected site and state, Amber's fixed charges (`loadAmberChargeFields`, `readAmberRates`), `fmtDate`, the message under the dates bar |
+| `app-core.js` | ~200 | What the page controller's files share: `state`, `Amber.app`, `$`, `storedJson`, the selected site and state, Amber's fixed charges (`loadAmberChargeFields`, `readAmberRates`), `fmtDate`, the message under the dates bar, tables in their own sideways-scrolling box (`scrollBox`, `syncScrollHints`) |
 | `app-plan-form.js` | ~620 | The plan form on Compare: TOU and feed-in windows, the plan picker (`updatePlanSelector`, `selectSupplierPlan`), `createPlanObjectFromForm`, `applyPlanTemplate`, saved settings (`saveAllSettings`, `loadAllSettings`), custom plans |
-| `app-results.js` | ~680 | Showing results: the answer (`displayResults`), every plan (`renderAllPlansTable`), savings in the plan picker (`updatePlanSavings`), month by month (`loadMonthlyData`, `renderMonthly`), the Usage tab's daily graph, day picker and More Stats, `hideResults` |
+| `app-results.js` | ~690 | Showing results: the answer (`displayResults`), every plan (`renderAllPlansTable`), savings in the plan picker (`updatePlanSavings`), month by month (`loadMonthlyData`, `renderMonthly`), the Usage tab's daily graph, day picker and More Stats, `hideResults` |
 | `app-imports.js` | ~450 | Sites and imports: the site picker (`populateSites`, `syncSiteMode`), imported households (`loadLocalSites`, `renderLocalSites`), Amber CSV import (`handleUsageCsvFile`), NEM12 (`handleNem12File`, `renderNem12Options`, `buildNem12Estimate`) |
-| `app-bill.js` | ~260 | An Amber bill: reading the file and filling Amber's charges from it (`handleAmberBillFile`, `applyAmberBillRates`), and the Bill? tab (`ensureBillLoaded`, `renderBillCheck`) |
+| `app-bill.js` | ~300 | An Amber bill: reading the file and filling Amber's charges from it (`handleAmberBillFile`, `applyAmberBillRates`), and the Bill? tab, which loads the bill period's own readings (`ensureBillLoaded`, `billChannelData`, `renderBillCheck`) |
 | `app-free.js` | ~250 | The Free? tab: its settings, `renderBatteryShift`, `drawBatteryShift` |
 | `app-settings.js` | ~120 | The settings menu: `buildSettingsMenu`, `clearSavedReadings`, deleting custom plans |
-| `app.js` | ~700 | The top of the controller, loaded last: tabs (`selectTab`), the Start tab's welcome and account fields, the dates bar and Download menu, `fetchAndCompare`, `recalculateAndShow`, `init()`, `Amber.appApi` |
+| `app.js` | ~720 | The top of the controller, loaded last: tabs (`selectTab`), the Start tab's welcome and account fields, the dates bar and Download menu, `loadReadings` (the cache, then Amber), `fetchAndCompare`, `recalculateAndShow`, `init()`, `Amber.appApi` |
 
 ## Data model
 
@@ -162,7 +162,7 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 
 ### Compare (`app.js`: `fetchAndCompare`; `app-results.js`: `displayResults`, `renderAllPlansTable`, `renderMonthly`; `app-plan-form.js`: the plan form)
 
-1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back.
+1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back (`loadReadings` in `app.js`, shared with the bill check).
 2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement, one calendar month at a time via `Amber.monthsInRange`; Bill? settles the bill's own period with `billPeriod`).
 3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
 4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
@@ -173,7 +173,7 @@ Uses the same channel totals and daily summaries. Charts use the interval's loca
 
 ### Bill? (`bill.js`, `app-bill.js`)
 
-Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The last result is kept in localStorage `amberBillCheck`.
+Reads the bill (pdf.js is loaded on demand), loads that period's meter data (from the cache or API), and `compareBill` checks each line. The load is the bill check's own (`ensureBillLoaded` → `loadReadings` → `state.billData`): the dates bar and the Compare results are left alone, and results already on show are used when they cover the bill. The last result is kept in localStorage `amberBillCheck`.
 
 ### Free? (`redispatch.js`, `app-free.js`)
 
@@ -234,6 +234,7 @@ Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` 
 
 - The CSP (`index.html` `<meta http-equiv="Content-Security-Policy">`) is `default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; …`. This means no inline scripts, no inline `<style>` and no `style="…"` attributes (setting `element.style.x` from JS is fine), and no third-party hosts.
 - All data stays in the browser. The API key is obfuscated (XOR with a fixed key, then base64), not encrypted.
+- Text is formatted in one place each: dollars with `Amber.money` (`costs.js`: "$1,234.56", a proper minus sign, whole dollars on Solar+?), dates with `Amber.formatDate` (`time.js`: "31 Oct 2026"), plan rates with `Amber.formatCentsPerKwh` ("27.11 c/kWh"), and percentages with no space ("20%").
 - Dynamic HTML is built with template strings. Anything from data or user input goes through `Amber.escapeHTML` (aliased `esc` in `planner-ui.js`), which escapes `& < > " '`, so it is safe inside an element and inside a quoted attribute.
 
 ## Build, test and CI
@@ -241,7 +242,7 @@ Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` 
 - `npm run build:css` rebuilds `css/app.css`. Tailwind scans `index.html` and `js/**/*.js` for class names, and `tailwind.config.js` safelists classes that are only built dynamically. Commit `css/app.css` after changing classes.
 - **Lint**: `npm run lint` runs ESLint 10 with `eslint.config.js` (a flat config). The files in `js/` are checked as classic browser scripts, and the unit checks, scripts and specs as CommonJS. On top of ESLint's recommended set it reports unused variables, shadowed names, `var`, `==` and a `let` that never changes, and holds the house style (4-space indent, single quotes, semicolons, from `@stylistic/eslint-plugin`). One rule is the project's own: `local/no-extra-arguments` (`eslint-rules/no-extra-arguments.js`) reports a call that passes more arguments than the function takes, for functions and `Amber.*` functions defined in the same file. Rules are tuned to the code rather than the code restyled: the tests keep their own alignment of long asserts, and `preserve-caught-error` is off because network errors are replaced on purpose by plain messages.
 - **Unit checks**: `tests/unit-*.js`, run with plain `node` (`npm run test:unit`). Each prints `ok:` / `FAIL:` lines and exits non-zero on failure. `unit-syntax.js` runs first: it parses every `js/*.js` (no other unit script loads the DOM files such as `help.js` and `app.js`), checks that `index.html` loads each of them once, with `app.js` last, and checks the calls between the app files through `Amber.app`. `unit-planner.js` holds the parity checks: the planner's cost equals Compare's, battery energy balances, finance and ratings.
-- **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 66 tests take about a minute with two workers.
+- **End-to-end**: `tests/*.spec.js` with Playwright (Chromium) against `scripts/static-server.js` on port 4173 (`playwright.config.js`, `reuseExistingServer: true`). Tests mock Amber's API with `page.route('**/api.amber.com.au/**', …)` and build NEM12 files in code. About 69 tests take about a minute with two workers.
 - **CI**: `.github/workflows/test.yml` runs `npm ci`, `npm run lint`, installs Chromium and runs `npm test -- --workers=2` on every pull request and on pushes to `main`. Failed runs upload `test-results/`.
 
 ## Releases

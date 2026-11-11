@@ -59,12 +59,15 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#billCheckBody')).toContainText('billing period dates');
     await expect(page.locator('#billCheckBody details pre')).toContainText('Total due $12.00');
 
-    // Uploading a bill loads its period's meter data straight away (no button)
+    // Uploading a bill loads its period's meter data straight away (no button). It's the bill
+    // check's own load: the dates at the top and the Compare tab are left as they were.
+    const datesBefore = [await page.inputValue('#startDate'), await page.inputValue('#endDate')];
     await page.setInputFiles('#billCheckFile', { name: 'bill.txt', mimeType: 'text/plain', buffer: Buffer.from(BILL) });
     await expect(page.locator('#billCheckPeriod')).toContainText(/1 July? 2025 to 31 July? 2025 \(31 days\)/);
     await page.waitForSelector('#billCheckBody table');
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
-    await expect(page.locator('#endDate')).toHaveValue('2025-07-31');
+    await expect(page.locator('#startDate')).toHaveValue(datesBefore[0]);
+    await expect(page.locator('#endDate')).toHaveValue(datesBefore[1]);
+    await expect(page.locator('#resultsSection')).toBeHidden();
     const rows = page.locator('#billCheckBody tbody tr');
     await expect(rows).toHaveCount(8);
     await expect(page.locator('#billCheckBody [aria-label="matches"]')).toHaveCount(8);
@@ -76,9 +79,13 @@ test('bill check and monthly breakdown', async ({ page }) => {
 
     // Monthly table total matches the Results table
     await page.click('#tab-compare');
+    await page.fill('#startDate', '2025-07-01');
+    await page.fill('#endDate', '2025-07-31');
+    await page.click('#fetchData');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(page.locator('#monthlySection')).toBeVisible();
     const monthlyTotal = await page.locator('#monthlyTable tbody tr:last-child td:nth-child(9)').textContent();
-    const resultsTotal = await page.locator('#results-table-container tr:has-text("Total") td:nth-child(2)').last().textContent();
+    const resultsTotal = await page.locator('#results-table-container tr:has-text("Total") td:nth-child(4)').last().textContent();
     expect(monthlyTotal.trim()).toBe(resultsTotal.trim());
 
     // Only whole months within the chosen dates are listed. July is cached from the bill
@@ -101,36 +108,35 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, /Aug(ust)? 2025/, 'Total']);
 
-    // Coming back to Bill Check loads the bill period again
+    // Coming back to Bill Check: the check is still there
     await page.click('#tab-bill');
     await page.waitForSelector('#billCheckBody table');
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
 
-    // Other dates chosen on Bill Check: say so, with a link back to the bill period
-    await page.fill('#startDate', '2025-08-01');
-    await page.fill('#endDate', '2025-08-05');
-    await page.click('#fetchData');
-    await expect(page.locator('#billCheckBody')).toContainText("don't cover this bill");
-    await page.click('#billCheckBody [data-bill-reload]');
-    await page.waitForSelector('#billCheckBody table');
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
-
-    // Survives a reload, and opening the tab loads the bill period again
+    // Other dates chosen while on Bill Check: the bill is still checked against its own period,
+    // and the dates stay as chosen
     await page.fill('#startDate', '2025-08-01');
     await page.fill('#endDate', '2025-08-05');
     await page.click('#fetchData');
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
+    await expect(page.locator('#billCheckBody table')).toBeVisible();
+    await expect(page.locator('#billCheckBody [aria-label="matches"]')).toHaveCount(8);
+    await expect(page.locator('#billCheckBody')).not.toContainText("don't cover this bill");
+    await expect(page.locator('#startDate')).toHaveValue('2025-08-01');
+
+    // Survives a reload: opening the tab loads the bill period again, and the dates are still August
     await page.click('#tab-compare');
     await page.reload();
     await page.click('#tab-bill');
     await expect(page.locator('#billCheckSection')).toBeVisible();
     await page.waitForSelector('#billCheckBody table');
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+    await expect(page.locator('#billCheckBody [aria-label="matches"]')).toHaveCount(8);
+    await expect(page.locator('#startDate')).toHaveValue('2025-08-01');
+    await expect(page.locator('#endDate')).toHaveValue('2025-08-05');
     expect(errors).toEqual([]);
 });
 
-test('bill uploaded from Setup during the opening Compare, then opens on the bill', async ({ page }) => {
+test('bill uploaded from Start during the opening Compare: both load, each with its own dates', async ({ page }) => {
     await page.addInitScript(() => {
         const key = 'amber-compare-export-secure-key';
         const ob = (s) => btoa(s.split('').map((c, i) => String.fromCharCode(c.charCodeAt(0) ^ key.charCodeAt(i % key.length))).join(''));
@@ -152,14 +158,19 @@ test('bill uploaded from Setup during the opening Compare, then opens on the bil
     await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
     await expect(page.locator('#billCheckBody')).toContainText(/Fetching your meter data|Line/);
     await page.waitForSelector('#billCheckBody table', { timeout: 20000 });
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
+    // The opening Compare keeps its own dates (this month), and finishes with its results.
+    const thisMonth = await page.inputValue('#startDate');
+    expect(thisMonth).not.toBe('2025-07-01');
+    await expect(page.locator('#fetchData')).toHaveText('Compare costs', { timeout: 20000 });
+    await page.click('#tab-compare');
+    await expect(page.locator('#resultsSection')).toBeVisible();
 
-    // Reopening on Bill Check loads the bill period instead of This month.
+    // Reopening on Bill Check loads the bill period for the check, and This month for Compare.
+    await page.click('#tab-bill');
     await page.reload();
     await expect(page.locator('#tab-bill')).toHaveAttribute('aria-selected', 'true');
     await page.waitForSelector('#billCheckBody table', { timeout: 20000 });
-    await expect(page.locator('#startDate')).toHaveValue('2025-07-01');
-    await expect(page.locator('#endDate')).toHaveValue('2025-07-31');
+    await expect(page.locator('#startDate')).toHaveValue(thisMonth);
 });
 
 test('a bill period that fails to load is not retried by opening the tab', async ({ page }) => {

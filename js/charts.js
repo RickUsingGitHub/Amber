@@ -235,7 +235,7 @@
                 plugins: {
                     title: {
                         display: true,
-                        text: `Average day, ${options.startDate} to ${options.endDate}`
+                        text: `Average day, ${Amber.formatDate(options.startDate)} to ${Amber.formatDate(options.endDate)}`
                     },
                     tooltip: {
                         position: 'cursor',
@@ -426,7 +426,7 @@
                     }
                 },
                 plugins: {
-                    title: { display: true, text: `${selectedDateStr}: power and Amber's price${qualityNote}${renewNote}` },
+                    title: { display: true, text: `${Amber.formatDate(selectedDateStr, true)}: power and Amber's price${qualityNote}${renewNote}` },
                     tooltip: {
                         position: 'cursor',
                         callbacks: makeTooltipCallbacks(options.planConfig, options.state, selectedDateStr)

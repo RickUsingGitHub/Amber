@@ -402,7 +402,7 @@
 
             const notes = [`Estimated Amber's prices for ${dates.length} days (${app.fmtDate(dates[0])} – ${app.fmtDate(dates[dates.length - 1])}) on ${sel.net.name} ${sel.tariffCode}.`];
             if (est.missingPrice.length) notes.push(`${est.missingPrice.length} day${est.missingPrice.length === 1 ? ' has' : 's have'} no wholesale prices yet and ${est.missingPrice.length === 1 ? 'was' : 'were'} left out.`);
-            if (est.summary.capCreditCents > 0) notes.push(`Amber's quarterly wholesale price cap took $${(est.summary.capCreditCents / 100).toFixed(2)} off.`);
+            if (est.summary.capCreditCents > 0) notes.push(`Amber's quarterly wholesale price cap took ${Amber.money((est.summary.capCreditCents / 100))} off.`);
             notes.push('Choose their current plan on the Compare tab.');
             setNem12Status(notes.join(' '), false);
 
@@ -429,6 +429,7 @@
             state.monthly = null;
             state.lastFetchTimestamp = null;
             state.batteryShift = null;
+            state.billData = null;
             state.stateChosenByHand = false;
             syncSiteMode();
             app.updatePlanSelector(app.currentStateCode());

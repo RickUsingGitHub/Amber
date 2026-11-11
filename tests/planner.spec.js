@@ -91,6 +91,10 @@ test('Solar & battery: a NEM12 household gets a best setup, its year month by mo
     const started = Date.now();
     await page.click('#planRun');
     await expect(page.locator('#planResults')).toBeVisible({ timeout: 120000 });
+    // Percentages have no space before the sign, and dollars have their thousands separated, as on the other tabs.
+    const planText = await page.locator('#planResults').innerText();
+    expect(planText).not.toMatch(/\d %/);
+    expect(planText).toMatch(/\$\d{1,3},\d{3}/);
     console.log(`planner search took ${((Date.now() - started) / 1000).toFixed(1)} s`);
     await expect(page.locator('#planProgressText')).toContainText('options compared');
     await expect(page.locator('#planRecommendation')).toContainText('Best for you');

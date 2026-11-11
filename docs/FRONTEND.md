@@ -25,7 +25,7 @@ main          six <section role="tabpanel" id="panel-…" data-panel="…">, one
 footer        #disclaimerShort, <details id="disclaimer">, ko-fi link
 ```
 
-The layout is a single centred column (`max-w-4xl`) of white cards (`bg-white rounded-lg shadow-md p-6`) on `bg-gray-100`. The accent colour is Tailwind indigo, with green/red for savings and costs, and amber/orange for warnings.
+The layout is a single centred column (`max-w-5xl`, wide enough for the eleven-column month table on a computer) of white cards (`bg-white rounded-lg shadow-md p-6`) on `bg-gray-100`. The accent colour is Tailwind indigo, with green/red for savings and costs, and amber/orange for warnings.
 
 ### Tabs
 
@@ -49,6 +49,9 @@ Tab behaviour (`app.js` `selectTab`, `setupTabs`): `aria-selected`, roving `tabi
 | `data-preset` | Date quick picks (`7d`, `thisMonth`, `lastMonth`, `3m`, `90d`, `12m`) |
 | `data-jump`, `data-jump-nav` | In-page jump links |
 | `data-results-placeholder` | "Nothing here yet" blocks |
+| `data-scroll-box`, `data-scroll-hint` | A table's own sideways-scrolling box and the note under it, shown only while the table overflows (`Amber.scrollBox`, `Amber.syncScrollHints`) |
+| `data-tight` | Set on a `data-scroll-box` whose table doesn't fit. Cells with a `group-data-[tight]:` class then give way first (the month table's Difference column wraps, a long plan name in "Every plan" may break), and the note shows only if the table is still too wide |
+| `data-compact-only` | Lines shown only on a phone, repeating a column that is hidden there (left out of the table CSV) |
 | `data-help`, `data-help-label` | Help bubbles (key into `Amber.HELP`, or plain text; label for screen readers) |
 | `data-tou-period`, `data-add-tou-window`, `data-remove-window` | TOU plan form |
 | `data-date`, `data-month-key` | Calendar days and months |
@@ -92,7 +95,7 @@ Text from data or the user goes through `Amber.escapeHTML` (`esc`). Keep that wh
 ## Responsive behaviour
 
 - The tab bar stays on one line from 320 px up and scrolls sideways (tested at 320, 360 and 390 px), and the page itself never scrolls sideways (tested).
-- Wide tables sit in cards with `overflow-x-auto` and scroll inside the card on a phone. The planner's options table (7 columns) and month table are the widest.
+- On a computer (1024 px and wider) every Compare and Free? table fits its card. On a phone the answer table hides its When and kWh columns and shows them under What, so both prices show without swiping; "Every plan" fits too. How wide text is depends on the computer's or phone's own font (the app uses the system font), so a table that is a little too wide first lets one column wrap (`data-tight`) before it scrolls; the layout tests pass with fonts as wide as DejaVu Sans, the default on GitHub's Ubuntu runners. The eleven-column month table and the Free? tables scroll inside their own box (`data-scroll-box`) with the first column staying in view and a note saying there is more to the side. The Solar+? tables still scroll inside their cards (the options table has 7 columns).
 - Planner inputs are grids that collapse to one column (`grid-cols-1 sm:grid-cols-2/3`).
 
 ## Accessibility today
@@ -110,14 +113,14 @@ The app is written for everyday Australian householders:
 - Plain English with short sentences. Say what something means for the reader ("Pays back in 6.7 years"), not jargon ("ROI").
 - Australian spelling and units: kWh, kW, c/kWh, $ with commas.
 - Every input and table heading gets a help bubble. The jargon buster explains the terms that can't be avoided (feed-in, NEM12, controlled load, demand charge, TOU).
-- **Known inconsistency**: percentages are "20%" in most of the app but "20 %" (with a space) in the Solar+? tab. Pick one in a refresh.
 
 ## Known UI issues and opportunities
 
 - **Solar+? is long and text-heavy.** Results stack as: recommendation, rating, battery check, options, month table, breakdown, check the numbers, payback, assumptions. Many paragraphs are full sentences of figures. Candidates: a summary strip of 3–4 key numbers, progressive disclosure (`<details>`) for the breakdown, numbers and assumptions, and a sticky "option on show" header.
 - **Inputs on Solar+?** are spread over several `<details>` groups. "Prices and rebates" has 18 numeric fields in one grid.
 - **Compare's plan form** (flat / TOU / feed-in windows / demand) is dense and shown under the results, and custom plans are edited in place.
-- **Tables** are styled inline in several places with small differences. A shared table component (CSS classes in `input.css`) would make them consistent.
+- **Tables** are styled inline in several places with small differences. A shared table component (CSS classes in `input.css`) would make them consistent. The Solar+? tables don't use `Amber.scrollBox` yet.
+- **Tab names** (Bill?, Free?, Solar+?) are short on purpose: longer names on a computer were tried and dropped in v1.53. The full name is the tab's hover text.
 - **Charts**: the payback chart's x labels rotate on narrow screens. The Usage charts would benefit from a legend and colour review. Chart colours are hard-coded hex values in `charts.js` and `planner-ui.js`.
 - **Visual hierarchy**: every card has the same weight; the main answer on each tab could stand out more.
 - **Help bubbles** are everywhere, which helps beginners but adds visual noise. Consider showing them only on hover or focus on wider screens.

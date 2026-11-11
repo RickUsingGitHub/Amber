@@ -3,6 +3,7 @@
     const app = Amber.app;
     const state = app.state;
     const $ = app.$;
+    const money = Amber.money;
 
     /*
      * Showing results. Compare: the answer and its table (displayResults), every plan
@@ -11,6 +12,9 @@
      * the charts and calendar themselves are in charts.js and calendar.js. Pricing lives in
      * costs.js and monthly.js: this file reads the inputs, calls it and builds the HTML.
      */
+
+    /** kWh as text: one decimal place, thousands separated ("3,496.7"). */
+    const kwhText = (v) => (Number(v) || 0).toLocaleString('en-AU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 
     // ---------- Every plan, and the savings in the plan picker ----------
 
@@ -63,9 +67,9 @@
         let html = `<table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
-                    <th class="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
                 </tr>
             </thead><tbody class="bg-white divide-y divide-gray-200">`;
         rows.forEach((row) => {
@@ -73,18 +77,20 @@
             let vs = '≈ no difference';
             let cls = 'text-gray-600';
             if (Math.abs(diff) >= 0.01) {
-                if (diff > 0) { vs = `$${diff.toFixed(2)} cheaper than Amber`; cls = 'text-red-700'; }
-                else { vs = `$${Math.abs(diff).toFixed(2)} more than Amber`; cls = 'text-green-700'; }
+                // On a phone the heading already says "compared with Amber": keep the cell to one line.
+                const thanAmber = '<span class="hidden sm:inline"> than Amber</span>';
+                if (diff > 0) { vs = `<span class="whitespace-nowrap">${Amber.money(diff)}</span> cheaper${thanAmber}`; cls = 'text-red-700'; }
+                else { vs = `<span class="whitespace-nowrap">${Amber.money(Math.abs(diff))}</span> more${thanAmber}`; cls = 'text-green-700'; }
             }
             const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
             html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Show this plan in full above">
-                <td class="px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(Amber.planListLabel(row.name, app.currentSiteNetwork()))}</td>
-                <td class="px-4 py-2 text-sm text-right">$${row.total.toFixed(2)}</td>
-                <td class="px-4 py-2 text-sm text-right ${cls}">${vs}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-gray-900 group-data-[tight]:[overflow-wrap:anywhere]">${Amber.escapeHTML(Amber.planListLabel(row.name, app.currentSiteNetwork()))}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-right whitespace-nowrap">${Amber.money(row.total)}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-right sm:whitespace-nowrap ${cls}">${vs}</td>
             </tr>`;
         });
         html += '</tbody></table>';
-        host.innerHTML = html;
+        host.innerHTML = app.scrollBox(html);
         host.querySelectorAll('tbody tr').forEach((tr, index) => {
             const planName = rows[index].name;
             const activate = () => app.selectSupplierPlan(planName, { scroll: true });
@@ -140,8 +146,8 @@
             let savingsText = ' (~ no difference)';
             if (Math.abs(difference) >= 0.01) {
                 savingsText = difference > 0
-                    ? ` ($${difference.toFixed(2)} cheaper)`
-                    : ` ($${Math.abs(difference).toFixed(2)} more)`;
+                    ? ` (${Amber.money(difference)} cheaper)`
+                    : ` (${Amber.money(Math.abs(difference))} more)`;
             }
             option.textContent = Amber.planListLabel(option.value, app.currentSiteNetwork()) + savingsText;
         }
@@ -180,7 +186,7 @@
         if (!found) {
             const option = document.createElement('option');
             option.value = dateStr;
-            option.textContent = dateStr;
+            option.textContent = Amber.formatDate(dateStr, true);
             selector.insertBefore(option, selector.firstChild);
             selector.value = dateStr;
         }
@@ -208,7 +214,7 @@
         datesArray.reverse().forEach((dateValue) => {
             const option = document.createElement('option');
             option.value = dateValue;
-            option.textContent = dateValue;
+            option.textContent = Amber.formatDate(dateValue, true);
             selector.appendChild(option);
         });
         selector.onchange = () => {
@@ -258,11 +264,6 @@
     }
 
     async function displayResults(channelTotals, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemandTariffInfo, skipGraphs) {
-        // "$12.34" / "−$6.45" (proper minus sign before the dollar sign).
-        const money = (v) => {
-            const n = Number(v) || 0;
-            return `${n < -0.004 ? '−' : ''}$${Math.abs(n).toFixed(2)}`;
-        };
         const planName = $('planName').value.trim() || 'your plan';
         const period = `(${app.fmtDate(startDateStr)} to ${app.fmtDate(endDateStr)})`;
         const rates = app.readAmberRates();
@@ -277,16 +278,33 @@
         const daysWithReadings = new Set(Object.values(channelTotals).flatMap((c) => c.usageData.map(Amber.usageDateStr)));
         const missingDays = Math.max(0, numDays - daysWithReadings.size);
         const incompleteNotice = missingDays ? `<p role="status" class="text-sm text-amber-800 mb-4">Incomplete comparison: ${missingDays} of ${numDays} days have no readings. Usage costs omit those days; fixed charges and export allowances still cover the full selected period. Savings are provisional. Daily exports and calendar totals cover only days with readings.</p>` : '';
+        // One row shape for the whole table (five cells, no spans), so two columns can step aside on
+        // a phone: "When" and "kWh" are hidden there and shown under "What" instead, which leaves
+        // room for the two prices without swiping.
+        // Tight sides on a phone, so What and both prices fit across whatever font the phone uses.
+        const CELL = 'px-1.5 sm:px-3 py-3 text-sm';
+        const headCell = (label, key, right, compact) => `<th scope="col" class="px-1.5 sm:px-3 py-3 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider${compact ? ' hidden sm:table-cell' : ''}"><span data-help="${key}" data-help-label="${Amber.escapeHTML(label)}">${Amber.escapeHTML(label)}</span></th>`;
+        const rateLine = (rate) => {
+            const text = Amber.formatCentsPerKwh(rate);
+            return text ? `<div class="text-xs font-normal text-gray-400">${text}</div>` : '';
+        };
+        // r: { what, when, kwh, amber, other (HTML), sub (shown under "what" on a phone), tone, row }.
+        const line = (r) => {
+            const tone = r.tone || 'text-gray-500';
+            return `<tr class="${r.row || ''}">
+                <td class="${CELL} font-medium text-gray-900 sm:whitespace-nowrap">${r.what}${r.sub ? `<div class="sm:hidden mt-0.5 text-xs font-normal text-gray-500" data-compact-only>${r.sub}</div>` : ''}</td>
+                <td class="${CELL} text-gray-700 hidden sm:table-cell">${r.when || ''}</td>
+                <td class="${CELL} ${tone} text-right whitespace-nowrap hidden sm:table-cell">${r.kwh || ''}</td>
+                <td class="${CELL} ${tone} text-right whitespace-nowrap">${r.amber || ''}</td>
+                <td class="${CELL} ${tone} text-right whitespace-nowrap">${r.other || ''}</td>
+            </tr>`;
+        };
+        const tableIntro = `<p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>${incompleteNotice}`;
         let tableHTML = `
-            <p class="text-sm text-gray-500 mb-4">${numDays} days ${period}</p>${incompleteNotice}
             <table class="min-w-full divide-y divide-gray-200">
                 <thead class="bg-gray-50">
                     <tr>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colLine" data-help-label="What">What</span></th>
-                        <th scope="col" class="px-3 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colPeriod" data-help-label="When">When</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colUsage" data-help-label="kWh">kWh</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colAmber" data-help-label="Amber">Amber</span></th>
-                        <th scope="col" class="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"><span data-help="colOther" data-help-label="${Amber.escapeHTML(planName)}">${Amber.escapeHTML(planName)}</span></th>
+                        ${headCell('What', 'colLine')}${headCell('When', 'colPeriod', false, true)}${headCell('kWh', 'colUsage', true, true)}${headCell('Amber', 'colAmber', true)}${headCell(planName, 'colOther', true)}
                     </tr>
                 </thead>
                 <tbody class="bg-white divide-y divide-gray-200">`;
@@ -302,6 +320,7 @@
                 amberCost: c.totalAmberCost || 0,
                 otherCost: c.totalOtherCost || 0
             }];
+            const channelLabel = `${channelName(c)} <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span>`;
             let channelKwh = 0;
             let channelAmber = 0;
             let channelOther = 0;
@@ -313,34 +332,34 @@
                 channelKwh += row.kwh || 0;
                 channelAmber += adjustedAmberCost;
                 channelOther += adjustedOtherCost;
-                tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">${channelName(c)} <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700">${Amber.escapeHTML(row.label)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(row.kwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedAmberCost)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(row.rate)}${money(adjustedOtherCost)}</td>
-                </tr>`;
+                tableHTML += line({
+                    what: channelLabel,
+                    when: Amber.escapeHTML(row.label),
+                    kwh: kwhText(row.kwh),
+                    sub: `${Amber.escapeHTML(row.label)} · ${kwhText(row.kwh)} kWh`,
+                    amber: money(adjustedAmberCost),
+                    other: `${money(adjustedOtherCost)}${rateLine(row.rate)}`
+                });
             });
             if (c.amberExportCharge) {
                 const exportAmber = Amber.adjustForGst(c.amberExportCharge, app.gstInclusive(), false);
                 adjustedAmberTotal += exportAmber;
                 channelAmber += exportAmber;
-                tableHTML += `<tr>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm font-medium text-gray-900">Solar sent out <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-700"><span data-help="rowExportCharge" data-help-label="Network export charge">Network export charge</span></td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${(c.amberExportChargeKwh || 0).toFixed(1)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${Amber.formatCentsPerKwh(c.amberExportChargeRate)}${money(exportAmber)}</td>
-                    <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">$0.00</td>
-                </tr>`;
+                tableHTML += line({
+                    what: `Solar sent out <span class="font-normal text-xs text-gray-400">${Amber.escapeHTML(c.identifier)}</span>`,
+                    when: '<span data-help="rowExportCharge" data-help-label="Network export charge">Network export charge</span>',
+                    kwh: kwhText(c.amberExportChargeKwh),
+                    sub: `Network export charge · ${kwhText(c.amberExportChargeKwh)} kWh`,
+                    amber: `${money(exportAmber)}${rateLine(c.amberExportChargeRate)}`,
+                    other: money(0)
+                });
             }
             if (periodRows.length + (c.amberExportCharge ? 1 : 0) > 1) {
-                tableHTML += `<tr class="bg-gray-50 font-semibold">
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">${channelName(c)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900">Subtotal</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${channelKwh.toFixed(1)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelAmber)}</td>
-                    <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(channelOther)}</td>
-                </tr>`;
+                tableHTML += line({
+                    row: 'bg-gray-50 font-semibold', tone: 'text-gray-900',
+                    what: channelName(c), when: 'Subtotal', kwh: kwhText(channelKwh), sub: `Subtotal · ${kwhText(channelKwh)} kWh`,
+                    amber: money(channelAmber), other: money(channelOther)
+                });
             }
         });
 
@@ -361,18 +380,15 @@
                 cost: Amber.adjustForGst(projectedMonthlyCost, app.gstInclusive(), false),
                 month: maxDemandDateTimeObj.toLocaleString('default', { month: 'long' })
             };
-            tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">
-                    <span id="amber-demand-tooltip-trigger" class="border-b border-dotted border-gray-500">Amber demand charge</span><span data-help="rowDemand" data-help-label="Amber demand charge"></span>
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
+            tableHTML += line({
+                row: 'font-semibold border-t', tone: 'text-gray-900',
+                what: '<span id="amber-demand-tooltip-trigger" class="border-b border-dotted border-gray-500">Amber demand charge</span><span data-help="rowDemand" data-help-label="Amber demand charge"></span>',
+                kwh: `<div class="text-xs font-normal text-gray-500">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">on ${maxDemandDateTime}</div>
-                    ${demandMonthsHtml(demandTariffInfo.months) || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedDemandCost)}</td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500"></td>
-            </tr>`;
+                    <div class="font-normal text-gray-500">${demandMonthsHtml(demandTariffInfo.months) || `<div class="text-xs">× ${demandTariffInfo.demandDays} days</div>`}</div>`,
+                sub: `Busiest: ${maxDemandKw} kW on ${maxDemandDateTime}`,
+                amber: money(adjustedDemandCost)
+            });
         }
 
         if (otherDemandTariffInfo && otherDemandTariffInfo.cost > 0) {
@@ -381,16 +397,15 @@
             const maxDemandKw = ((otherDemandTariffInfo.maxDemandKwh || 0) * 2).toFixed(2);
             const maxDemandDateTime = otherDemandTariffInfo.maxDemandTime || '';
             const dayCount = otherDemandTariffInfo.applicableDaysCount || numDays;
-            tableHTML += `<tr class="font-semibold border-t">
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="2">${Amber.escapeHTML(planName)} demand charge<span data-help="rowOtherDemand" data-help-label="Demand charge"></span></td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">
-                    <div class="text-xs">Busiest: ${maxDemandKw} kW</div>
+            tableHTML += line({
+                row: 'font-semibold border-t', tone: 'text-gray-900',
+                what: `<span class="whitespace-normal">${Amber.escapeHTML(planName)} demand charge</span><span data-help="rowOtherDemand" data-help-label="Demand charge"></span>`,
+                kwh: `<div class="text-xs font-normal text-gray-500">Busiest: ${maxDemandKw} kW</div>
                     <div class="text-xs text-blue-600 font-normal">${Amber.escapeHTML(String(maxDemandDateTime))}</div>
-                    ${demandMonthsHtml(otherDemandTariffInfo.months) || `<div class="text-xs">× ${dayCount} applicable days</div>`}
-                </td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900"></td>
-                <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-500 text-right">${money(adjustedOtherDemandCost)}</td>
-            </tr>`;
+                    <div class="font-normal text-gray-500">${demandMonthsHtml(otherDemandTariffInfo.months) || `<div class="text-xs">× ${dayCount} applicable days</div>`}</div>`,
+                sub: `Busiest: ${maxDemandKw} kW`,
+                other: money(adjustedOtherDemandCost)
+            });
         }
 
         const amberFixed = Amber.amberFixedForPeriod(rates, startDateStr, endDateStr);
@@ -400,21 +415,19 @@
         adjustedAmberTotal += amberConnectionCost + amberSubscriptionCost;
         adjustedOtherTotal += otherDailyConnection;
 
-        tableHTML += `<tr class="font-semibold border-t">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Daily supply charge<span data-help="rowDaily" data-help-label="Daily supply charge"></span></td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberConnectionCost)}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(otherDailyConnection)}</td>
-        </tr>
-        <tr class="font-semibold">
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900" colspan="3">Amber membership fee<span data-help="rowSubscription" data-help-label="Amber membership fee"></span></td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-900 text-right">${money(amberSubscriptionCost)}</td>
-            <td class="px-3 py-2 whitespace-nowrap text-sm text-gray-500 text-right">none</td>
-        </tr>
-        <tr class="bg-gray-50 font-bold">
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900" colspan="3">Total<span data-help="rowTotal" data-help-label="Total"></span></td>
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedAmberTotal)}</td>
-            <td class="px-3 py-3 whitespace-nowrap text-sm text-gray-900 text-right">${money(adjustedOtherTotal)}</td>
-        </tr></tbody></table>`;
+        tableHTML += line({
+            row: 'font-semibold border-t', tone: 'text-gray-900',
+            what: 'Daily supply charge<span data-help="rowDaily" data-help-label="Daily supply charge"></span>',
+            amber: money(amberConnectionCost), other: money(otherDailyConnection)
+        }) + line({
+            row: 'font-semibold', tone: 'text-gray-900',
+            what: 'Amber membership fee<span data-help="rowSubscription" data-help-label="Amber membership fee"></span>',
+            amber: money(amberSubscriptionCost), other: '<span class="font-normal text-gray-500">none</span>'
+        }) + line({
+            row: 'bg-gray-50 font-bold', tone: 'text-gray-900',
+            what: 'Total<span data-help="rowTotal" data-help-label="Total"></span>',
+            amber: money(adjustedAmberTotal), other: money(adjustedOtherTotal)
+        }) + '</tbody></table>';
 
         const savings = adjustedOtherTotal - adjustedAmberTotal;
         let savingsSummaryHTML = '<div class="mb-4 p-4 rounded-lg text-center ';
@@ -422,9 +435,9 @@
             savingsSummaryHTML += 'bg-amber-50"><p class="text-lg font-medium text-amber-800">Incomplete comparison — savings are provisional.</p>';
         } else if (savings > 0) {
             const percent = adjustedOtherTotal > 0 ? ` (${((savings / adjustedOtherTotal) * 100).toFixed(1)}%)` : '';
-            savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber was <span class="font-bold">$${savings.toFixed(2)}${percent}</span> cheaper than <span class="italic">${Amber.escapeHTML(planName)}</span> for these dates.</p>`;
+            savingsSummaryHTML += `bg-green-100"><p class="text-lg font-medium text-green-800">Amber was <span class="font-bold">${Amber.money(savings)}${percent}</span> cheaper than <span class="italic">${Amber.escapeHTML(planName)}</span> for these dates.</p>`;
         } else if (savings < 0) {
-            savingsSummaryHTML += `bg-red-100"><p class="text-lg font-medium text-red-800"><span class="italic">${Amber.escapeHTML(planName)}</span> would have been <span class="font-bold">$${Math.abs(savings).toFixed(2)}</span> cheaper than Amber for these dates.</p>`;
+            savingsSummaryHTML += `bg-red-100"><p class="text-lg font-medium text-red-800"><span class="italic">${Amber.escapeHTML(planName)}</span> would have been <span class="font-bold">${Amber.money(Math.abs(savings))}</span> cheaper than Amber for these dates.</p>`;
         } else {
             savingsSummaryHTML += 'bg-gray-100"><p class="text-lg font-medium text-gray-800">Amber and this plan cost about the same for these dates.</p>';
         }
@@ -432,9 +445,8 @@
             savingsSummaryHTML += '<p class="mt-2 text-sm text-gray-700">That\'s against example prices. For a real answer, choose the plan you\'re on (or type its prices) under <button type="button" data-jump="planChooser" class="text-indigo-600 font-medium hover:underline">Compare Amber with…</button></p>';
         }
         savingsSummaryHTML += '</div>';
-        // The answer first; the table (which scrolls sideways on a phone) underneath.
-        const scrollHint = '<p class="sm:hidden text-xs text-gray-500 mb-2">Swipe the table sideways to see every column →</p>';
-        $('results-table-container').innerHTML = savingsSummaryHTML + scrollHint + tableHTML;
+        // The answer first; the table underneath.
+        $('results-table-container').innerHTML = savingsSummaryHTML + tableIntro + app.scrollBox(tableHTML);
 
         if (projectedMonthlyCostData) {
             const trigger = $('amber-demand-tooltip-trigger');
@@ -456,7 +468,7 @@
         } else {
             banner.classList.add('hidden');
         }
-        $('resultsDisclaimer').textContent = `Plan prices are the published ones as at ${asAt}, including GST. Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
+        $('resultsDisclaimer').textContent = `Plan prices are the published ones as at ${app.fmtDate(asAt)}, including GST. Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
 
         const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
         const qualityBanner = $('qualityBanner');
@@ -574,10 +586,7 @@
         const { rows, total } = monthly.breakdown;
         const gst = app.gstInclusive();
         const adj = (v) => Amber.adjustForGst(v || 0, gst, false);
-        const money = (v) => `${v < -0.004 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
         const planName = $('planName').value.trim() || 'your plan';
-        // The plan's name as the plan list shows it (without the network), for the Difference column.
-        const planShort = Amber.escapeHTML($('planName').value.trim() ? Amber.planListLabel($('planName').value.trim(), app.currentSiteNetwork()) : 'Your plan');
         const view = (r) => {
             const amberTotal = adj(r.amberUsage) + (r.amberFeedIn || 0) + adj(r.amberDemand) + adj(r.amberConnection + r.amberSubscription);
             const otherTotal = gst ? r.otherTotal : r.otherTotalExGst;
@@ -587,25 +596,32 @@
             ? 'Total'
             : new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }));
         const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
-        const th = (t, right, help) => `<th scope="col" class="px-3 py-2 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">${help ? `<span data-help="${help}" data-help-label="${t}">${t}</span>` : t}</th>`;
-        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            ${th('Month')}${th('Days', 1, 'Days in the month. If some show as 25/31, only 25 days had meter readings.')}${th('kWh bought', 1, 'colUsage')}${th('kWh sent out', 1, 'Solar sent to the grid, in kWh.')}${th('Power', 1, 'What Amber charged for the power you bought (including any network export charge).')}${th('Solar credit', 1, 'What Amber paid for solar you sent out (shown with a minus sign).')}${th('Demand', 1, 'rowDemand')}${th('Daily + fees', 1, 'Daily supply charge plus Amber\'s membership fee.')}${th('Amber', 1, 'Everything on Amber for the month.')}${th(Amber.escapeHTML(planName), 1, 'colOther')}${th('Difference', 1, 'Which was cheaper that month, and by how much.')}
+        // Headings wrap onto two lines and cells are tight, so all eleven columns fit a computer
+        // screen. Fonts differ in width from one computer to the next: if the table is still too
+        // wide there, its last column wraps ("Plan $53.10" over "cheaper") before anything is
+        // pushed off the side (see syncScrollHints).
+        // On a phone the table scrolls sideways with the month staying in view.
+        const th = (t, right, help, first) => `<th scope="col" class="px-1.5 py-2 ${right ? 'text-right' : 'text-left'} align-bottom text-xs font-medium text-gray-500 uppercase tracking-wider${first ? ' sticky left-0 bg-inherit' : ''}">${help ? `<span data-help="${help}" data-help-label="${t}">${t}</span>` : t}</th>`;
+        let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead><tr class="bg-gray-50">
+            ${th('Month', 0, '', 1)}${th('Days', 1, 'Days in the month. If some show as 25/31, only 25 days had meter readings.')}${th('kWh bought', 1, 'colUsage')}${th('kWh sent out', 1, 'Solar sent to the grid, in kWh.')}${th('Power', 1, 'What Amber charged for the power you bought (including any network export charge).')}${th('Solar credit', 1, 'What Amber paid for solar you sent out (shown with a minus sign).')}${th('Demand', 1, 'rowDemand')}${th('Daily + fees', 1, 'Daily supply charge plus Amber\'s membership fee.')}${th('Amber', 1, 'Everything on Amber for the month.')}${th(Amber.escapeHTML(planName), 1, 'colOther')}${th('Difference', 1, 'Which was cheaper that month, and by how much.')}
         </tr></thead><tbody class="divide-y divide-gray-200">`;
         rows.concat([total]).forEach((r) => {
             const v = view(r);
             const isTotal = r.month === 'Total';
             const diffCls = Math.abs(v.diff) < 0.005 ? 'text-gray-600' : (v.diff > 0 ? 'text-green-700' : 'text-red-700');
-            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber' : planShort} ${money(Math.abs(v.diff))} cheaper`;
-            const td = (content, right, extra) => `<td class="px-3 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
-            html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : ''}">
-                ${td(label(r))}${td(daysCell(r), 1)}${td(r.importKwh.toFixed(1), 1)}${td(r.exportKwh.toFixed(1), 1)}
+            // "Plan" is the one named in the column before (its full name here made every row three lines tall).
+            const diffText = Math.abs(v.diff) < 0.005 ? '—' : `${v.diff > 0 ? 'Amber' : 'Plan'} ${money(Math.abs(v.diff))} cheaper`;
+            const td = (content, right, extra) => `<td class="px-1.5 py-2 whitespace-nowrap ${right ? 'text-right' : ''} ${extra || ''}">${content}</td>`;
+            html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : 'bg-white'}">
+                ${td(label(r), 0, 'sticky left-0 bg-inherit')}${td(daysCell(r), 1)}${td(kwhText(r.importKwh), 1)}${td(kwhText(r.exportKwh), 1)}
                 ${td(money(adj(r.amberUsage)), 1)}${td(money(r.amberFeedIn || 0), 1)}${td(money(adj(r.amberDemand)), 1)}${td(money(adj(r.amberConnection + r.amberSubscription)), 1)}
-                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, diffCls)}
+                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, `${diffCls} lg:group-data-[tight]:whitespace-normal`)}
             </tr>`;
         });
-        html += '</tbody></table>';
+        html = app.scrollBox(html + '</tbody></table>');
         html += `<p class="text-xs text-gray-500 mt-2">${gst ? 'Includes GST' : 'Without GST (solar credits unchanged)'}.</p>`;
         $('monthlyTable').innerHTML = html;
+        app.syncScrollHints();
         app.renderBatteryShift();
     }
 
@@ -625,7 +641,6 @@
         const section = $('moreStatsSection');
         if (!s.dayCount) { section.classList.add('hidden'); return; }
         section.classList.remove('hidden');
-        const money = (v) => `${v < 0 ? '−' : ''}$${Math.abs(v).toFixed(2)}`;
         const pct = (a, b) => (b > 0 ? `${((a / b) * 100).toFixed(0)}%` : '–');
         const rows = [
             ['Average price you paid', s.avgImportCents != null ? `${s.avgImportCents.toFixed(1)} c/kWh` : '–', `${fmt(s.importKwh, 0)} kWh bought for ${money(s.importCost)}`,
@@ -673,7 +688,7 @@
 
     // What the other app-*.js files use from this one.
     Object.assign(app, {
-        updatePlanSavings, displayResults, periodOpts, loadMonthlyData, renderMonthly, hideResults
+        updatePlanSavings, displayResults, loadMonthlyData, renderMonthly, hideResults
     });
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;

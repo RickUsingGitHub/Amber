@@ -8,7 +8,7 @@ Notes for anyone reviewing this codebase: what it must keep doing, where mistake
 npm install
 npm run build:css
 npm run lint        # ESLint
-npm test            # ~11 unit scripts, then ~66 Playwright tests (~60 s with --workers=2)
+npm test            # ~11 unit scripts, then ~69 Playwright tests (~60 s with --workers=2)
 npm run serve       # http://127.0.0.1:4173
 ```
 
@@ -52,7 +52,6 @@ These are the properties the tests guard and that users rely on. A change that b
 - **Vendored libraries** are pinned copies: Chart.js 4.4.2, chartjs-plugin-zoom 2.0.1, pdf.js 3.11.174. Updating them is manual.
 - **The price-update workflow** uses Node 20 actions, which GitHub is deprecating (a warning only). `test.yml` already uses Node 22.
 - **The API key** is obfuscated, not encrypted. That's fine for a browser-only tool, but it shouldn't be described as secure.
-- **Number formatting** varies: percentages are "20%" in most places but "20 %" on Solar+?. Money uses `toLocaleString('en-AU')` in some places and `toFixed` in others.
 
 ## Questions worth a reviewer's opinion
 
@@ -80,6 +79,7 @@ These are the properties the tests guard and that users rely on. A change that b
 | `unit-review.js` | Regression checks from an earlier review: household caps across channels, export settlement, missing vs zero days, CSV backup timestamps |
 | `autoload`, `cache`, `import`, `review` specs | Opening state, the cache, CSV import and backup round trip |
 | `ui`, `tabs`, `graphs`, `stats`, `performance` specs | Tabs, help bubbles, disclaimer, phone layout, charts, More Stats, fetch behaviour |
-| `billcheck`, `shift`, `v140` specs | Bill?, Free?, financial-year rate switching |
+| `billcheck`, `shift`, `v140` specs | Bill? (which loads its own period and leaves the dates alone), Free?, financial-year rate switching |
+| `v165` spec | Tables fitting a computer screen, the phone layout of the answer, one money/date/rate format, the table CSV |
 | `v162` spec | Saved plan prices refreshed when a built-in plan changes, the answer and month by month agreeing on Amber's total, clearing saved readings, no maintainer tools in the menu, plan names with quotes or tags, changing state (and a site outside NSW), the bill check's pointer to Start, damaged saved settings, a Compare when the readings can't be saved, Escape closing the menus |
 | `nem12`, `planner` specs | The NEM12 path and every Solar+? flow |

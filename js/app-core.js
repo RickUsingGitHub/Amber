@@ -45,9 +45,8 @@
         activeTab: null,
         resultsTab: 'compare',
         ready: false,
-        pendingBillLoad: false,
-        billLoading: null,
-        billLoadFailed: null
+        // The bill check's own readings: { key, loading } | { key, error } | { key, siteId, channelData, warning }.
+        billData: null
     };
 
     function $(id) {
@@ -151,7 +150,7 @@
     // ---------- Dates and messages ----------
 
     function fmtDate(iso) {
-        return new Date(iso + 'T00:00:00').toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+        return Amber.formatDate(iso);
     }
 
     function showMessage(text, isError) {
@@ -166,6 +165,34 @@
         $('messageContainer').classList.add('hidden');
     }
 
+    // ---------- Tables that can scroll sideways ----------
+
+    /**
+     * A table in its own sideways-scrolling box, so only the table moves (not the card's heading),
+     * with a note under it that shows only while part of the table is off-screen.
+     */
+    function scrollBox(tableHtml) {
+        return `<div data-scroll-box class="group overflow-x-auto">${tableHtml}</div><p data-scroll-hint class="hidden mt-1 text-xs text-gray-500">Scroll the table sideways to see every column →</p>`;
+    }
+
+    /**
+     * Show each table's "scroll sideways" note only while part of the table is off-screen. A table
+     * that doesn't fit is first marked data-tight, which lets cells that allow it wrap
+     * (group-data-[tight]: classes); the note shows only if it is still too wide after that.
+     */
+    function syncScrollHints() {
+        document.querySelectorAll('[data-scroll-box]').forEach((box) => {
+            const hint = box.nextElementSibling;
+            if (!hint || !hint.hasAttribute('data-scroll-hint')) return;
+            box.removeAttribute('data-tight');
+            if (box.scrollWidth > box.clientWidth + 1) box.setAttribute('data-tight', '');
+            hint.classList.toggle('hidden', box.scrollWidth <= box.clientWidth + 1);
+        });
+    }
+
+    Amber.scrollBox = scrollBox;
+    Amber.syncScrollHints = syncScrollHints;
+
     Amber._appState = state;
 
     // The app's shared internals: `state`, and the functions and constants one app-*.js file uses
@@ -173,7 +200,7 @@
     Amber.app = {
         state, $, storedJson, gstInclusive, currentStateCode, selectedSite, currentSiteNetwork,
         siteNetworkState, AMBER_CHARGE_FIELDS, loadAmberChargeFields, readAmberRates, fmtDate,
-        showMessage, hideMessage
+        showMessage, hideMessage, scrollBox, syncScrollHints
     };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;
