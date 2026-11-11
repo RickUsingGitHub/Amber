@@ -93,11 +93,11 @@ test('Amber\'s total is the same in the answer and month by month when the expor
         const cells = (row) => Array.from(row.querySelectorAll('td')).map((td) => td.textContent.trim());
         const answer = cells(Array.from(document.querySelectorAll('#results-table-container tbody tr')).pop());
         const months = cells(Array.from(document.querySelectorAll('#monthlyTable tbody tr')).pop());
-        return { answer: answer[1], months: months[8], monthsLabel: months[0], rows: document.querySelectorAll('#monthlyTable tbody tr').length };
+        return { answer: answer[3], months: months[8], monthsLabel: months[0], rows: document.querySelectorAll('#monthlyTable tbody tr').length };
     });
     expect(totals.rows).toBe(4);
     expect(totals.monthsLabel).toBe('Total');
-    expect(totals.answer).toMatch(/^\$\d+\.\d\d$/);
+    expect(totals.answer).toMatch(/^\$[\d,]+\.\d\d$/);
     expect(totals.months).toBe(totals.answer);
 });
 

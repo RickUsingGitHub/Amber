@@ -49,10 +49,12 @@
         const billOk = !!(parsed && parsed.check && parsed.check.ok);
         if (billOk) {
             state.billCheck = parsed.check;
+            state.billData = null;
             try { localStorage.setItem(BILL_CHECK_KEY, JSON.stringify(parsed.check)); } catch (e) { /* ignore */ }
             renderBillCheck();
         }
-        // Show the check and fetch the bill period's meter data straight away.
+        // Show the check and load the bill period's meter data straight away (its own load: the
+        // dates at the top and the Compare results stay as they are).
         const showBill = () => {
             if (!billOk) return;
             if (state.activeTab !== 'bill') app.selectTab('bill');
@@ -113,32 +115,59 @@
     }
 
     function billPeriodLoaded(bill) {
-        return !!(bill && state.cachedChannelData && state.lastFetchedStartDate
+        const site = app.selectedSite();
+        return !!(bill && state.cachedChannelData && state.lastFetchedStartDate && !(site && site.local)
             && state.lastFetchedStartDate <= bill.start && state.lastFetchedEndDate >= bill.end);
     }
 
     const billKey = (bill) => (bill ? `${bill.start}|${bill.end}` : '');
 
+    /** The readings to check a bill against: the results on show if they cover it, else its own. */
+    function billChannelData(bill) {
+        if (billPeriodLoaded(bill)) return state.cachedChannelData;
+        const own = state.billData;
+        return own && own.key === billKey(bill) && own.channelData ? own.channelData : null;
+    }
+
     /**
-     * Fetch the saved bill's period (once a Compare in progress finishes) unless it is already
-     * loaded. Opening the tab doesn't retry a bill period that already failed to load.
+     * Load the saved bill's period for the bill check, unless the results on show already cover
+     * it. This is the bill check's own load: the dates at the top and the Compare results are left
+     * as they are. Opening the tab doesn't retry a bill period that already failed to load.
      */
-    function ensureBillLoaded(opts) {
+    async function ensureBillLoaded(opts) {
         const bill = state.billCheck;
-        if (!billPeriodFinished(bill) || billPeriodLoaded(bill)) return;
-        if (!$('apiKey').value.trim()) { renderBillCheck(); return; }
+        const key = billKey(bill);
         const fromTab = !!(opts && opts.fromTab);
-        if (fromTab && state.billLoadFailed === billKey(bill)) { renderBillCheck(); return; }
-        if (!fromTab) state.billLoadFailed = null;
-        if (state.fetching) {
-            state.pendingBillLoad = true;
+        const own = state.billData && state.billData.key === key ? state.billData : null;
+        const apiKey = $('apiKey').value.trim();
+        if (!billPeriodFinished(bill) || billChannelData(bill) || !apiKey || (own && (own.loading || (fromTab && own.error)))) {
             renderBillCheck();
             return;
         }
-        $('startDate').value = bill.start;
-        $('endDate').value = bill.end;
-        state.billLoading = billKey(bill);
-        app.fetchAndCompare();
+        state.billData = { key, loading: true };
+        renderBillCheck();
+        let result;
+        try {
+            if (!state.sites.some((site) => !site.local) || state.sitesApiKey !== apiKey) {
+                app.populateSites(await Amber.fetchSites(apiKey));
+                state.sitesApiKey = apiKey;
+            }
+            const site = app.selectedSite();
+            if (!site || site.local) throw new Error('The selected site is a household imported from NEM12. Choose your Amber site on the Start tab to check this bill.');
+            const loaded = await app.loadReadings(site, apiKey, bill.start, bill.end);
+            if (!loaded.items.length) throw new Error(loaded.chunkErrors.length ? app.failedChunksMessage(loaded.failedRanges, loaded.chunkErrors) : 'Amber has no meter data for these dates.');
+            const channelData = {};
+            (site.channels || []).forEach((c) => { channelData[c.identifier] = Amber.emptyChannel(c); });
+            Amber.processUsageData(loaded.items, channelData, true);
+            Object.values(channelData).forEach((c) => c.usageData.sort((x, y) => x.nemTime.localeCompare(y.nemTime)));
+            result = { key, siteId: site.id, channelData, warning: loaded.chunkErrors.length ? app.failedChunksMessage(loaded.failedRanges, loaded.chunkErrors) : '' };
+        } catch (err) {
+            console.error(err);
+            result = { key, error: err && err.message ? err.message : 'Something went wrong.' };
+        }
+        // A different bill (or none) since this started: its result isn't wanted any more.
+        if (!state.billData || state.billData.key !== key || billKey(state.billCheck) !== key) return;
+        state.billData = result;
         renderBillCheck();
     }
 
@@ -167,18 +196,20 @@
         }
         const days = Amber.inclusiveDayCount(bill.start, bill.end);
         $('billCheckPeriod').textContent = `Bill period: ${app.fmtDate(bill.start)} to ${app.fmtDate(bill.end)} (${days} days${bill.periodFromFileName ? ', from the file name' : ''}). Bill charges are shown without GST, and so are the figures from your meter readings.`;
-        if (!billPeriodLoaded(bill)) {
+        const data = billChannelData(bill);
+        const own = state.billData && state.billData.key === billKey(bill) ? state.billData : null;
+        if (!data) {
             let msg;
             if (!billPeriodFinished(bill)) {
                 msg = 'The bill period hasn\'t finished yet, so there is no complete meter data to check against.';
             } else if (!$('apiKey').value.trim()) {
                 msg = 'Add your Amber API key on the <button type="button" data-go-start class="text-indigo-600 hover:underline font-medium">Start</button> tab to check this bill against your meter data.';
-            } else if (state.fetching || state.pendingBillLoad) {
+            } else if (own && own.loading) {
                 msg = 'Fetching your meter data for the bill period…';
-            } else if (state.billLoadFailed === billKey(bill)) {
-                msg = 'Couldn\'t load meter data for the bill period (see the message above). <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Try again</button>';
+            } else if (own && own.error) {
+                msg = `Couldn't load meter data for the bill period. ${Amber.escapeHTML(own.error)} <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Try again</button>`;
             } else {
-                msg = 'The selected dates don\'t cover this bill. <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Check the bill period</button>';
+                msg = 'Your meter data for the bill period isn\'t loaded yet. <button type="button" data-bill-reload class="text-indigo-600 hover:underline font-medium">Load it and check the bill</button>';
             }
             body.innerHTML = `<p class="text-sm text-gray-600">${msg}</p>`;
             const reload = body.querySelector('[data-bill-reload]');
@@ -186,29 +217,29 @@
             return;
         }
         // A bill is one settlement of the export allowance, whatever calendar months it covers.
-        const totals = Amber.periodTotals(state.cachedChannelData, bill.start, bill.end, Object.assign(app.periodOpts(), { billPeriod: true }));
+        const totals = Amber.periodTotals(data, bill.start, bill.end, { site: app.selectedSite(), state: app.currentStateCode(), amberRates: app.readAmberRates(), billPeriod: true });
         const rows = Amber.compareBill(bill, totals);
-        const fmtVal = (v, unit) => (unit === '$' ? `$${v.toFixed(2)}` : `${v.toFixed(unit === 'kW' || Math.abs(v) < 10 ? 2 : 1)} ${unit}`);
+        const fmtVal = (v, unit) => (unit === '$' ? `${Amber.money(v)}` : `${v.toFixed(unit === 'kW' || Math.abs(v) < 10 ? 2 : 1)} ${unit}`);
         const fmtDiff = (v, unit) => {
             if (Math.abs(v) < (unit === '$' ? 0.005 : 0.05)) return '—';
             return (v > 0 ? '+' : '−') + fmtVal(Math.abs(v), unit);
         };
         let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead class="bg-gray-50"><tr>
-            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bill</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Meter data</th>
-            <th class="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Difference</th>
-            <th class="px-3 py-2"></th></tr></thead><tbody class="divide-y divide-gray-200">`;
+            <th class="px-2 sm:px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Line</th>
+            <th class="px-2 sm:px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Bill</th>
+            <th class="px-2 sm:px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Meter data</th>
+            <th class="px-2 sm:px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Difference</th>
+            <th class="px-2 sm:px-3 py-2"></th></tr></thead><tbody class="divide-y divide-gray-200">`;
         rows.forEach((r) => {
             html += `<tr class="${r.ok ? '' : 'bg-amber-50'}">
-                <td class="px-3 py-2 text-gray-900">${Amber.escapeHTML(r.label)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.bill, r.unit)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.meter, r.unit)}</td>
-                <td class="px-3 py-2 text-right whitespace-nowrap ${r.ok ? 'text-gray-600' : 'text-amber-800 font-semibold'}">${fmtDiff(r.diff, r.unit)}</td>
-                <td class="px-3 py-2 text-center">${r.ok ? '<span class="text-green-700" aria-label="matches">✓</span>' : '<span class="text-amber-700" aria-label="check">⚠</span>'}</td>
+                <td class="px-2 sm:px-3 py-2 text-gray-900">${Amber.escapeHTML(r.label)}</td>
+                <td class="px-2 sm:px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.bill, r.unit)}</td>
+                <td class="px-2 sm:px-3 py-2 text-right whitespace-nowrap">${fmtVal(r.meter, r.unit)}</td>
+                <td class="px-2 sm:px-3 py-2 text-right whitespace-nowrap ${r.ok ? 'text-gray-600' : 'text-amber-800 font-semibold'}">${fmtDiff(r.diff, r.unit)}</td>
+                <td class="px-2 sm:px-3 py-2 text-center">${r.ok ? '<span class="text-green-700" aria-label="matches">✓</span>' : '<span class="text-amber-700" aria-label="check">⚠</span>'}</td>
             </tr>`;
         });
-        html += '</tbody></table>';
+        html = app.scrollBox(html + '</tbody></table>');
 
         const notes = [];
         const bad = rows.filter((r) => !r.ok).map((r) => r.key);
@@ -217,10 +248,16 @@
             notes.push(`Peak demand matches but the charge doesn't: the bill charges demand for all ${days} days, while Amber's data marks only ${totals.demandDays} days as demand days.`);
         }
         if (totals.dataDays < days) notes.push(`Meter data is missing for ${days - totals.dataDays} day(s) of the bill period.`);
-        const est = Object.keys(state.dailySummaries || {}).filter((d) => d >= bill.start && d <= bill.end && state.dailySummaries[d].estimatedCount > 0).length;
+        const estimated = new Set();
+        Object.values(data).forEach((c) => (c.usageData || []).forEach((item) => {
+            const d = Amber.usageDateStr(item);
+            if (d >= bill.start && d <= bill.end && Amber.isEstimatedQuality(item.quality)) estimated.add(d);
+        }));
+        const est = estimated.size;
+        if (own && own.warning && data === own.channelData) notes.push(own.warning);
         if (est) notes.push(`${est} day(s) still have estimated meter data, which can differ from what was billed.`);
-        if (bill.otherCost) notes.push(`The charges total includes $${bill.otherCost.toFixed(2)} of other charges from the bill (e.g. a card payment fee) that aren't in meter data.`);
-        if (bill.voucherCredit) notes.push(`Vouchers & concessions of $${bill.voucherCredit.toFixed(2)} (without GST) are credited on the bill but aren't part of this check.`);
+        if (bill.otherCost) notes.push(`The charges total includes ${Amber.money(bill.otherCost)} of other charges from the bill (e.g. a card payment fee) that aren't in meter data.`);
+        if (bill.voucherCredit) notes.push(`Vouchers & concessions of ${Amber.money(bill.voucherCredit)} (without GST) are credited on the bill but aren't part of this check.`);
         if (bill.feedInKwh == null) notes.push('Feed-in credits weren\'t found on the bill, so they aren\'t compared.');
         const reward = rows.find((r) => r.key === 'exportRewardKwh');
         if (reward) {
@@ -231,6 +268,7 @@
         notes.push('Supply, subscription and demand use the rates in the Amber charges fields (prefilled from this bill).');
         html += `<ul class="text-xs text-gray-600 mt-3 space-y-1 list-disc pl-5">${notes.map((n) => `<li>${Amber.escapeHTML(n)}</li>`).join('')}</ul>`;
         body.innerHTML = html;
+        app.syncScrollHints();
     }
 
     function setupBillCheck() {
@@ -247,6 +285,7 @@
         $('billCheckClear').addEventListener('click', () => {
             state.billCheck = null;
             state.billCheckError = null;
+            state.billData = null;
             try { localStorage.removeItem(BILL_CHECK_KEY); } catch (e) { /* ignore */ }
             renderBillCheck();
         });
@@ -255,8 +294,7 @@
 
     // What the other app-*.js files use from this one.
     Object.assign(app, {
-        billPeriodFinished, billPeriodLoaded, billKey, ensureBillLoaded, renderBillCheck,
-        setupBillCheck
+        ensureBillLoaded, renderBillCheck, setupBillCheck
     });
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;

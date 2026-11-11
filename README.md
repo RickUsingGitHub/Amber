@@ -46,7 +46,7 @@ The tab bar is Start, Compare, Usage, Bill?, Free? and Solar+?. Hovering a tab s
 
 ### Bill?
 
-- Upload an Amber bill (PDF or text). The app loads the bill period's meter data and checks every line against it: usage, peak demand and demand charges, daily supply, subscription, GST, the charges total, solar exports and export credits.
+- Upload an Amber bill (PDF or text). The app loads the bill period's meter data for the check (leaving the dates at the top and the Compare results as they are) and checks every line against it: usage, peak demand and demand charges, daily supply, subscription, GST, the charges total, solar exports and export credits.
 
 ### Free?
 

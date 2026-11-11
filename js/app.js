@@ -41,6 +41,7 @@
         [state.usageChart, state.dailyUsageChart].forEach((chart) => {
             if (chart) chart.resize();
         });
+        app.syncScrollHints();
         if (tab === 'bill' && state.ready) app.ensureBillLoaded({ fromTab: true });
         // The planner uses its own 12 months, so the dates bar and download tools step aside.
         if (tab === 'plan') {
@@ -174,6 +175,7 @@
         if (state.sitesApiKey && key !== state.sitesApiKey) {
             Amber.clearSitesCache();
             state.sitesApiKey = null;
+            state.billData = null;
             app.populateSites([]);
         }
     }
@@ -185,6 +187,7 @@
             $(id).addEventListener('change', () => {
                 app.saveAllSettings();
                 if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) recalculateAndShow(true);
+                else app.renderBillCheck();
             });
         });
         $('rememberApiKey').addEventListener('change', () => {
@@ -322,6 +325,8 @@
             Amber.generateResultsTableCsv(table, state.lastFetchedStartDate, state.lastFetchedEndDate);
             csvMenu.classList.add('hidden');
         });
+
+        root.addEventListener('resize', app.syncScrollHints);
     }
 
     // ---------- Compare ----------
@@ -351,6 +356,99 @@
         state.dailySummaries = summaries;
         state.demandInfoForTooltip = monthlyDemandInfo;
         await app.displayResults(state.cachedChannelData, startDateStr, endDateStr, numDays, demandTariffInfo, otherDemand, skipGraphs === true);
+    }
+
+    /**
+     * A site's readings for from..to (inclusive dates): the saved days from the cache and the rest
+     * from Amber, saving the final days that come back. An imported household only ever has its
+     * saved days. progress({ processedDays, cachedDays, toFetch, chunks, completedChunks }) is told
+     * how it is going. Used by Compare and by the bill check, which loads its own period.
+     * Returns { items, cachedDays, localMissing, chunkErrors, failedRanges, cacheWriteFailed }.
+     */
+    async function loadReadings(site, apiKey, from, to, progress) {
+        const tell = progress || (() => {});
+        const db = await Amber.openDb();
+        const rangeDates = [];
+        Amber.eachDateInclusive(new Date(from + 'T00:00:00'), new Date(to + 'T00:00:00'), (dateStr) => {
+            rangeDates.push(dateStr);
+        });
+        const cache = await Amber.loadSiteCacheDates(db, site.id, rangeDates);
+        const emptyCutoff = Amber.emptyDayCutoff();
+
+        const items = [];
+        const datesToFetch = [];
+        let processedDays = 0;
+        let cachedDays = 0;
+        let localMissing = 0;
+        rangeDates.forEach((dateStr) => {
+            const cached = cache.byDate[dateStr];
+            if (site.local) {
+                if (cached && cached.length) {
+                    items.push(...cached);
+                    cachedDays++;
+                } else {
+                    localMissing++;
+                }
+                processedDays++;
+                return;
+            }
+            if (Amber.cachedDayUsable(cached, dateStr, emptyCutoff)) {
+                items.push(...cached);
+                cachedDays++;
+                processedDays++;
+            } else {
+                datesToFetch.push(dateStr);
+            }
+        });
+
+        const fetchRanges = Amber.buildFetchRanges(datesToFetch);
+        const chunkErrors = [];
+        const failedRanges = [];
+        let completedChunks = 0;
+        const report = () => tell({ processedDays, cachedDays, toFetch: datesToFetch.length, chunks: fetchRanges.length, completedChunks });
+        report();
+        const cacheWrites = [];
+        const chunkResults = await Amber.mapPool(fetchRanges, Amber.FETCH_CONCURRENCY, async (range) => {
+            try {
+                const data = await Amber.fetchUsageRange(apiKey, site.id, range);
+                processedDays += Amber.inclusiveDayCount(range.start, range.end);
+                completedChunks++;
+                report();
+
+                const dailyData = {};
+                data.forEach((item) => {
+                    const usageDateStr = Amber.usageDateStr(item);
+                    if (!usageDateStr) return;
+                    if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
+                    dailyData[usageDateStr].push(item);
+                });
+                // Cache final days, and remember old days Amber has no data for.
+                for (let d = range.start; d <= range.end; d = Amber.addDays(d, 1)) {
+                    const dayItems = dailyData[d] || [];
+                    if (Amber.isCompleteDay(dayItems) || (!dayItems.length && d < emptyCutoff)) {
+                        cacheWrites.push({ id: `${site.id}_${d}`, data: dayItems });
+                    }
+                }
+                return data;
+            } catch (err) {
+                chunkErrors.push(err.message);
+                failedRanges.push({ range, busy: !!(err.network || err.status === 429) });
+                return [];
+            }
+        });
+        // The readings are in hand either way: if the browser can't save them (its storage is
+        // full, say), carry on and say they'll download again next time.
+        let cacheWriteFailed = false;
+        if (cacheWrites.length) {
+            try {
+                await Amber.setUsageDataMany(db, cacheWrites);
+            } catch (err) {
+                console.error(err);
+                cacheWriteFailed = true;
+            }
+        }
+        chunkResults.forEach((data) => items.push(...data));
+        return { items, cachedDays, localMissing, chunkErrors, failedRanges, cacheWriteFailed };
     }
 
     async function fetchAndCompare() {
@@ -429,91 +527,15 @@
             state.monthly = null;
             app.showMessage(`Site found: ${site.nmi || site.id}. Preparing to fetch usage data...`);
             await Amber.sleep(0);
-            const db = await Amber.openDb();
-            const rangeDates = [];
-            Amber.eachDateInclusive(new Date(startDateValue + 'T00:00:00'), new Date(clampedEnd + 'T00:00:00'), (dateStr) => {
-                rangeDates.push(dateStr);
+            const loaded = await loadReadings(site, apiKey, startDateValue, clampedEnd, (p) => {
+                $('progressBar').style.width = `${Math.min(100, (p.processedDays / numDays) * 100)}%`;
+                if (!p.chunks) return;
+                const note = `${p.cachedDays} of ${numDays} days from cache; fetching ${p.toFetch} day(s) from Amber (${p.completedChunks}/${p.chunks} chunks)...`;
+                if (p.completedChunks === 0) app.showMessage(note);
+                else $('message').textContent = note;
             });
-            const cache = await Amber.loadSiteCacheDates(db, site.id, rangeDates);
-            const emptyCutoff = Amber.emptyDayCutoff();
-
-            const selectedUsageData = [];
-            const datesToFetch = [];
-            let processedDays = 0;
-            let cachedDays = 0;
-            let localMissing = 0;
-            rangeDates.forEach((dateStr) => {
-                const cached = cache.byDate[dateStr];
-                if (localMode) {
-                    if (cached && cached.length) {
-                        selectedUsageData.push(...cached);
-                        cachedDays++;
-                    } else {
-                        localMissing++;
-                    }
-                    processedDays++;
-                    return;
-                }
-                if (Amber.cachedDayUsable(cached, dateStr, emptyCutoff)) {
-                    selectedUsageData.push(...cached);
-                    cachedDays++;
-                    processedDays++;
-                } else {
-                    datesToFetch.push(dateStr);
-                }
-            });
-            $('progressBar').style.width = `${(processedDays / numDays) * 100}%`;
-
-            const fetchRanges = Amber.buildFetchRanges(datesToFetch);
-            const fetchNote = `${cachedDays} of ${numDays} days from cache; fetching ${datesToFetch.length} day(s) from Amber`;
-            if (fetchRanges.length) app.showMessage(`${fetchNote} (0/${fetchRanges.length} chunks)...`);
-            const chunkErrors = [];
-            const failedRanges = [];
-            let completedChunks = 0;
-            const cacheWrites = [];
-            const chunkResults = await Amber.mapPool(fetchRanges, Amber.FETCH_CONCURRENCY, async (range) => {
-                try {
-                    const data = await Amber.fetchUsageRange(apiKey, site.id, range);
-                    const daysInThisRange = Amber.inclusiveDayCount(range.start, range.end);
-                    processedDays += daysInThisRange;
-                    completedChunks++;
-                    $('progressBar').style.width = `${Math.min(100, (processedDays / numDays) * 100)}%`;
-                    $('message').textContent = `${fetchNote} (${completedChunks}/${fetchRanges.length} chunks)...`;
-
-                    const dailyData = {};
-                    data.forEach((item) => {
-                        const usageDateStr = Amber.usageDateStr(item);
-                        if (!usageDateStr) return;
-                        if (!dailyData[usageDateStr]) dailyData[usageDateStr] = [];
-                        dailyData[usageDateStr].push(item);
-                    });
-                    // Cache final days, and remember old days Amber has no data for.
-                    for (let d = range.start; d <= range.end; d = Amber.addDays(d, 1)) {
-                        const items = dailyData[d] || [];
-                        if (Amber.isCompleteDay(items) || (!items.length && d < emptyCutoff)) {
-                            cacheWrites.push({ id: `${site.id}_${d}`, data: items });
-                            cache.byDate[d] = items;
-                        }
-                    }
-                    return data;
-                } catch (err) {
-                    chunkErrors.push(err.message);
-                    failedRanges.push({ range, busy: !!(err.network || err.status === 429) });
-                    return [];
-                }
-            });
-            // The readings are in hand either way: if the browser can't save them (its storage is
-            // full, say), compare anyway and say they'll download again next time.
-            let cacheWriteFailed = false;
-            if (cacheWrites.length) {
-                try {
-                    await Amber.setUsageDataMany(db, cacheWrites);
-                } catch (err) {
-                    console.error(err);
-                    cacheWriteFailed = true;
-                }
-            }
-            chunkResults.forEach((data) => selectedUsageData.push(...data));
+            const selectedUsageData = loaded.items;
+            const { chunkErrors, failedRanges, localMissing, cacheWriteFailed } = loaded;
 
             if (!selectedUsageData.length) {
                 if (localMode) throw new Error(`No imported meter data for NMI ${site.nmi} in these dates. Its data covers ${app.fmtDate(site.firstDay || '')} – ${app.fmtDate(site.lastDay || '')}.`);
@@ -576,16 +598,7 @@
             app.showMessage(`Error: ${error.message}`, true);
         } finally {
             setFetching(false);
-            if (state.billLoading) {
-                if (!app.billPeriodLoaded(state.billCheck) && app.billKey(state.billCheck) === state.billLoading) state.billLoadFailed = state.billLoading;
-                state.billLoading = null;
-            }
-            if (state.pendingBillLoad) {
-                state.pendingBillLoad = false;
-                setTimeout(() => app.ensureBillLoaded(), 0);
-            } else {
-                app.renderBillCheck();
-            }
+            app.renderBillCheck();
         }
     }
 
@@ -671,14 +684,15 @@
             }
             fetchAndCompare();
         } else if (storedKey.key && Amber.AUTO_COMPARE) {
-            if (state.activeTab === 'bill' && app.billPeriodFinished(state.billCheck)) app.ensureBillLoaded();
-            else applyDatePreset('thisMonth');
+            applyDatePreset('thisMonth');
+            if (state.activeTab === 'bill') app.ensureBillLoaded({ fromTab: true });
         }
     }
 
     // What the other app-*.js files use from this one.
     Object.assign(app, {
-        selectTab, syncConnectedUi, recalculateAndShow, fetchAndCompare
+        selectTab, syncConnectedUi, recalculateAndShow, loadReadings, fetchAndCompare,
+        failedChunksMessage
     });
 
     // What the Solar & battery tab (planner-ui.js) reads from the rest of the app.

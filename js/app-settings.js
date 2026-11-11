@@ -58,6 +58,7 @@
         state.lastFetchTimestamp = null;
         state.batteryShift = null;
         state.batteryDetect = null;
+        state.billData = null;
         app.hideResults();
         app.hideMessage();
         $('calendar-container').innerHTML = '';
