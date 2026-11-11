@@ -50,6 +50,7 @@ Tab behaviour (`app.js` `selectTab`, `setupTabs`): `aria-selected`, roving `tabi
 | `data-jump`, `data-jump-nav` | In-page jump links |
 | `data-results-placeholder` | "Nothing here yet" blocks |
 | `data-scroll-box`, `data-scroll-hint` | A table's own sideways-scrolling box and the note under it, shown only while the table overflows (`Amber.scrollBox`, `Amber.syncScrollHints`) |
+| `data-tight` | Set on a `data-scroll-box` whose table doesn't fit. Cells with a `group-data-[tight]:` class then give way first (the month table's Difference column wraps, a long plan name in "Every plan" may break), and the note shows only if the table is still too wide |
 | `data-compact-only` | Lines shown only on a phone, repeating a column that is hidden there (left out of the table CSV) |
 | `data-help`, `data-help-label` | Help bubbles (key into `Amber.HELP`, or plain text; label for screen readers) |
 | `data-tou-period`, `data-add-tou-window`, `data-remove-window` | TOU plan form |
@@ -94,7 +95,7 @@ Text from data or the user goes through `Amber.escapeHTML` (`esc`). Keep that wh
 ## Responsive behaviour
 
 - The tab bar stays on one line from 320 px up and scrolls sideways (tested at 320, 360 and 390 px), and the page itself never scrolls sideways (tested).
-- On a computer (1024 px and wider) every Compare and Free? table fits its card. On a phone the answer table hides its When and kWh columns and shows them under What, so both prices show without swiping; "Every plan" fits too. The eleven-column month table and the Free? tables scroll inside their own box (`data-scroll-box`) with the first column staying in view and a note saying there is more to the side. The Solar+? tables still scroll inside their cards (the options table has 7 columns).
+- On a computer (1024 px and wider) every Compare and Free? table fits its card. On a phone the answer table hides its When and kWh columns and shows them under What, so both prices show without swiping; "Every plan" fits too. How wide text is depends on the computer's or phone's own font (the app uses the system font), so a table that is a little too wide first lets one column wrap (`data-tight`) before it scrolls; the layout tests pass with fonts as wide as DejaVu Sans, the default on GitHub's Ubuntu runners. The eleven-column month table and the Free? tables scroll inside their own box (`data-scroll-box`) with the first column staying in view and a note saying there is more to the side. The Solar+? tables still scroll inside their cards (the options table has 7 columns).
 - Planner inputs are grids that collapse to one column (`grid-cols-1 sm:grid-cols-2/3`).
 
 ## Accessibility today

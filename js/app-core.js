@@ -172,13 +172,20 @@
      * with a note under it that shows only while part of the table is off-screen.
      */
     function scrollBox(tableHtml) {
-        return `<div data-scroll-box class="overflow-x-auto">${tableHtml}</div><p data-scroll-hint class="hidden mt-1 text-xs text-gray-500">Scroll the table sideways to see every column →</p>`;
+        return `<div data-scroll-box class="group overflow-x-auto">${tableHtml}</div><p data-scroll-hint class="hidden mt-1 text-xs text-gray-500">Scroll the table sideways to see every column →</p>`;
     }
 
+    /**
+     * Show each table's "scroll sideways" note only while part of the table is off-screen. A table
+     * that doesn't fit is first marked data-tight, which lets cells that allow it wrap
+     * (group-data-[tight]: classes); the note shows only if it is still too wide after that.
+     */
     function syncScrollHints() {
         document.querySelectorAll('[data-scroll-box]').forEach((box) => {
             const hint = box.nextElementSibling;
             if (!hint || !hint.hasAttribute('data-scroll-hint')) return;
+            box.removeAttribute('data-tight');
+            if (box.scrollWidth > box.clientWidth + 1) box.setAttribute('data-tight', '');
             hint.classList.toggle('hidden', box.scrollWidth <= box.clientWidth + 1);
         });
     }
