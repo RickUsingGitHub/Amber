@@ -67,9 +67,9 @@
         let html = `<table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
-                    <th class="px-2 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-                    <th class="px-2 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
-                    <th class="px-2 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
+                    <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
                 </tr>
             </thead><tbody class="bg-white divide-y divide-gray-200">`;
         rows.forEach((row) => {
@@ -84,9 +84,9 @@
             }
             const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
             html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Show this plan in full above">
-                <td class="px-2 sm:px-4 py-2 text-sm text-gray-900">${Amber.escapeHTML(Amber.planListLabel(row.name, app.currentSiteNetwork()))}</td>
-                <td class="px-2 sm:px-4 py-2 text-sm text-right whitespace-nowrap">${Amber.money(row.total)}</td>
-                <td class="px-2 sm:px-4 py-2 text-sm text-right sm:whitespace-nowrap ${cls}">${vs}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-gray-900 group-data-[tight]:[overflow-wrap:anywhere]">${Amber.escapeHTML(Amber.planListLabel(row.name, app.currentSiteNetwork()))}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-right whitespace-nowrap">${Amber.money(row.total)}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-right sm:whitespace-nowrap ${cls}">${vs}</td>
             </tr>`;
         });
         html += '</tbody></table>';
@@ -281,8 +281,9 @@
         // One row shape for the whole table (five cells, no spans), so two columns can step aside on
         // a phone: "When" and "kWh" are hidden there and shown under "What" instead, which leaves
         // room for the two prices without swiping.
-        const CELL = 'px-2 sm:px-3 py-3 text-sm';
-        const headCell = (label, key, right, compact) => `<th scope="col" class="px-2 sm:px-3 py-3 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider${compact ? ' hidden sm:table-cell' : ''}"><span data-help="${key}" data-help-label="${Amber.escapeHTML(label)}">${Amber.escapeHTML(label)}</span></th>`;
+        // Tight sides on a phone, so What and both prices fit across whatever font the phone uses.
+        const CELL = 'px-1.5 sm:px-3 py-3 text-sm';
+        const headCell = (label, key, right, compact) => `<th scope="col" class="px-1.5 sm:px-3 py-3 ${right ? 'text-right' : 'text-left'} text-xs font-medium text-gray-500 uppercase tracking-wider${compact ? ' hidden sm:table-cell' : ''}"><span data-help="${key}" data-help-label="${Amber.escapeHTML(label)}">${Amber.escapeHTML(label)}</span></th>`;
         const rateLine = (rate) => {
             const text = Amber.formatCentsPerKwh(rate);
             return text ? `<div class="text-xs font-normal text-gray-400">${text}</div>` : '';
@@ -596,7 +597,10 @@
             : new Date(`${r.month}-01T00:00:00`).toLocaleDateString('en-AU', { month: 'short', year: 'numeric' }));
         const daysCell = (r) => (r.dataDays < r.days ? `<span class="text-amber-700" title="Days with meter data / days in period">${r.dataDays}/${r.days}</span>` : String(r.days));
         // Headings wrap onto two lines and cells are tight, so all eleven columns fit a computer
-        // screen. On a phone the table scrolls sideways with the month staying in view.
+        // screen. Fonts differ in width from one computer to the next: if the table is still too
+        // wide there, its last column wraps ("Plan $53.10" over "cheaper") before anything is
+        // pushed off the side (see syncScrollHints).
+        // On a phone the table scrolls sideways with the month staying in view.
         const th = (t, right, help, first) => `<th scope="col" class="px-1.5 py-2 ${right ? 'text-right' : 'text-left'} align-bottom text-xs font-medium text-gray-500 uppercase tracking-wider${first ? ' sticky left-0 bg-inherit' : ''}">${help ? `<span data-help="${help}" data-help-label="${t}">${t}</span>` : t}</th>`;
         let html = `<table class="min-w-full divide-y divide-gray-200 text-sm"><thead><tr class="bg-gray-50">
             ${th('Month', 0, '', 1)}${th('Days', 1, 'Days in the month. If some show as 25/31, only 25 days had meter readings.')}${th('kWh bought', 1, 'colUsage')}${th('kWh sent out', 1, 'Solar sent to the grid, in kWh.')}${th('Power', 1, 'What Amber charged for the power you bought (including any network export charge).')}${th('Solar credit', 1, 'What Amber paid for solar you sent out (shown with a minus sign).')}${th('Demand', 1, 'rowDemand')}${th('Daily + fees', 1, 'Daily supply charge plus Amber\'s membership fee.')}${th('Amber', 1, 'Everything on Amber for the month.')}${th(Amber.escapeHTML(planName), 1, 'colOther')}${th('Difference', 1, 'Which was cheaper that month, and by how much.')}
@@ -611,7 +615,7 @@
             html += `<tr class="${isTotal ? 'bg-gray-50 font-semibold' : 'bg-white'}">
                 ${td(label(r), 0, 'sticky left-0 bg-inherit')}${td(daysCell(r), 1)}${td(kwhText(r.importKwh), 1)}${td(kwhText(r.exportKwh), 1)}
                 ${td(money(adj(r.amberUsage)), 1)}${td(money(r.amberFeedIn || 0), 1)}${td(money(adj(r.amberDemand)), 1)}${td(money(adj(r.amberConnection + r.amberSubscription)), 1)}
-                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, diffCls)}
+                ${td(money(v.amberTotal), 1, 'font-semibold')}${td(money(v.otherTotal), 1)}${td(diffText, 1, `${diffCls} lg:group-data-[tight]:whitespace-normal`)}
             </tr>`;
         });
         html = app.scrollBox(html + '</tbody></table>');
