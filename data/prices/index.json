@@ -103,7 +103,7 @@
      "complete": true
     },
     "2026-11": {
-     "intervals": 3456,
+     "intervals": 3744,
      "complete": false
     }
    },
@@ -213,7 +213,7 @@
      "complete": true
     },
     "2026-11": {
-     "intervals": 3456,
+     "intervals": 3744,
      "complete": false
     }
    },
@@ -323,7 +323,7 @@
      "complete": true
     },
     "2026-11": {
-     "intervals": 3456,
+     "intervals": 3744,
      "complete": false
     }
    },
@@ -433,7 +433,7 @@
      "complete": true
     },
     "2026-11": {
-     "intervals": 3456,
+     "intervals": 3744,
      "complete": false
     }
    },
@@ -441,6 +441,6 @@
    "last": "2026-11"
   }
  },
- "updated": "2026-11-12T21:51:08.990Z",
+ "updated": "2026-11-13T21:26:44.370Z",
  "source": "AEMO aggregated price and demand data (5-minute RRP, $/MWh, interval end in NEM time)"
 }
