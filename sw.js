@@ -1,11 +1,11 @@
 (function (root) {
-    const CACHE_NAME = 'amber-compare-v1.66';
+    const CACHE_NAME = 'amber-compare-v1.67';
     const APP_SHELL = [
         './',
         'index.html',
         'manifest.json',
         'favicon.ico',
-        'css/app.css?v=1.66',
+        'css/app.css?v=1.67',
         'chart.umd.min.js',
         'chartjs-plugin-zoom.min.js'
     ];

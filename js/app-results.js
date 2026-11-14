@@ -62,38 +62,48 @@
             const planConfig = name === selectedName ? app.createPlanObjectFromForm() : plans[name];
             const result = Amber.computePlanTotals(channelTotals, planConfig, planTotalsOptions(planConfig, numDays, startDateStr, endDateStr));
             return { name, total: result.otherTotal, asAt: Amber.templateAsAt(plans[name]) };
-        }).sort((a, b) => a.total - b.total);
+        });
+        rows.push({ name: 'Amber', total: amberTotal, isAmber: true });
+        rows.sort((a, b) => a.total - b.total);
 
         let html = `<table class="min-w-full divide-y divide-gray-200">
             <thead class="bg-gray-50">
                 <tr>
                     <th class="px-1.5 sm:px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
                     <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Cost for these dates</th>
-                    <th class="px-1.5 sm:px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">Compared with Amber</th>
                 </tr>
             </thead><tbody class="bg-white divide-y divide-gray-200">`;
         rows.forEach((row) => {
-            const diff = amberTotal - row.total;
-            let vs = '≈ no difference';
-            let cls = 'text-gray-600';
-            if (Math.abs(diff) >= 0.01) {
-                // On a phone the heading already says "compared with Amber": keep the cell to one line.
-                const thanAmber = '<span class="hidden sm:inline"> than Amber</span>';
-                if (diff > 0) { vs = `<span class="whitespace-nowrap">${Amber.money(diff)}</span> cheaper${thanAmber}`; cls = 'text-red-700'; }
-                else { vs = `<span class="whitespace-nowrap">${Amber.money(Math.abs(diff))}</span> more${thanAmber}`; cls = 'text-green-700'; }
+            let colorCls = 'text-gray-900';
+            let hoverTitle = 'Amber Electric for these dates';
+            if (!row.isAmber) {
+                const diff = amberTotal - row.total;
+                if (diff >= 0.01) {
+                    colorCls = 'text-red-700';
+                    hoverTitle = `${Amber.money(diff)} cheaper than Amber — tap to show in full above`;
+                } else if (diff <= -0.01) {
+                    colorCls = 'text-green-700';
+                    hoverTitle = `${Amber.money(Math.abs(diff))} more than Amber — tap to show in full above`;
+                } else {
+                    hoverTitle = 'About the same as Amber — tap to show in full above';
+                }
             }
-            const current = row.name === selectedName ? ' font-semibold bg-indigo-50' : '';
-            html += `<tr class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="Show this plan in full above">
-                <td class="px-1.5 sm:px-4 py-2 text-sm text-gray-900 group-data-[tight]:[overflow-wrap:anywhere]">${Amber.escapeHTML(Amber.planListLabel(row.name, app.currentSiteNetwork()))}</td>
-                <td class="px-1.5 sm:px-4 py-2 text-sm text-right whitespace-nowrap">${Amber.money(row.total)}</td>
-                <td class="px-1.5 sm:px-4 py-2 text-sm text-right sm:whitespace-nowrap ${cls}">${vs}</td>
+            const label = row.isAmber ? 'Amber' : Amber.planListLabel(row.name, app.currentSiteNetwork());
+            const current = row.isAmber ? ' font-semibold bg-gray-50' : (row.name === selectedName ? ' font-semibold bg-indigo-50' : '');
+            const rowAttrs = row.isAmber
+                ? `class="${current.trim()}" title="${Amber.escapeHTML(hoverTitle)}"`
+                : `class="cursor-pointer hover:bg-gray-50${current}" role="button" tabindex="0" title="${Amber.escapeHTML(hoverTitle)}"`;
+            html += `<tr ${rowAttrs}>
+                <td class="px-1.5 sm:px-4 py-2 text-sm ${colorCls} group-data-[tight]:[overflow-wrap:anywhere]">${Amber.escapeHTML(label)}</td>
+                <td class="px-1.5 sm:px-4 py-2 text-sm text-right whitespace-nowrap ${colorCls}">${Amber.money(row.total)}</td>
             </tr>`;
         });
         html += '</tbody></table>';
         host.innerHTML = app.scrollBox(html);
         host.querySelectorAll('tbody tr').forEach((tr, index) => {
-            const planName = rows[index].name;
-            const activate = () => app.selectSupplierPlan(planName, { scroll: true });
+            const row = rows[index];
+            if (row.isAmber) return;
+            const activate = () => app.selectSupplierPlan(row.name, { scroll: true });
             tr.addEventListener('click', activate);
             tr.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' || e.key === ' ') {

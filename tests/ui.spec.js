@@ -259,8 +259,13 @@ test.describe('Amber UI flows', () => {
         await page.selectOption('#planSelector', '2026-27 DMO (Ausgrid, Flat)');
         await page.click('#fetchData');
         await page.waitForSelector('#allPlansSection:not(.hidden)');
+        await expect(page.locator('#allPlansTable thead th')).toHaveCount(2);
+        const amberRow = page.locator('#allPlansTable tbody tr').filter({ has: page.locator('td', { hasText: /^Amber$/ }) });
+        await expect(amberRow).toBeVisible();
+        await expect(amberRow.locator('td').first()).toHaveClass(/text-gray-900/);
         const row = page.locator('#allPlansTable tbody tr').filter({ hasText: 'Origin Go Variable (Flat)' });
         await expect(row).toBeVisible();
+        await expect(row).toHaveAttribute('title', /\$[\d,]+\.\d\d (cheaper|more) than Amber|About the same as Amber/);
         await row.click();
         await expect(page.locator('#planSelector')).toHaveValue('Origin Go Variable (Ausgrid, Flat)');
         await expect(page.locator('#results-table-container')).toContainText(/Origin Go Variable/);
