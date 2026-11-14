@@ -35,7 +35,9 @@
         { id: 'ballarat', name: 'Ballarat', state: 'VIC', lat: -37.56, lon: 143.85, networks: [] },
         { id: 'bendigo', name: 'Bendigo', state: 'VIC', lat: -36.76, lon: 144.28, networks: [] },
         { id: 'mildura', name: 'Mildura', state: 'VIC', lat: -34.19, lon: 142.16, networks: [] },
-        { id: 'traralgon', name: 'Traralgon', state: 'VIC', lat: -38.20, lon: 146.54, networks: [] }
+        { id: 'traralgon', name: 'Traralgon', state: 'VIC', lat: -38.20, lon: 146.54, networks: [] },
+        { id: 'hobart', name: 'Hobart', state: 'TAS', lat: -42.88, lon: 147.33, networks: ['tasnetworks'] },
+        { id: 'launceston', name: 'Launceston', state: 'TAS', lat: -41.43, lon: 147.14, networks: [] }
     ];
 
     Amber.solarLocationFor = function (networkKey) {

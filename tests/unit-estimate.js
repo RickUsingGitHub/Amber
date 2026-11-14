@@ -2,7 +2,9 @@
 
 require('../js/constants.js');
 require('../js/time.js');
+require('../js/templates.js');
 require('../js/costs.js');
+require('../js/csv.js');
 require('../js/monthly.js');
 require('../js/networks.js');
 require('../js/estimate.js');
@@ -157,6 +159,56 @@ Object.keys(Amber.NETWORKS).forEach((key) => {
     const ok = Object.keys(r.days).length === 2 && r.days['2026-01-15'].every((i) => Number.isFinite(i.perKwh));
     assert(ok, `${net.name} ${net.defaultTariff} prices every interval`);
 });
+
+// ---- Tasmania (TasNetworks / TAS1), Multi-NMI NEM12, CDR Plan Importer, What-If & Share Summary ----
+assert(Amber.networkForNmi('8000123456') === 'tasnetworks' && Amber.NETWORKS.tasnetworks.region === 'TAS1', 'TasNetworks guessed from 8000 NMI prefix and uses TAS1');
+const multiNmi = Amber.parseNem12([
+    '100,NEM12,202601010000,TASNETWORKS,RETAILER',
+    '200,8000111111,E1,E1,E1,N1,M1,kWh,30,',
+    `300,20260115,${day(flat(0.5))},A,,,20260116000000,`,
+    '200,8000222222,E1,E1,E1,N1,M2,kWh,30,',
+    `300,20260115,${day(flat(0.25))},A,,,20260116000000,`,
+    '900'
+].join('\n'));
+assert(Object.keys(multiNmi.nmis).length === 2 && near(multiNmi.nmis['8000111111'].channels.E1.kwh, 24) && near(multiNmi.nmis['8000222222'].channels.E1.kwh, 12),
+    'Multi-NMI NEM12 keeps both NMIs distinct');
+
+const cdrParsed = Amber.parseCdrPlan({
+    planData: {
+        displayName: 'Test CDR Plan',
+        brandName: 'Origin',
+        geography: { distributors: ['Ausgrid'] },
+        electricityContract: {
+            pricingModel: 'TIME_OF_USE',
+            tariffPeriod: [{
+                dailySupplyCharges: '1.10',
+                rateBlockUType: 'timeOfUseRates',
+                timeOfUseRates: [
+                    { type: 'PEAK', rates: [{ unitPrice: '0.40' }], timeVariations: [{ days: ['MON', 'TUE', 'WED', 'THU', 'FRI'], startTime: '15:00', endTime: '21:00' }] },
+                    { type: 'OFF_PEAK', rates: [{ unitPrice: '0.20' }], timeVariations: [] }
+                ]
+            }],
+            solarFeedInTariff: [{ payerType: 'RETAILER', tariffUType: 'singleTariff', singleTariff: { rates: [{ unitPrice: '0.05' }] } }]
+        }
+    }
+});
+assert(cdrParsed && cdrParsed.ok && cdrParsed.name === 'Origin Test CDR Plan (Ausgrid, TOU)' && cdrParsed.plan.rateType === 'tou'
+    && near(cdrParsed.plan.daily, 121) && near(cdrParsed.plan.tou.peak.rate, 44)
+    && near(cdrParsed.plan.tou.offpeak.rate, 22) && near(cdrParsed.plan.feedIn, 5),
+    'AER CDR plan importer converts ex-GST dollar rates to GST-inclusive cents and maps TOU windows');
+
+const whatIfTotals = { E1: { type: 'general', usageData: [{ nemTime: '2026-01-15T01:00:00+10:00', kwh: 0.5, perKwh: 20 }] } };
+Amber.applyWhatIfLoads(whatIfTotals, { evKm: 10000, evCharge: 'overnight', hotWater: 'heatpump', hotWaterRun: 'overnight' }, 'NSW');
+assert(whatIfTotals.E1.usageData[0].kwh > 0.5, 'applyWhatIfLoads adds EV and heat-pump load to matching intervals');
+Amber.applyWhatIfLoads(whatIfTotals, { evKm: 0, hotWater: '' }, 'NSW');
+assert(near(whatIfTotals.E1.usageData[0].kwh, 0.5), 'applyWhatIfLoads restores baseline kWh when cleared');
+
+const summaryTxt = Amber.formatShareSummaryText({
+    startDate: '2026-01-01', endDate: '2026-01-31', numDays: 31, planName: 'Flat Plan',
+    amberTotal: 80, otherTotal: 100, importKwh: 300, exportKwh: 120
+});
+assert(summaryTxt.includes('Amber was $20.00 (20.0%) cheaper than Flat Plan') && !summaryTxt.includes('4102000001'),
+    'formatShareSummaryText produces privacy-safe plain-English summary');
 
 if (failed) {
     console.error(`${failed} estimate test(s) failed`);

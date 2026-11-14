@@ -440,6 +440,16 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
         && flatCost(stored.imp, stored.exp) < flatCost(thrown.imp, thrown.exp) - 300,
         `zero export: the battery stores ${stored.charged.toFixed(0)} kWh of solar the limit would have thrown away, and nothing reaches the grid`);
 
+    // Battery foresight modes: optimal >= realistic, and tou runs cleanly.
+    const optRun = Amber.simulateBattery(backA.year, Amber.plannerFlows(backA.year, {}), Amber.plannerBatteryPrices(backA.year, amberPlan, null, model), Object.assign({}, battery, { foresight: 'optimal' }));
+    const realRun = Amber.simulateBattery(backA.year, Amber.plannerFlows(backA.year, {}), Amber.plannerBatteryPrices(backA.year, amberPlan, null, model), Object.assign({}, battery, { foresight: 'realistic' }));
+    const touRun = Amber.simulateBattery(backA.year, Amber.plannerFlows(backA.year, {}), Amber.plannerBatteryPrices(backA.year, amberPlan, null, model), Object.assign({}, battery, { foresight: 'tou' }));
+    const optBill = amberCost(optRun.imp, optRun.exp);
+    const realBill = amberCost(realRun.imp, realRun.exp);
+    const touBill = amberCost(touRun.imp, touRun.exp);
+    assert(Number.isFinite(optBill) && Number.isFinite(realBill) && Number.isFinite(touBill) && optBill <= realBill + 1e-6,
+        `battery foresight modes: optimal ($${optBill.toFixed(0)}) <= realistic ($${realBill.toFixed(0)}), tou ($${touBill.toFixed(0)})`);
+
     pending.push((async () => {
         const ctx = { year: back.year, plans: [flat, amberPlan], state: 'NSW', amberModel: model, solarSizes: [0], batterySizes: [0, 5], existing: { kwh: 10, kw: 5 }, battery: { rte: 0.9 } };
         const res = await Amber.plannerSearch(ctx);

@@ -4,9 +4,10 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self' https://api.amber.com.au; img-src 'self' data:; font-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'">
-    <title>Amber Compare &amp; Export v1.65</title>
+    <title>Amber Compare &amp; Export v1.66</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
-    <link rel="stylesheet" href="css/app.css?v=1.65">
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="css/app.css?v=1.66">
 </head>
 <body class="bg-gray-100 text-gray-800">
     <a href="#mainTabs" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:bg-white focus:px-3 focus:py-2 focus:rounded">Skip to the tabs</a>
@@ -19,7 +20,7 @@
                         <img src="favicon.ico" alt="" class="mr-3 h-12 w-12 sm:h-14 sm:w-14"> Amber Compare &amp; Export
                     </h1>
                     <p class="mt-2 text-gray-600">See what your electricity really costs on Amber, check an Amber bill, and find out whether another plan (or Amber) would be cheaper for you.</p>
-                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.65.</p>
+                    <p class="mt-1 text-xs text-gray-500">Free and private: everything runs in this browser and nothing is uploaded. Version 1.66.</p>
                 </div>
                 <div class="relative flex items-center">
                     <button id="settingsBtn" type="button" aria-label="Settings" aria-haspopup="true" aria-expanded="false" class="p-2 rounded-full text-gray-500 hover:bg-gray-100 hover:text-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -91,6 +92,8 @@
                             <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Every meter reading<span class="block text-xs text-gray-500">Each 5 or 30 minutes, with Amber's price (CSV)</span></a>
                             <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily totals<span class="block text-xs text-gray-500">One row a day: kWh and cost on each plan (CSV)</span></a>
                             <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">The comparison table<span class="block text-xs text-gray-500">As shown on the Compare tab (CSV)</span></a>
+                            <a href="#" id="downloadSummaryCardPng" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-100">Shareable summary card<span class="block text-xs text-gray-500">Privacy-safe PNG image (no NMI or account IDs)</span></a>
+                            <a href="#" id="copySummaryText" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Copy plain-English summary<span class="block text-xs text-gray-500">Forum-ready text summary to clipboard</span></a>
                         </div>
                     </div>
                 </div>
@@ -225,6 +228,10 @@
                     <p id="nem12Status" class="hidden text-xs mt-2"></p>
                     <div id="nem12Options" class="hidden mt-4 space-y-3 text-sm">
                         <p id="nem12Summary" class="text-gray-700"></p>
+                        <div id="nem12NmiRow" class="hidden">
+                            <label for="nem12Nmi" class="block text-xs font-medium text-gray-600" data-help="nem12Nmi">Meter (NMI) in this file</label>
+                            <select id="nem12Nmi" class="w-full sm:w-auto mt-1 px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 text-sm"></select>
+                        </div>
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div>
                                 <label for="nem12Network" class="block text-xs font-medium text-gray-600" data-help="nem12Network">Electricity network</label>
@@ -294,6 +301,14 @@
                         </div>
                         <div id="ratesDetails" class="hidden mt-4 space-y-4">
                             <p id="ratesGstNote" class="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded-md p-3">Type prices exactly as they appear on the plan's fact sheet, your bill or Energy Made Easy: those include GST. Solar feed-in has no GST.</p>
+                            <div class="flex flex-wrap items-center gap-3">
+                                <label class="inline-flex items-center px-3 py-1.5 text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 rounded-md hover:bg-indigo-100 cursor-pointer">
+                                    <span>Import plan JSON (Energy Made Easy / CDR)</span>
+                                    <input type="file" id="cdrPlanFile" accept=".json,application/json,text/plain" class="sr-only">
+                                </label>
+                                <span data-help="cdrPlanFile" data-help-label="Import plan JSON"></span>
+                                <span id="cdrPlanStatus" class="hidden text-xs" role="status"></span>
+                            </div>
                             <div>
                                 <label for="planName" class="block text-sm font-medium text-gray-700 mb-1" data-help="planName">Name for your own plan</label>
                                 <input type="text" id="planName" class="w-full px-3 py-2 bg-gray-50 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500" placeholder="e.g. My current EnergyAustralia plan">
@@ -434,6 +449,37 @@
                             </div>
                         </div>
                     </div>
+                    <details id="compareWhatIf" class="mt-3 border-t pt-3">
+                        <summary class="cursor-pointer text-sm font-medium text-indigo-600 hover:underline"><span data-help="compareWhatIf" data-help-label="What-if: test an electric car or heat pump on this comparison">What-if: test an electric car or heat pump on this comparison</span></summary>
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 mt-3 text-sm">
+                            <div>
+                                <label for="whatIfEvKm" class="block text-xs font-medium text-gray-700" data-help="planEv">Electric car (km/yr)</label>
+                                <input type="number" id="whatIfEvKm" min="0" step="1000" value="0" class="w-full mt-1 px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                            </div>
+                            <div>
+                                <label for="whatIfEvCharge" class="block text-xs font-medium text-gray-700" data-help="planEv">Car charges</label>
+                                <select id="whatIfEvCharge" class="w-full mt-1 px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                                    <option value="overnight">Overnight (12am–6am)</option>
+                                    <option value="solar">Midday solar (10am–3pm)</option>
+                                    <option value="evening">Evening (6pm–10pm)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="whatIfHotWater" class="block text-xs font-medium text-gray-700" data-help="planHotWater">Heat-pump hot water</label>
+                                <select id="whatIfHotWater" class="w-full mt-1 px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                                    <option value="">None added</option>
+                                    <option value="heatpump">Add heat pump (~3 kWh/day)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="whatIfHotWaterRun" class="block text-xs font-medium text-gray-700" data-help="planHotWater">Heat pump runs</label>
+                                <select id="whatIfHotWaterRun" class="w-full mt-1 px-2 py-1.5 bg-gray-50 border border-gray-300 rounded-md text-sm">
+                                    <option value="solar">Midday (10am–3pm)</option>
+                                    <option value="overnight">Overnight (12am–6am)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <div data-results-placeholder class="bg-white rounded-lg shadow-md p-6 mb-6 text-sm text-gray-600"></div>
@@ -667,8 +713,16 @@
                                 <label for="planShading" class="block text-sm font-medium text-gray-700" data-help="planShading">Shade (% of sunlight lost)</label>
                                 <input type="number" id="planShading" min="0" max="80" step="1" value="0" class="plan-input">
                             </div>
-                            <div class="sm:col-span-3">
+                            <div class="sm:col-span-3 flex flex-wrap items-center justify-between gap-4">
                                 <label class="inline-flex items-start gap-2 text-sm text-gray-700" data-help="planSwitchOff" data-help-label="Panels switch off when the feed-in price is negative"><input type="checkbox" id="planSwitchOff" checked class="mt-0.5"> <span>Panels switch off when the feed-in price is negative <span class="text-gray-500">(a "curtailable" inverter)</span></span></label>
+                                <div class="flex items-center gap-2">
+                                    <label for="planForesight" class="text-sm font-medium text-gray-700" data-help="planForesight">Battery dispatch foresight</label>
+                                    <select id="planForesight" class="plan-input sm:w-auto">
+                                        <option value="optimal">Optimal foresight (default)</option>
+                                        <option value="realistic">Realistic forecast (SmartShift style)</option>
+                                        <option value="tou">Simple time-of-use rules</option>
+                                    </select>
+                                </div>
                             </div>
                         </div>
                     </details>
@@ -758,6 +812,7 @@
                             </label>
                         </div>
                         <div id="planOptionsTable"></div>
+                        <div id="planSizingMatrix" class="hidden mt-5 pt-4 border-t border-gray-200"></div>
                     </div>
                     <div class="bg-white rounded-lg shadow-md p-6 mb-6 overflow-x-auto">
                         <h3 id="planDetailTitle" class="text-xl font-bold text-gray-900 mb-1">Next year, month by month</h3>
@@ -797,33 +852,33 @@
 
     <script src="chart.umd.min.js"></script>
     <script src="chartjs-plugin-zoom.min.js"></script>
-    <script src="js/constants.js?v=1.65"></script>
-    <script src="js/help.js?v=1.65"></script>
-    <script src="js/time.js?v=1.65"></script>
-    <script src="js/templates.js?v=1.65"></script>
-    <script src="js/storage.js?v=1.65"></script>
-    <script src="js/costs.js?v=1.65"></script>
-    <script src="js/api.js?v=1.65"></script>
-    <script src="js/bill.js?v=1.65"></script>
-    <script src="js/csv.js?v=1.65"></script>
-    <script src="js/charts.js?v=1.65"></script>
-    <script src="js/calendar.js?v=1.65"></script>
-    <script src="js/stats.js?v=1.65"></script>
-    <script src="js/monthly.js?v=1.65"></script>
-    <script src="js/redispatch.js?v=1.65"></script>
-    <script src="js/import.js?v=1.65"></script>
-    <script src="js/networks.js?v=1.65"></script>
-    <script src="js/estimate.js?v=1.65"></script>
-    <script src="js/solar.js?v=1.65"></script>
-    <script src="js/planner.js?v=1.65"></script>
-    <script src="js/planner-ui.js?v=1.65"></script>
-    <script src="js/app-core.js?v=1.65"></script>
-    <script src="js/app-plan-form.js?v=1.65"></script>
-    <script src="js/app-results.js?v=1.65"></script>
-    <script src="js/app-imports.js?v=1.65"></script>
-    <script src="js/app-bill.js?v=1.65"></script>
-    <script src="js/app-free.js?v=1.65"></script>
-    <script src="js/app-settings.js?v=1.65"></script>
-    <script src="js/app.js?v=1.65"></script>
+    <script src="js/constants.js?v=1.66"></script>
+    <script src="js/help.js?v=1.66"></script>
+    <script src="js/time.js?v=1.66"></script>
+    <script src="js/templates.js?v=1.66"></script>
+    <script src="js/storage.js?v=1.66"></script>
+    <script src="js/costs.js?v=1.66"></script>
+    <script src="js/api.js?v=1.66"></script>
+    <script src="js/bill.js?v=1.66"></script>
+    <script src="js/csv.js?v=1.66"></script>
+    <script src="js/charts.js?v=1.66"></script>
+    <script src="js/calendar.js?v=1.66"></script>
+    <script src="js/stats.js?v=1.66"></script>
+    <script src="js/monthly.js?v=1.66"></script>
+    <script src="js/redispatch.js?v=1.66"></script>
+    <script src="js/import.js?v=1.66"></script>
+    <script src="js/networks.js?v=1.66"></script>
+    <script src="js/estimate.js?v=1.66"></script>
+    <script src="js/solar.js?v=1.66"></script>
+    <script src="js/planner.js?v=1.66"></script>
+    <script src="js/planner-ui.js?v=1.66"></script>
+    <script src="js/app-core.js?v=1.66"></script>
+    <script src="js/app-plan-form.js?v=1.66"></script>
+    <script src="js/app-results.js?v=1.66"></script>
+    <script src="js/app-imports.js?v=1.66"></script>
+    <script src="js/app-bill.js?v=1.66"></script>
+    <script src="js/app-free.js?v=1.66"></script>
+    <script src="js/app-settings.js?v=1.66"></script>
+    <script src="js/app.js?v=1.66"></script>
 </body>
 </html>

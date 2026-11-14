@@ -284,15 +284,27 @@
         const box = $('nem12Options');
         if (!p) { box.classList.add('hidden'); return; }
         box.classList.remove('hidden');
+        const nmiKeys = Object.keys(p.parsed.nmis);
+        const nmiRow = $('nem12NmiRow');
+        const nmiSel = $('nem12Nmi');
+        if (nmiRow && nmiSel) {
+            nmiRow.classList.toggle('hidden', nmiKeys.length <= 1);
+            if (nmiKeys.length > 1) {
+                fillSelect(nmiSel, nmiKeys.map((k) => ({
+                    value: k,
+                    label: `${k} (${p.parsed.nmis[k].days.length} days)`
+                })), p.parsed.nmi);
+            }
+        }
         const nmiData = p.parsed.nmis[p.parsed.nmi];
         // Every interval length in the file (a meter can switch from 30- to 5-minute readings).
         const lens = Array.from(new Set([].concat(...Object.values(nmiData.channels).map((c) =>
             Object.values(c.days).map((values) => 1440 / values.length))))).sort((a, b) => a - b);
-        const others = Object.keys(p.parsed.nmis).length - 1;
+        const others = nmiKeys.length - 1;
         const gaps = (nmiData.incompleteDays || []).length;
         $('nem12Summary').textContent = `NMI ${nmiData.nmi}: ${nmiData.days.length} days (${app.fmtDate(nmiData.firstDay)} – ${app.fmtDate(nmiData.lastDay)}) of ${lens.join('/')}-minute data.`
             + (gaps ? ` ${gaps} day${gaps === 1 ? '' : 's'} with missing readings left out.` : '')
-            + (others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file left out.` : '');
+            + (others ? ` ${others} other NMI${others === 1 ? '' : 's'} in the file (switch above).` : '');
         fillSelect($('nem12Network'), [{ value: '', label: 'Choose the network…' }].concat(
             Object.keys(Amber.NETWORKS).map((k) => ({ value: k, label: `${Amber.NETWORKS[k].name} (${Amber.NETWORKS[k].state})` }))), p.networkKey || '');
         const net = Amber.NETWORKS[$('nem12Network').value];
@@ -437,6 +449,17 @@
             renderLocalSites();
         });
         $('nem12File').addEventListener('change', (e) => handleNem12File(e.target.files && e.target.files[0]));
+        const nmiSel = $('nem12Nmi');
+        if (nmiSel) {
+            nmiSel.addEventListener('change', () => {
+                if (!state.nem12 || !state.nem12.parsed.nmis[nmiSel.value]) return;
+                state.nem12.parsed.nmi = nmiSel.value;
+                const nmiData = state.nem12.parsed.nmis[nmiSel.value];
+                state.nem12.roles = Amber.guessNem12Roles(nmiData);
+                state.nem12.networkKey = Amber.networkForNmi(nmiData.nmi) || '';
+                renderNem12Options();
+            });
+        }
         $('nem12Network').addEventListener('change', () => {
             if (state.nem12) state.nem12.networkKey = $('nem12Network').value;
             renderNem12Options();

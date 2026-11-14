@@ -583,5 +583,217 @@
         return latest;
     };
 
+    const CDR_DAY_MAP = {
+        SUN: 0, SUNDAY: 0,
+        MON: 1, MONDAY: 1,
+        TUE: 2, TUESDAY: 2,
+        WED: 3, WEDNESDAY: 3,
+        THU: 4, THURSDAY: 4,
+        FRI: 5, FRIDAY: 5,
+        SAT: 6, SATURDAY: 6
+    };
+
+    function cdrDays(daysArr) {
+        if (!Array.isArray(daysArr) || !daysArr.length) return ALL_DAYS.slice();
+        const out = [];
+        daysArr.forEach((d) => {
+            const key = String(d || '').trim().toUpperCase();
+            if (key === 'WEEKDAYS') [1, 2, 3, 4, 5].forEach((n) => { if (!out.includes(n)) out.push(n); });
+            else if (key === 'WEEKENDS') [0, 6].forEach((n) => { if (!out.includes(n)) out.push(n); });
+            else if (CDR_DAY_MAP[key] != null && !out.includes(CDR_DAY_MAP[key])) out.push(CDR_DAY_MAP[key]);
+        });
+        return out.length ? out : ALL_DAYS.slice();
+    }
+
+    function cdrTime(t) {
+        if (!t) return '00:00';
+        const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+        if (!m) return '00:00';
+        const hh = parseInt(m[1], 10);
+        const mm = parseInt(m[2], 10);
+        if (hh === 23 && mm === 59) return '24:00';
+        return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+    }
+
+    function cdrCents(amount, withGst) {
+        const v = parseFloat(amount);
+        if (!Number.isFinite(v)) return 0;
+        // CDR unitPrice / dailySupplyCharge are in dollars ($/kWh or $/day) when < 5, or already cents when larger.
+        const cents = Math.abs(v) < 5 ? v * 100 : v;
+        return Math.round(cents * (withGst ? 1.1 : 1) * 10000) / 10000;
+    }
+
+    /**
+     * Parse an Energy Made Easy / AER Consumer Data Right (CDR) plan JSON (or a saved Amber Compare
+     * plan JSON) into `{ ok, name, state, plan }`. CDR unit prices are ex-GST dollars, so 10% GST
+     * is added to supply, usage, controlled load and demand (solar feed-in has no GST).
+     */
+    Amber.parseCdrPlan = function (input) {
+        let raw = input;
+        if (typeof input === 'string') {
+            try {
+                raw = JSON.parse(input);
+            } catch (e) {
+                return { ok: false, error: 'That does not look like valid JSON.' };
+            }
+        }
+        if (!raw || typeof raw !== 'object') return { ok: false, error: 'Empty plan JSON.' };
+
+        const data = (raw.data && typeof raw.data === 'object' ? raw.data : raw);
+        const inner = (data.planData && typeof data.planData === 'object' ? data.planData : data);
+
+        // 1. Direct Amber Compare plan format: { name, state, plan: { rateType, ... } } or { rateType, ... }
+        const directPlan = (inner.plan && (inner.plan.rateType === 'flat' || inner.plan.rateType === 'tou'))
+            ? inner.plan
+            : ((inner.rateType === 'flat' || inner.rateType === 'tou') ? inner : null);
+        if (directPlan) {
+            const state = String(inner.state || data.state || '').toUpperCase();
+            return {
+                ok: true,
+                name: String(inner.name || data.displayName || data.name || 'Imported plan').trim(),
+                state: Amber.STATE_TIMEZONES[state] ? state : null,
+                plan: JSON.parse(JSON.stringify(directPlan))
+            };
+        }
+
+        // 2. AER CDR Energy Plan format (electricityContract)
+        const contract = inner.electricityContract || data.electricityContract;
+        if (!contract || typeof contract !== 'object') {
+            return { ok: false, error: 'Could not find an electricityContract or plan rates in that JSON.' };
+        }
+
+        const brand = String(inner.brandName || data.brandName || inner.brand || data.brand || '').trim();
+        const display = String(inner.displayName || data.displayName || inner.planName || data.name || '').trim();
+        const distList = (inner.geography && Array.isArray(inner.geography.distributors) && inner.geography.distributors)
+            || (data.geography && Array.isArray(data.geography.distributors) && data.geography.distributors) || [];
+        const dist = distList[0] ? String(distList[0]).trim() : '';
+        const netInfo = dist ? Amber.networkInfo(dist) : null;
+        let state = netInfo ? netInfo.state : null;
+        if (!state) {
+            const states = (inner.geography && inner.geography.states) || (data.geography && data.geography.states) || [];
+            if (Array.isArray(states) && states[0] && Amber.STATE_TIMEZONES[String(states[0]).toUpperCase()]) {
+                state = String(states[0]).toUpperCase();
+            }
+        }
+
+        const periods = Array.isArray(contract.tariffPeriod) ? contract.tariffPeriod : [];
+        const p0 = periods[0] || contract;
+        const dailyRaw = p0.dailySupplyCharge != null ? p0.dailySupplyCharge
+            : (Array.isArray(p0.dailySupplyCharges) ? p0.dailySupplyCharges[0] : (p0.dailySupplyCharges != null ? p0.dailySupplyCharges : contract.dailySupplyCharge));
+        const daily = cdrCents(dailyRaw, true);
+
+        let cl = 0;
+        const clArr = Array.isArray(contract.controlledLoad) ? contract.controlledLoad : [];
+        if (clArr.length) {
+            const cl0 = clArr[0];
+            const clRate = (cl0.singleRate && Array.isArray(cl0.singleRate.rates) && cl0.singleRate.rates[0] && cl0.singleRate.rates[0].unitPrice)
+                || (Array.isArray(cl0.timeOfUseRates) && cl0.timeOfUseRates[0] && Array.isArray(cl0.timeOfUseRates[0].rates) && cl0.timeOfUseRates[0].rates[0] && cl0.timeOfUseRates[0].rates[0].unitPrice);
+            if (clRate != null) cl = cdrCents(clRate, true);
+        }
+
+        let feedIn = 0;
+        const feedInWindows = [];
+        const fitArr = Array.isArray(contract.solarFeedInTariff) ? contract.solarFeedInTariff : [];
+        fitArr.forEach((fit) => {
+            const payer = fit.singleTariff || fit.timeVaryingTariffs || fit;
+            if (fit.singleTariff && Array.isArray(fit.singleTariff.rates) && fit.singleTariff.rates[0]) {
+                feedIn = cdrCents(fit.singleTariff.rates[0].unitPrice, false);
+            } else if (fit.singleTariff && fit.singleTariff.amount != null) {
+                feedIn = cdrCents(fit.singleTariff.amount, false);
+            } else if (payer && Array.isArray(payer.timeVariations) && payer.timeVariations.length) {
+                const r = cdrCents((Array.isArray(payer.rates) && payer.rates[0] && payer.rates[0].unitPrice) || payer.amount || 0, false);
+                payer.timeVariations.forEach((tv) => {
+                    if (tv.startTime && tv.endTime) {
+                        feedInWindows.push({ start: cdrTime(tv.startTime), end: cdrTime(tv.endTime), days: cdrDays(tv.days), rate: r });
+                    } else {
+                        feedIn = r;
+                    }
+                });
+            }
+        });
+
+        const demand = { e: false };
+        const demArr = (Array.isArray(p0.demandCharges) && p0.demandCharges) || (Array.isArray(contract.demandCharges) && contract.demandCharges) || [];
+        if (demArr.length) {
+            const d0 = demArr[0];
+            let dRate = cdrCents(d0.amount != null ? d0.amount : d0.unitPrice, true);
+            if (String(d0.measureUnit || '').toUpperCase() === 'MONTH' || String(d0.chargePeriod || '').toUpperCase() === 'MONTH') {
+                dRate = Math.round((dRate / 30.4375) * 10000) / 10000;
+            }
+            demand.e = dRate > 0;
+            demand.r = dRate;
+            demand.s = cdrTime(d0.startTime || '16:00');
+            demand.f = cdrTime(d0.endTime || '21:00');
+            demand.days = cdrDays(d0.days);
+        }
+
+        const touRates = Array.isArray(p0.timeOfUseRates) ? p0.timeOfUseRates : [];
+        const blockModel = String(p0.rateBlockUType || '').toLowerCase();
+        const isTou = blockModel === 'timeofuserates' || touRates.length > 0;
+        const clock = 'local';
+        const timeZone = Amber.STATE_TIMEZONES[state || 'NSW'];
+
+        if (!isTou) {
+            const sr = p0.singleRate || contract.singleRate || {};
+            const r0 = (Array.isArray(sr.rates) && sr.rates[0] && sr.rates[0].unitPrice) != null ? sr.rates[0].unitPrice : sr.generalUnitPrice;
+            const flat = cdrCents(r0, true);
+            const suffix = dist ? `(${dist}, Flat)` : '(Flat)';
+            const name = [brand, display, suffix].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+            return {
+                ok: true,
+                name: name || 'Imported CDR Plan (Flat)',
+                state,
+                plan: { rateType: 'flat', daily, flat, cl, feedIn, feedInWindows, demand, clock, timeZone }
+            };
+        }
+
+        const tou = {
+            peak: { rate: 0, windows: [] },
+            shoulder: { rate: 0, windows: [] },
+            offpeak: { rate: 0 }
+        };
+        touRates.forEach((tr) => {
+            const type = String(tr.type || '').toUpperCase();
+            const rate = cdrCents(Array.isArray(tr.rates) && tr.rates[0] ? tr.rates[0].unitPrice : tr.unitPrice, true);
+            const wins = [];
+            const tvList = Array.isArray(tr.timeVariations) ? tr.timeVariations : (Array.isArray(tr.timeOfUse) ? tr.timeOfUse : []);
+            tvList.forEach((tv) => {
+                if (tv.startTime && tv.endTime) {
+                    wins.push({ start: cdrTime(tv.startTime), end: cdrTime(tv.endTime), days: cdrDays(tv.days) });
+                }
+            });
+            if (rate === 0 && wins.length) {
+                if (!tou.free) tou.free = { rate: 0, windows: [] };
+                tou.free.windows.push(...wins);
+            } else if (type === 'PEAK') {
+                tou.peak.rate = rate;
+                tou.peak.windows.push(...wins);
+            } else if (type === 'SHOULDER') {
+                tou.shoulder.rate = rate;
+                tou.shoulder.windows.push(...wins);
+            } else if (type === 'OFF_PEAK' || type === 'OFFPEAK') {
+                if (tou.offpeak.rate > 0 && rate < tou.offpeak.rate && wins.length) {
+                    tou.superOffpeak = { rate, windows: wins };
+                } else {
+                    tou.offpeak.rate = rate;
+                }
+            } else if (wins.length) {
+                if (!tou.shoulder.rate) {
+                    tou.shoulder.rate = rate;
+                    tou.shoulder.windows.push(...wins);
+                }
+            }
+        });
+        if (!tou.shoulder.windows.length && !tou.shoulder.rate) delete tou.shoulder;
+        const suffix = dist ? `(${dist}, TOU)` : '(TOU)';
+        const name = [brand, display, suffix].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+        return {
+            ok: true,
+            name: name || 'Imported CDR Plan (TOU)',
+            state,
+            plan: { rateType: 'tou', daily, feedIn, cl, feedInWindows, tou, demand, clock, timeZone }
+        };
+    };
+
     if (typeof module === 'object' && module.exports) module.exports = Amber;
 })(typeof window !== 'undefined' ? window : globalThis);

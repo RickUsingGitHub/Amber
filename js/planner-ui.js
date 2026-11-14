@@ -37,7 +37,7 @@
     const EXISTING = ['planExistingSolarKw', 'planExistingFacing', 'planExistingBatteryKwh', 'planExistingBatteryKw'];
     const FIELDS = EXISTING.concat(['planCompareWith', 'planLocation', 'planExportLimit', 'planSolarMode', 'planSolarKw', 'planRoofKw', 'planBatteryMode', 'planBatteryKwh',
         'planBatteryMax', 'planOrientation', 'planTilt', 'planShading', 'planEvKm', 'planEvCharge', 'planHotWater', 'planPeople',
-        'planHotWaterRun', 'planSwitchOff', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
+        'planHotWaterRun', 'planSwitchOff', 'planForesight', 'planGasHeatingMJ', 'planGasCooking', 'planGasAllGone', 'planGasCents', 'planGasSupply', 'planRankBy']).concat(COSTS.map((c) => c.id));
 
     const ui = { site: null, year: null, busy: false, results: null, selected: null, chart: null, built: false, excluded: { companies: new Set(), plans: new Set() }, groups: null };
 
@@ -480,14 +480,15 @@
             town: town ? town.name : 'your area', facing: (Amber.SOLAR_ORIENTATIONS[$('planOrientation').value] || { label: 'North' }).label,
             tilt: num('planTilt'), shading: num('planShading'), exportLimit: num('planExportLimit')
         };
+        const foresight = ($('planForesight') && $('planForesight').value) || 'optimal';
         const t0 = Date.now();
-        const res = await Amber.plannerSearch({
+        const res = await Amber.plannerSearchAsync({
             year: searchYear, plans, state, amberModel, solarPerKw, solarSizes, batterySizes,
             existing: existing.kwh > 0 ? { kwh: existing.kwh, kw: existing.kw } : null,
-            battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100 },
+            battery: { kwPerKwh: num('planKwPerKwh') || 0.4, rte: (num('planRte') || 90) / 100, foresight },
             exportLimitKw: num('planExportLimit'), extra: loads.extra, clScale: loads.clScale,
             keepPlans: 6, mustPlans: compareWith ? [compareWith] : [], allowPlans: allow, alsoPlans: compareWith ? [compareWith] : [],
-            switchOffNegative: $('planSwitchOff').checked
+            switchOffNegative: $('planSwitchOff').checked, foresight
         }, (p) => {
             const text = p.phase === 'existing' ? `Running your battery on every plan… ${p.done} of ${p.total}`
                 : p.phase === 'probe' ? `Checking which plans suit a battery… ${p.done} of ${p.total}` : `Trying sizes and plans… ${p.done} of ${p.total}`;
@@ -772,7 +773,20 @@
         }
         const kit = hardware ? best : ranked().filter((x) => x.solarKw > 0 || x.batteryKwh > 0).sort((a, b) => b.fin.npv - a.fin.npv)[0];
         const keen = kit ? keenHtml(kit, hardware ? 'How keen to be' : 'New panels or a battery') : '';
-        box.innerHTML = `<h3 class="text-xl font-bold text-gray-900 mb-2">Best for you: ${esc(describe(best))}, on ${esc(label(best.plan))}</h3>${keen}<div class="space-y-2 text-gray-800">${lines.join('')}</div>`;
+        box.innerHTML = `<div class="flex flex-wrap items-center justify-between gap-2 mb-2"><h3 class="text-xl font-bold text-gray-900">Best for you: ${esc(describe(best))}, on ${esc(label(best.plan))}</h3><button type="button" id="planCopySummaryBtn" class="text-xs px-2.5 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50">Copy summary</button></div>${keen}<div class="space-y-2 text-gray-800">${lines.join('')}</div>`;
+        const copyBtn = $('planCopySummaryBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', async () => {
+                const summaryText = `Amber Solar+? Summary: Best option is ${describe(best)} on ${label(best.plan)} — next year's bill ${dollars(best.bill)} (${dollars(Math.abs(best.saving))}/yr ${best.saving >= 0 ? 'saving' : 'more'})${hardware ? `, upfront ${dollars(fin.capex.total)} after rebates, ${paybackText(fin)}, NPV ${dollars(fin.npv)}` : ''}.`;
+                if (typeof navigator !== 'undefined' && navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(summaryText);
+                        copyBtn.textContent = 'Copied!';
+                        setTimeout(() => { copyBtn.textContent = 'Copy summary'; }, 2000);
+                    } catch { /* ignore */ }
+                }
+            });
+        }
     }
 
     function system(x) {
@@ -847,6 +861,80 @@
         $('planOptionsTable').querySelectorAll('[data-plan-option]').forEach((tr) => {
             tr.addEventListener('click', () => pick(tr));
             tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(tr); } });
+        });
+        renderMatrix(list);
+    }
+
+    function renderMatrix(list) {
+        const box = $('planSizingMatrix');
+        if (!box) return;
+        const r = ui.results;
+        const current = ui.selected || list[0];
+        if (!current) { box.classList.add('hidden'); return; }
+        const planName = current.plan;
+        const planOpts = r.options.filter((x) => x.plan === planName);
+        const sSizes = Array.from(new Set(planOpts.map((x) => x.solarKw))).sort((a, b) => a - b);
+        const bSizes = Array.from(new Set(planOpts.map((x) => x.batteryKwh))).sort((a, b) => a - b);
+        if (sSizes.length < 2 || bSizes.length < 2) {
+            box.classList.add('hidden');
+            box.innerHTML = '';
+            return;
+        }
+        box.classList.remove('hidden');
+        let bestNpv = -Infinity;
+        let minNpv = Infinity;
+        planOpts.forEach((x) => {
+            if (x.fin && Number.isFinite(x.fin.npv)) {
+                if (x.fin.npv > bestNpv) bestNpv = x.fin.npv;
+                if (x.fin.npv < minNpv) minNpv = x.fin.npv;
+            }
+        });
+        const at = (s, b) => planOpts.find((x) => x.solarKw === s && x.batteryKwh === b);
+        let html = `<h4 class="text-sm font-semibold text-gray-800 mb-1" data-help="planMatrix" data-help-label="2D sizing grid">2D sizing grid on ${esc(label(planName))}</h4>`
+            + `<p class="text-xs text-gray-600 mb-2">Worth in today's money (${r.f.years} yrs) and payback across every solar and battery size tried on this plan. Tap any cell to inspect it below.</p>`
+            + `<div data-scroll-box class="group overflow-x-auto"><table class="min-w-full divide-y divide-gray-200 text-xs border border-gray-200"><thead class="bg-gray-50"><tr>`
+            + `<th class="px-2 py-1.5 text-left font-medium text-gray-500">Solar \\ Battery</th>`
+            + bSizes.map((b) => `<th class="px-2 py-1.5 text-right font-medium text-gray-500 whitespace-nowrap">${b > 0 ? esc(kwh(b)) : 'No battery'}</th>`).join('')
+            + '</tr></thead><tbody class="divide-y divide-gray-200">';
+        sSizes.forEach((s) => {
+            html += `<tr><th class="px-2 py-1.5 text-left font-medium text-gray-700 bg-gray-50 whitespace-nowrap">${s > 0 ? esc(kw(s)) : 'No panels'}</th>`;
+            bSizes.forEach((b) => {
+                const cell = at(s, b);
+                if (!cell || !cell.fin) {
+                    html += '<td class="px-2 py-1.5 text-right text-gray-400">—</td>';
+                    return;
+                }
+                const npv = cell.fin.npv;
+                const isSelected = current.solarKw === s && current.batteryKwh === b && current.plan === planName;
+                const isBest = Math.abs(npv - bestNpv) < 0.5 && (s > 0 || b > 0);
+                const bg = isSelected
+                    ? 'bg-indigo-100 ring-2 ring-inset ring-indigo-600 font-semibold'
+                    : isBest
+                        ? 'bg-emerald-100 font-semibold'
+                        : npv > 0
+                            ? 'bg-emerald-50 hover:bg-emerald-100'
+                            : 'bg-rose-50 hover:bg-rose-100';
+                const pb = cell.fin.capex.total <= 0 ? '—' : (cell.fin.payback == null ? 'never' : `${cell.fin.payback.toFixed(1)}y`);
+                html += `<td class="px-2 py-1.5 text-right whitespace-nowrap cursor-pointer ${bg}" data-matrix-s="${s}" data-matrix-b="${b}" tabindex="0" role="button">`
+                    + `<div class="${npv >= 0 ? 'text-gray-900' : 'text-red-700'}">${dollars(npv)}</div>`
+                    + `<div class="text-[10px] text-gray-500">${pb}</div></td>`;
+            });
+            html += '</tr>';
+        });
+        html += '</tbody></table></div>';
+        box.innerHTML = html;
+        const pickCell = (el) => {
+            const s = parseFloat(el.getAttribute('data-matrix-s'));
+            const b = parseFloat(el.getAttribute('data-matrix-b'));
+            const found = at(s, b);
+            if (!found) return;
+            ui.selected = found;
+            renderOptions();
+            renderDetail();
+        };
+        box.querySelectorAll('[data-matrix-s]').forEach((tdEl) => {
+            tdEl.addEventListener('click', () => pickCell(tdEl));
+            tdEl.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pickCell(tdEl); } });
         });
     }
 

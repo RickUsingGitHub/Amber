@@ -40,9 +40,15 @@
         }
         let channel = null;
         let section = null; // { nmi, length, scale } of the current 200 row
-        src.split(/\r?\n/).forEach((raw) => {
+        let pos = 0;
+        const totalLen = src.length;
+        while (pos < totalLen) {
+            const nl = src.indexOf('\n', pos);
+            const end = nl === -1 ? totalLen : nl;
+            const raw = src.slice(pos, end > pos && src.charCodeAt(end - 1) === 13 ? end - 1 : end);
+            pos = nl === -1 ? totalLen : nl + 1;
             const line = raw.trim();
-            if (!line) return;
+            if (!line) continue;
             const f = splitLine(line).map((x) => x.trim());
             const rec = f[0];
             if (rec === '200') {
@@ -54,17 +60,17 @@
                 if (!nmi || !kind || !UOM_SCALE[uom] || ![5, 15, 30].includes(len)) {
                     channel = null;
                     out.skipped += 1;
-                    return;
+                    continue;
                 }
                 const n = out.nmis[nmi] || (out.nmis[nmi] = { nmi, channels: {}, incomplete: new Set() });
                 // intervalLength/uom: the channel's first section (a later section may differ).
                 channel = n.channels[suffix] || (n.channels[suffix] = { suffix, uom, intervalLength: len, kind, days: {}, kwh: 0 });
                 section = { nmi: n, length: len, scale: UOM_SCALE[uom] };
-                return;
+                continue;
             }
             if (rec === '300' && channel) {
                 const d = f[1] || '';
-                if (!/^\d{8}$/.test(d)) { out.skipped += 1; return; }
+                if (!/^\d{8}$/.test(d)) { out.skipped += 1; continue; }
                 const date = `${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}`;
                 const key = `${channel.suffix}|${date}`;
                 const n = 1440 / section.length;
@@ -72,7 +78,7 @@
                 // Every interval needs a reading: a short or damaged row is left out, not filled with zeros.
                 if (readings.length < n || readings.some((v) => !Number.isFinite(v))) {
                     if (!channel.days[date]) section.nmi.incomplete.add(key);
-                    return;
+                    continue;
                 }
                 const values = readings.map((v) => Math.max(0, v) * section.scale);
                 if (channel.days[date]) channel.kwh -= channel.days[date].reduce((s, v) => s + v, 0);
@@ -80,7 +86,7 @@
                 channel.kwh += values.reduce((s, v) => s + v, 0);
                 section.nmi.incomplete.delete(key);
             }
-        });
+        }
         let best = null;
         Object.keys(out.nmis).forEach((nmi) => {
             const n = out.nmis[nmi];

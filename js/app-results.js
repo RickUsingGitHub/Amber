@@ -415,6 +415,18 @@
         adjustedAmberTotal += amberConnectionCost + amberSubscriptionCost;
         adjustedOtherTotal += otherDailyConnection;
 
+        let totalImportKwh = 0;
+        let totalExportKwh = 0;
+        Object.values(channelTotals).forEach((c) => {
+            if (c.type === 'feedIn') totalExportKwh += c.totalKWh || 0;
+            else totalImportKwh += c.totalKWh || 0;
+        });
+        state.lastResultDataPayload.amberTotal = adjustedAmberTotal;
+        state.lastResultDataPayload.otherTotal = adjustedOtherTotal;
+        state.lastResultDataPayload.planName = planName;
+        state.lastResultDataPayload.importKwh = totalImportKwh;
+        state.lastResultDataPayload.exportKwh = totalExportKwh;
+
         tableHTML += line({
             row: 'font-semibold border-t', tone: 'text-gray-900',
             what: 'Daily supply charge<span data-help="rowDaily" data-help-label="Daily supply charge"></span>',
