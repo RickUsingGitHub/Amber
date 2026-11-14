@@ -20,7 +20,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const REGIONS = ['NSW1', 'QLD1', 'SA1', 'VIC1'];
+const REGIONS = ['NSW1', 'QLD1', 'SA1', 'TAS1', 'VIC1'];
 const OUT = path.join(__dirname, '..', 'data', 'prices');
 
 function arg(name, fallback) {

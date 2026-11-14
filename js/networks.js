@@ -246,6 +246,22 @@
             },
             exportTariffs: {},
             controlled: { NEE30: { name: 'Dedicated circuit', daily: 0, rate: 4.90 } }
+        },
+        tasnetworks: {
+            name: 'TasNetworks', state: 'TAS', region: 'TAS1', lossFactor: 1.051,
+            metering: 35.10, charges: { environmental: 0.94, market: 1.02, hedging: 1.00, greenPower: 0.73 }, priceCap: 15.60,
+            nmiPrefixes: ['8000', '8590', 'T000'],
+            defaultTariff: 'TAS93', defaultControlled: 'TAS61',
+            tariffs: {
+                TAS93: { name: 'Residential time of use (Tariff 93)', daily: 86.65, bands: [band(19.86, [w('07:00', '10:00', WD), w('16:00', '21:00', WD)])], rate: 5.33 },
+                TAS87: { name: 'Residential time of use demand (Tariff 87)', daily: 83.62, bands: [band(10.22, [w('07:00', '10:00', WD), w('16:00', '21:00', WD)])], rate: 3.80, demand: { rate: 24.41, window: w('16:00', '21:00', WD) } },
+                TAS31: { name: 'Residential light and power (Tariff 31)', daily: 84.66, rate: 13.50 }
+            },
+            exportTariffs: {},
+            controlled: {
+                TAS61: { name: 'Off-peak with afternoon boost (Tariff 61)', daily: 19.68, rate: 5.38 },
+                TAS41: { name: 'Heating and hot water (Tariff 41)', daily: 20.65, rate: 7.85 }
+            }
         }
     };
 

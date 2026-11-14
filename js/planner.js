@@ -959,6 +959,8 @@
         const eta = Math.sqrt(rte);
         const P = Math.max(0.1, battery.kw || B * 0.4) * 0.5;
         const wear = battery.wear != null ? battery.wear : 2;
+        const foresight = battery.foresight || 'optimal';
+        const reserve = foresight === 'realistic' ? B * 0.08 : 0;
         const cap = flows.expCap;
         const buy = prices.buy;
         const sell = prices.sell;
@@ -967,14 +969,28 @@
 
         function staticBuy(i) { return buy[i] + shadow[i]; }
 
+        // In 'realistic' mode (imperfect forecasts), wholesale spikes (>60 c/kWh) are seen with
+        // dampened certainty when picking daily thresholds, and 8% of the battery is held as a reserve.
+        function expectedSell(i) {
+            const s = sell[i];
+            if (foresight === 'realistic' && s > 60) return 60 + (s - 60) * 0.65;
+            if (foresight === 'tou') return Math.min(s, 30);
+            return s;
+        }
+        function expectedBuy(i) {
+            const b = staticBuy(i);
+            if (foresight === 'realistic' && b > 60) return 60 + (b - 60) * 0.75;
+            return b;
+        }
+
         function terminalValue(d) {
             const day = d + 1 < year.days ? d + 1 : d;
             let refill = Infinity;
             let best = -Infinity;
             for (let i = day * SLOTS; i < (day + 1) * SLOTS; i++) {
-                const b = staticBuy(i);
+                const b = expectedBuy(i);
                 if (!prices.noGrid[i]) refill = Math.min(refill, buy[i] / eta);
-                if (spare[i] > 0) refill = Math.min(refill, sell[i] / eta);
+                if (spare[i] > 0) refill = Math.min(refill, expectedSell(i) / eta);
                 best = Math.max(best, b * eta);
             }
             if (!Number.isFinite(refill)) refill = best;
@@ -1000,20 +1016,24 @@
                     const win = prices.expWindows[w];
                     s = winUsed[w] < win.cap ? win.rate : win.over;
                 }
+                const sPerceived = commit ? (foresight === 'tou' ? -Infinity : (foresight === 'realistic' && s > 80 ? 80 + (s - 80) * 0.7 : s)) : expectedSell(i);
                 // Charging and discharging share the power limit (a half hour can hold both).
                 let power = P;
                 let toLoad = 0;
                 let toGrid = 0;
                 let chg = 0;
                 let grid = 0;
-                if (im > 0 && b >= theta) {
-                    toLoad = Math.min(im, e * eta, power);
+                const avail = Math.max(0, e - reserve);
+                if (im > 0 && b >= theta && avail > 0) {
+                    toLoad = Math.min(im, avail * eta, power);
                     im -= toLoad;
                     power -= toLoad;
                     e -= toLoad / eta;
                 }
-                if (s >= theta && power > 0 && e > 0) {
-                    toGrid = Math.min(e * eta, power, cap ? Math.max(0, cap[i] - ex) : power);
+                const availGrid = Math.max(0, e - reserve);
+                if (sPerceived >= theta && power > 0 && availGrid > 0) {
+                    const maxGrid = foresight === 'realistic' && s > 60 ? power * 0.85 : power;
+                    toGrid = Math.min(availGrid * eta, maxGrid, cap ? Math.max(0, cap[i] - ex) : maxGrid);
                     ex += toGrid;
                     power -= toGrid;
                     e -= toGrid / eta;
@@ -1064,12 +1084,12 @@
             const values = [];
             const buys = [];
             for (let i = d * SLOTS; i < (d + 1) * SLOTS; i++) {
-                values.push(staticBuy(i), sell[i]);
+                values.push(expectedBuy(i), expectedSell(i));
                 if (prices.free && prices.free[i]) values.push(prices.alt[i] + shadow[i]);
                 if (!prices.noGrid[i]) buys.push(buy[i]);
             }
-            const thetas = pickValues(values, 10).concat([Infinity]);
-            const phis = [-Infinity].concat(pickValues(buys, 5));
+            const thetas = foresight === 'tou' ? [22, 30, 40] : pickValues(values, 10).concat([Infinity]);
+            const phis = foresight === 'tou' ? [-Infinity, 0, 8, 15] : [-Infinity].concat(pickValues(buys, 5));
             const vEnd = terminalValue(d);
             let best = null;
             for (let a = 0; a < thetas.length; a++) {
@@ -1182,7 +1202,7 @@
                 const b = ctx.battery || {};
                 const ex = existing ? ctx.existing : { kwh: 0, kw: 0 };
                 const kw = kwh > 0 ? Math.min(15, Math.max(2.5, kwh * (b.kwPerKwh || 0.4))) : 0;
-                return { kwh: kwh + ex.kwh, kw: kw + ex.kw, rte: b.rte || 0.9, wear: b.wear != null ? b.wear : 2 };
+                return { kwh: kwh + ex.kwh, kw: kw + ex.kw, rte: b.rte || 0.9, wear: b.wear != null ? b.wear : 2, foresight: b.foresight || ctx.foresight || 'optimal' };
             },
             hasBattery(kwh) {
                 return kwh > 0 || existing;
@@ -1324,6 +1344,60 @@
         if (onProgress) onProgress({ phase: 'search', done: total, total });
         return { rows, prep, searchedPlans: searched.map((p) => p.name) };
     };
+
+    /**
+     * Run `Amber.plannerSearch` in a background Web Worker when available so the browser stays
+     * responsive during large multi-size searches, falling back cleanly to the main thread.
+     */
+    Amber.plannerSearchAsync = async function (ctx, onProgress) {
+        if (typeof Worker === 'function' && typeof window !== 'undefined' && window.location && /^https?:$/.test(window.location.protocol)) {
+            try {
+                const res = await new Promise((resolve, reject) => {
+                    const worker = new Worker('js/planner.js');
+                    const cleanup = () => { try { worker.terminate(); } catch (e) { /* ignore */ } };
+                    worker.onmessage = (e) => {
+                        const msg = e.data || {};
+                        if (msg.type === 'progress') {
+                            if (onProgress) onProgress(msg.progress);
+                        } else if (msg.type === 'done') {
+                            cleanup();
+                            const prep = Amber.plannerPrepare(ctx);
+                            resolve({ rows: msg.rows, prep, searchedPlans: msg.searchedPlans });
+                        } else if (msg.type === 'error') {
+                            cleanup();
+                            reject(new Error(msg.message || 'Worker error'));
+                        }
+                    };
+                    worker.onerror = (err) => {
+                        cleanup();
+                        reject(err || new Error('Worker failed'));
+                    };
+                    worker.postMessage({ type: 'search', ctx });
+                });
+                return res;
+            } catch (e) {
+                // Fall back to in-thread search if Worker fails to load or execute.
+            }
+        }
+        return Amber.plannerSearch(ctx, onProgress);
+    };
+
+    if (root && typeof root.WorkerGlobalScope === 'function' && root instanceof root.WorkerGlobalScope && typeof root.importScripts === 'function') {
+        try {
+            root.importScripts('constants.js', 'time.js', 'templates.js', 'costs.js', 'import.js', 'networks.js', 'estimate.js', 'solar.js');
+            root.onmessage = function (e) {
+                const msg = e.data || {};
+                if (msg.type !== 'search' || !msg.ctx) return;
+                Amber.plannerSearch(msg.ctx, (p) => {
+                    root.postMessage({ type: 'progress', progress: p });
+                }).then((res) => {
+                    root.postMessage({ type: 'done', rows: res.rows, searchedPlans: res.searchedPlans });
+                }).catch((err) => {
+                    root.postMessage({ type: 'error', message: err && err.message ? err.message : String(err) });
+                });
+            };
+        } catch (e) { /* ignore worker bootstrap error */ }
+    }
 
     function sum(arr) {
         let s = 0;

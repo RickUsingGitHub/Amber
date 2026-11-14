@@ -45,7 +45,9 @@
         '023': { start: '17:00', end: '21:00' },
         '024': { start: '17:00', end: '21:00' },
         '025': { start: '17:00', end: '20:00' },
-        '026': { start: '17:00', end: '20:00' }
+        '026': { start: '17:00', end: '20:00' },
+        // TasNetworks residential demand (Tariff 87): 7am–10am and 4pm–9pm weekdays.
+        TAS87: { start: '16:00', end: '21:00', days: WEEKDAYS }
     };
 
     function demandWindowFor(tariff) {

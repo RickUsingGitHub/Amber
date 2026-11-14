@@ -44,7 +44,7 @@ module.exports = [
     {
         // The app: classic scripts sharing window.Amber. The same files are `require`d by the Node
         // unit checks, hence `module` and `globalThis`. Chart and pdfjsLib are the vendored libraries.
-        files: ['js/**/*.js'],
+        files: ['js/**/*.js', 'sw.js'],
         languageOptions: {
             ecmaVersion: 2022,
             sourceType: 'script',

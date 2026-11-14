@@ -1,0 +1,16 @@
+{
+    "name": "Amber Compare & Export",
+    "short_name": "Amber Compare",
+    "description": "See what your electricity really costs on Amber, check an Amber bill, and compare Amber with other electricity plans and solar + battery options.",
+    "start_url": "./",
+    "display": "standalone",
+    "background_color": "#f3f4f6",
+    "theme_color": "#4f46e5",
+    "icons": [
+        {
+            "src": "favicon.ico",
+            "sizes": "48x48 32x32 16x16",
+            "type": "image/x-icon"
+        }
+    ]
+}

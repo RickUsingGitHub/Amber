@@ -608,6 +608,41 @@
             $('touRateSection').classList.toggle('hidden', selectedType !== 'tou');
             saveAllSettings();
         });
+        const cdrInput = $('cdrPlanFile');
+        if (cdrInput) {
+            cdrInput.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const status = $('cdrPlanStatus');
+                const setStatus = (msg, err) => {
+                    if (!status) return;
+                    status.textContent = msg;
+                    status.className = `text-xs ${err ? 'text-red-700' : 'text-green-700'}`;
+                };
+                file.text().then((text) => {
+                    const parsed = Amber.parseCdrPlan(text);
+                    if (!parsed || !parsed.ok) {
+                        setStatus((parsed && parsed.error) || 'Could not read that plan JSON.', true);
+                        return;
+                    }
+                    const stateCode = parsed.state || $('stateSelector').value || 'NSW';
+                    if ($('stateSelector').value !== stateCode) $('stateSelector').value = stateCode;
+                    if (!state.templates[stateCode]) state.templates[stateCode] = {};
+                    state.templates[stateCode][parsed.name] = parsed.plan;
+                    const customPlans = storedCustomPlans();
+                    if (!customPlans[stateCode]) customPlans[stateCode] = {};
+                    customPlans[stateCode][parsed.name] = parsed.plan;
+                    localStorage.setItem('customSupplierPlans', JSON.stringify(customPlans));
+                    updatePlanSelector(stateCode);
+                    selectSupplierPlan(parsed.name, { fromChange: true });
+                    setStatus(`Imported "${parsed.name}" (${stateCode}).`, false);
+                }).catch(() => {
+                    setStatus('Could not read that file.', true);
+                }).finally(() => {
+                    cdrInput.value = '';
+                });
+            });
+        }
     }
 
     // What the other app-*.js files use from this one.

@@ -20,7 +20,7 @@
     // Compare "This month" when the page opens with a saved API key (a test can preset
     // window.Amber.AUTO_COMPARE = false to start idle).
     Amber.AUTO_COMPARE = Amber.AUTO_COMPARE !== false;
-    Amber.APP_VERSION = '1.65';
+    Amber.APP_VERSION = '1.66';
     Amber.TEMPLATES_AS_AT = '2026-07-01';
     // All editable rates (plans, custom, Amber fixed charges) are GST-inclusive,
     // matching Energy Made Easy, DMO/VDO, retailer fact sheets and Amber perKwh.
@@ -63,6 +63,7 @@
         if (/united energy/.test(n)) return 'united energy';
         if (/ausnet/.test(n)) return 'ausnet';
         if (/evoenergy/.test(n)) return 'evoenergy';
+        if (/tasnetworks|tas networks/.test(n)) return 'tasnetworks';
         return null;
     };
 
@@ -134,7 +135,8 @@
         'Essential': '2026-27 DMO (Essential Energy, Flat)',
         'Energex': '2026-27 DMO (Energex, Flat)',
         'SA Power Networks': '2026-27 DMO (SA Power Networks, Flat)',
-        'SAPN': '2026-27 DMO (SA Power Networks, Flat)'
+        'SAPN': '2026-27 DMO (SA Power Networks, Flat)',
+        'TasNetworks': 'Aurora Peak and Off-Peak (Tariff 93, TOU)'
     };
 
     if (typeof module === 'object' && module.exports) module.exports = Amber;

@@ -325,6 +325,62 @@
             Amber.generateResultsTableCsv(table, state.lastFetchedStartDate, state.lastFetchedEndDate);
             csvMenu.classList.add('hidden');
         });
+        if ($('downloadSummaryCardPng')) {
+            $('downloadSummaryCardPng').addEventListener('click', (e) => {
+                e.preventDefault();
+                const p = state.lastResultDataPayload;
+                if (!p) return;
+                Amber.generateSummaryCardPng({
+                    startDate: p.startDateStr,
+                    endDate: p.endDateStr,
+                    numDays: p.numDays,
+                    planName: p.planName,
+                    amberTotal: p.amberTotal,
+                    otherTotal: p.otherTotal,
+                    importKwh: p.importKwh,
+                    exportKwh: p.exportKwh
+                });
+                csvMenu.classList.add('hidden');
+            });
+        }
+        if ($('copySummaryText')) {
+            $('copySummaryText').addEventListener('click', async (e) => {
+                e.preventDefault();
+                const p = state.lastResultDataPayload;
+                if (!p) return;
+                const text = Amber.formatShareSummaryText({
+                    startDate: p.startDateStr,
+                    endDate: p.endDateStr,
+                    numDays: p.numDays,
+                    planName: p.planName,
+                    amberTotal: p.amberTotal,
+                    otherTotal: p.otherTotal,
+                    importKwh: p.importKwh,
+                    exportKwh: p.exportKwh
+                });
+                csvMenu.classList.add('hidden');
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        app.showMessage('Copied plain-English summary to clipboard.', false);
+                        return;
+                    } catch { /* fallback to download */ }
+                }
+                Amber.downloadCSV(text, `amber_summary_${p.startDateStr}_to_${p.endDateStr}.txt`);
+            });
+        }
+
+        ['whatIfEvKm', 'whatIfEvCharge', 'whatIfHotWater', 'whatIfHotWaterRun'].forEach((id) => {
+            const el = $(id);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                if (state.cachedChannelData && state.lastFetchedStartDate && !state.fetching) {
+                    state.monthly = null;
+                    state.batteryShift = null;
+                    recalculateAndShow(false);
+                }
+            });
+        });
 
         root.addEventListener('resize', app.syncScrollHints);
     }
@@ -339,6 +395,15 @@
         btn.textContent = isFetching ? 'Comparing…' : 'Compare costs';
     }
 
+    function readWhatIfOpts() {
+        return {
+            evKm: $('whatIfEvKm') ? parseFloat($('whatIfEvKm').value) || 0 : 0,
+            evCharge: $('whatIfEvCharge') ? $('whatIfEvCharge').value : 'overnight',
+            hotWater: $('whatIfHotWater') ? $('whatIfHotWater').value : '',
+            hotWaterRun: $('whatIfHotWaterRun') ? $('whatIfHotWaterRun').value : 'solar'
+        };
+    }
+
     async function recalculateAndShow(skipGraphs) {
         if (!state.cachedChannelData) return;
         const startDateStr = state.lastFetchedStartDate;
@@ -346,6 +411,7 @@
         const numDays = Amber.inclusiveDayCount(startDateStr, endDateStr);
         const planConfig = app.createPlanObjectFromForm();
         const rates = app.readAmberRates();
+        Amber.applyWhatIfLoads(state.cachedChannelData, readWhatIfOpts(), app.currentStateCode());
         Amber.applyAmberFeedInSettlement(state.cachedChannelData, app.selectedSite(), numDays, { from: startDateStr, to: endDateStr });
         Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, app.currentStateCode());
         const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, app.currentStateCode());
@@ -552,6 +618,7 @@
 
             Amber.processUsageData(selectedUsageData, channelTotalsSelectedPeriod, true);
             Object.values(channelTotalsSelectedPeriod).forEach((c) => c.usageData.sort((a, b) => a.nemTime.localeCompare(b.nemTime)));
+            Amber.applyWhatIfLoads(channelTotalsSelectedPeriod, readWhatIfOpts(), app.currentStateCode());
             Amber.applyAmberFeedInSettlement(channelTotalsSelectedPeriod, site, numDays, { from: startDateValue, to: clampedEnd });
 
             const planConfig = app.createPlanObjectFromForm();
@@ -686,6 +753,9 @@
         } else if (storedKey.key && Amber.AUTO_COMPARE) {
             applyDatePreset('thisMonth');
             if (state.activeTab === 'bill') app.ensureBillLoaded({ fromTab: true });
+        }
+        if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.webdriver && /^https?:$/.test(root.location && root.location.protocol || '')) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
         }
     }
 

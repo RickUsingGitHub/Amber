@@ -967,5 +967,91 @@
         };
     };
 
+    const WHAT_IF_WINDOWS = {
+        overnight: [0, 6],
+        solar: [10, 15],
+        evening: [18, 22]
+    };
+
+    /**
+     * Layer optional "What-If" future appliance usage (electric car, heat-pump hot water) onto
+     * processed channelTotals for Compare / Free?. Keeps `baseKwh` on every interval so toggling
+     * What-If settings re-runs cleanly without re-fetching.
+     */
+    Amber.applyWhatIfLoads = function (channelTotals, opts, state) {
+        if (!channelTotals) return { addedKwh: 0 };
+        const o = opts || {};
+        const evKm = parseFloat(o.evKm) || 0;
+        const hwMode = o.hotWater || '';
+        const general = Object.values(channelTotals).find((c) => c.type === 'general');
+        if (!general || !Array.isArray(general.usageData) || !general.usageData.length) return { addedKwh: 0 };
+
+        // Restore base kWh first on every channel.
+        Object.values(channelTotals).forEach((ch) => {
+            let sumKwh = 0;
+            let sumAmber = 0;
+            (ch.usageData || []).forEach((item) => {
+                if (item.baseKwh == null) item.baseKwh = Amber.absKwh(item.kwh);
+                item.kwh = item.baseKwh;
+                const k = item.baseKwh;
+                sumKwh += k;
+                sumAmber += ((parseFloat(item.perKwh) || 0) / 100) * k;
+            });
+            ch.totalKWh = sumKwh;
+            ch.totalAmberCost = sumAmber;
+        });
+
+        if (!(evKm > 0) && !hwMode) return { addedKwh: 0 };
+
+        const tz = Amber.STATE_TIMEZONES[state] || 'Australia/Sydney';
+        const clockOpts = { clock: 'local', timeZone: tz };
+        const byDay = Object.create(null);
+        general.usageData.forEach((item) => {
+            const parts = Amber.itemClockParts(item, clockOpts);
+            const d = parts.dateStr;
+            if (!byDay[d]) byDay[d] = [];
+            byDay[d].push({ item, parts });
+        });
+
+        const evDaily = evKm > 0 ? (evKm / 365) * 0.17 * 1.1 : 0;
+        const evWin = WHAT_IF_WINDOWS[o.evCharge] || WHAT_IF_WINDOWS.overnight;
+        const hwDaily = hwMode === 'heatpump' ? ((parseFloat(o.people) || 3) * 3.5) / 3.5 : 0;
+        const hwWin = WHAT_IF_WINDOWS[o.hotWaterRun] || WHAT_IF_WINDOWS.solar;
+
+        let addedKwh = 0;
+        Object.keys(byDay).forEach((d) => {
+            const list = byDay[d];
+            const inWindow = (win) => list.filter(({ parts }) => {
+                const h = parts.hours + parts.minutes / 60;
+                return win[0] < win[1] ? (h >= win[0] && h < win[1]) : (h >= win[0] || h < win[1]);
+            });
+            if (evDaily > 0) {
+                const slots = inWindow(evWin);
+                if (slots.length) {
+                    const add = evDaily / slots.length;
+                    slots.forEach(({ item }) => { item.kwh += add; addedKwh += add; });
+                }
+            }
+            if (hwDaily > 0) {
+                const slots = inWindow(hwWin);
+                if (slots.length) {
+                    const add = hwDaily / slots.length;
+                    slots.forEach(({ item }) => { item.kwh += add; addedKwh += add; });
+                }
+            }
+        });
+
+        let sumKwh = 0;
+        let sumAmber = 0;
+        general.usageData.forEach((item) => {
+            const k = Amber.absKwh(item.kwh);
+            sumKwh += k;
+            sumAmber += ((parseFloat(item.perKwh) || 0) / 100) * k;
+        });
+        general.totalKWh = sumKwh;
+        general.totalAmberCost = sumAmber;
+        return { addedKwh };
+    };
+
     if (typeof module === 'object' && module.exports) module.exports = Amber;
 })(typeof window !== 'undefined' ? window : globalThis);
