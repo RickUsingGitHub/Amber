@@ -108,17 +108,19 @@ test('bill check and monthly breakdown', async ({ page }) => {
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
     await expect(monthCells).toHaveText([/Jul(y)? 2025/, /Aug(ust)? 2025/, 'Total']);
 
-    // Coming back to Bill Check: the check is still there
+    // Coming back to Bill Check: the check is still there, and Dates to look at is hidden
     await page.click('#tab-bill');
     await page.waitForSelector('#billCheckBody table');
-    await expect(page.locator('#fetchData')).toHaveText('Compare costs');
+    await expect(page.locator('#configSection')).toBeHidden();
 
-    // Other dates chosen while on Bill Check: the bill is still checked against its own period,
+    // Other dates chosen on Compare: the bill is still checked against its own period,
     // and the dates stay as chosen
+    await page.click('#tab-compare');
     await page.fill('#startDate', '2025-08-01');
     await page.fill('#endDate', '2025-08-05');
     await page.click('#fetchData');
     await expect(page.locator('#fetchData')).toHaveText('Compare costs');
+    await page.click('#tab-bill');
     await expect(page.locator('#billCheckBody table')).toBeVisible();
     await expect(page.locator('#billCheckBody [aria-label="matches"]')).toHaveCount(8);
     await expect(page.locator('#billCheckBody')).not.toContainText("don't cover this bill");

@@ -184,12 +184,14 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#apiKey')).toBeVisible();
         await expect(page.locator('#connectedCard')).toBeVisible();
         await expect(page.locator('#welcomeCard')).toBeHidden();
+        await expect(page.locator('#configSection')).toBeHidden();
         await page.click('#amberChargesDetails summary');
         await expect(page.locator('#amberConnectionRate')).toBeVisible();
         await expect(page.locator('#planSelector')).toBeHidden();
 
         await page.click('#tab-bill');
         await expect(page.locator('#billCheckSection')).toBeVisible();
+        await expect(page.locator('#configSection')).toBeHidden();
         await expect(page.locator('#calendarSection')).toBeHidden();
         await expect(page.locator('#apiKey')).toBeHidden();
 
@@ -227,8 +229,8 @@ test.describe('Amber UI flows', () => {
         await expect(page.locator('#panel-compare')).toBeHidden();
     });
 
-    test('Compare from Setup goes to the results tab', async ({ page }) => {
-        await page.click('#tab-setup');
+    test('Compare populates results, jump links, Free? and Usage tabs', async ({ page }) => {
+        await page.click('#tab-compare');
         await page.fill('#startDate', '2025-01-10');
         await page.fill('#endDate', '2025-01-10');
         await page.click('#fetchData');

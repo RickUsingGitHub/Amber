@@ -166,6 +166,7 @@ test.describe('Amber fetch and UI', () => {
             const path = new URL(request.url()).pathname;
             if (path.endsWith('/sites')) sitesCalls += 1;
         });
+        await page.click('#tab-compare');
         await page.fill('#startDate', '2025-01-10');
         await page.fill('#endDate', '2025-01-10');
         await page.click('#fetchData');
@@ -192,6 +193,7 @@ test.describe('Amber fetch and UI', () => {
         await expect(page.locator('[data-preset="7d"]')).toBeVisible();
         await page.click('#tab-setup');
         await expect(page.locator('#rememberApiKey')).toBeVisible();
+        await page.click('#tab-compare');
         await page.click('#fetchData');
         await page.waitForSelector('#resultsSection:not(.hidden)', { timeout: 15000 });
         await expect(page.locator('#allPlansSection')).toBeVisible();

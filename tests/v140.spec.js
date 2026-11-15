@@ -54,6 +54,7 @@ test('charges before 1 July use last year\'s rates, and old saved rates move the
     await expect(page.locator('#amberConnectionRatePrev')).toHaveValue('116.787');
     await expect(page.locator('#amberDemandRatePrev')).toHaveValue('42.345');
 
+    await page.click('#tab-compare');
     await page.fill('#startDate', '2026-06-29');
     await page.fill('#endDate', '2026-07-02');
     await page.click('#fetchData');

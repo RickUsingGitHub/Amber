@@ -19,11 +19,14 @@ test('first visit: a welcome with two paths, and the dates bar only once connect
     await page.click('#chooseAmber');
     await expect(page.locator('#apiKey')).toBeFocused();
     await page.fill('#apiKey', 'psk_test_key_123');
-    await expect(page.locator('#fetchData')).toBeVisible();
     await expect(page.locator('#welcomeCard')).toBeHidden();
     await expect(page.locator('#connectedCard')).toBeVisible();
+    await expect(page.locator('#fetchData')).toBeHidden();
+    await page.click('#tab-compare');
+    await expect(page.locator('#fetchData')).toBeVisible();
 
     // Clearing the key goes back to the welcome.
+    await page.click('#tab-setup');
     await page.fill('#apiKey', '');
     await expect(page.locator('#welcomeCard')).toBeVisible();
     await expect(page.locator('#fetchData')).toBeHidden();

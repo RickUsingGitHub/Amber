@@ -43,15 +43,8 @@
         });
         app.syncScrollHints();
         if (tab === 'bill' && state.ready) app.ensureBillLoaded({ fromTab: true });
-        // The planner uses its own 12 months, so the dates bar and download tools step aside.
-        if (tab === 'plan') {
-            $('configSection').classList.add('hidden');
-            $('resultTools').classList.add('hidden');
-            if (Amber.plannerUi) Amber.plannerUi.show();
-        } else if (state.planTabShown) {
-            syncConnectedUi();
-        }
-        state.planTabShown = tab === 'plan';
+        if (tab === 'plan' && Amber.plannerUi) Amber.plannerUi.show();
+        syncConnectedUi();
     }
 
     function initialTab() {
@@ -68,13 +61,14 @@
         return !!$('apiKey').value.trim() || app.loadLocalSites().length > 0;
     }
 
-    /** Show the welcome until there's something to look at; then the dates bar and results tools. */
+    /** Show the welcome until there's something to look at; then the dates bar and results tools on tabs that use them. */
     function syncConnectedUi() {
         const connected = isConnected();
+        const usesDatesBar = state.activeTab === 'compare' || state.activeTab === 'check' || state.activeTab === 'free';
         $('welcomeCard').classList.toggle('hidden', connected);
         $('connectedCard').classList.toggle('hidden', !connected);
-        $('configSection').classList.toggle('hidden', !connected);
-        $('resultTools').classList.toggle('hidden', !connected);
+        $('configSection').classList.toggle('hidden', !connected || !usesDatesBar);
+        $('resultTools').classList.toggle('hidden', !connected || !usesDatesBar);
         syncResultPlaceholders();
     }
 
