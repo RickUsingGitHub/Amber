@@ -4,3 +4,19 @@ playwright-report/
 blob-report/
 .playwright/
 .playwright-mcp/
+
+# Secrets & local environment
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Personal meter exports & bills
+*.csv
+*.pdf
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
