@@ -34,6 +34,38 @@
         </header>
 
         <main>
+            <div class="flex flex-wrap items-center gap-3 mb-4">
+                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-nowrap sm:flex-wrap max-w-full overflow-x-auto gap-0.5 sm:gap-1 bg-white rounded-lg shadow-md p-1">
+                    <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Start</button>
+                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare</button>
+                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab" title="Your usage: graphs, calendar and more numbers">Usage</button>
+                    <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab" title="Bill check: an Amber bill checked line by line">Bill?</button>
+                    <button type="button" role="tab" id="tab-free" data-tab="free" aria-controls="panel-free" aria-selected="false" tabindex="-1" class="main-tab" title="Free power: what free-power plans would cost if you moved some use into their free hours">Free?</button>
+                    <button type="button" role="tab" id="tab-plan" data-tab="plan" aria-controls="panel-plan" aria-selected="false" tabindex="-1" class="main-tab" title="Solar and battery: the best panels, battery and plan for you">Solar+?</button>
+                </div>
+                <div id="resultTools" class="ml-auto flex items-center">
+                    <div class="flex items-center mr-3">
+                        <span class="text-sm font-medium text-gray-700 mr-2" id="gstLabel">Include GST</span>
+                        <label class="gst-switch">
+                            <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
+                            <span class="gst-switch-track" aria-hidden="true"></span>
+                        </label>
+                        <span data-help="gst" data-help-label="Include GST"></span>
+                    </div>
+                    <div class="relative flex items-center">
+                        <button id="downloadCsvButton" type="button" disabled aria-haspopup="true" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">Download</button>
+                        <span data-help="exportMenu" data-help-label="Download"></span>
+                        <div id="csvDropdownMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
+                            <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Every meter reading<span class="block text-xs text-gray-500">Each 5 or 30 minutes, with Amber's price (CSV)</span></a>
+                            <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily totals<span class="block text-xs text-gray-500">One row a day: kWh and cost on each plan (CSV)</span></a>
+                            <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">The comparison table<span class="block text-xs text-gray-500">As shown on the Compare tab (CSV)</span></a>
+                            <a href="#" id="downloadSummaryCardPng" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-100">Shareable summary card<span class="block text-xs text-gray-500">Privacy-safe PNG image (no NMI or account IDs)</span></a>
+                            <a href="#" id="copySummaryText" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Copy plain-English summary<span class="block text-xs text-gray-500">Forum-ready text summary to clipboard</span></a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div id="configSection" class="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-4">
                 <h2 class="text-sm font-semibold text-gray-800 mb-2" data-help="dates">Dates to look at</h2>
                 <div id="configCompareBar" class="flex flex-wrap items-end gap-3">
@@ -63,38 +95,6 @@
                     <p id="message" class="text-lg"></p>
                     <div class="w-full bg-gray-200 rounded-full h-2.5 mt-4">
                         <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full w-0"></div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-3 mb-4">
-                <div id="mainTabs" role="tablist" aria-label="Sections" class="inline-flex flex-nowrap sm:flex-wrap max-w-full overflow-x-auto gap-0.5 sm:gap-1 bg-white rounded-lg shadow-md p-1">
-                    <button type="button" role="tab" id="tab-setup" data-tab="setup" aria-controls="panel-setup" aria-selected="false" tabindex="-1" class="main-tab">Start</button>
-                    <button type="button" role="tab" id="tab-compare" data-tab="compare" aria-controls="panel-compare" aria-selected="false" tabindex="-1" class="main-tab">Compare</button>
-                    <button type="button" role="tab" id="tab-check" data-tab="check" aria-controls="panel-check" aria-selected="false" tabindex="-1" class="main-tab" title="Your usage: graphs, calendar and more numbers">Usage</button>
-                    <button type="button" role="tab" id="tab-bill" data-tab="bill" aria-controls="panel-bill" aria-selected="false" tabindex="-1" class="main-tab" title="Bill check: an Amber bill checked line by line">Bill?</button>
-                    <button type="button" role="tab" id="tab-free" data-tab="free" aria-controls="panel-free" aria-selected="false" tabindex="-1" class="main-tab" title="Free power: what free-power plans would cost if you moved some use into their free hours">Free?</button>
-                    <button type="button" role="tab" id="tab-plan" data-tab="plan" aria-controls="panel-plan" aria-selected="false" tabindex="-1" class="main-tab" title="Solar and battery: the best panels, battery and plan for you">Solar+?</button>
-                </div>
-                <div id="resultTools" class="ml-auto flex items-center">
-                    <div class="flex items-center mr-3">
-                        <span class="text-sm font-medium text-gray-700 mr-2" id="gstLabel">Include GST</span>
-                        <label class="gst-switch">
-                            <input type="checkbox" id="gstToggle" checked aria-labelledby="gstLabel">
-                            <span class="gst-switch-track" aria-hidden="true"></span>
-                        </label>
-                        <span data-help="gst" data-help-label="Include GST"></span>
-                    </div>
-                    <div class="relative flex items-center">
-                        <button id="downloadCsvButton" type="button" disabled aria-haspopup="true" class="inline-flex items-center gap-2 px-3 py-2 rounded-md border border-gray-300 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">Download</button>
-                        <span data-help="exportMenu" data-help-label="Download"></span>
-                        <div id="csvDropdownMenu" class="hidden absolute right-0 top-10 mt-2 w-72 bg-white rounded-md shadow-lg py-1 z-20 border border-gray-200">
-                            <a href="#" id="downloadFullIntervalCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Every meter reading<span class="block text-xs text-gray-500">Each 5 or 30 minutes, with Amber's price (CSV)</span></a>
-                            <a href="#" id="downloadDailySummaryCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Daily totals<span class="block text-xs text-gray-500">One row a day: kWh and cost on each plan (CSV)</span></a>
-                            <a href="#" id="downloadResultsTableCsv" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">The comparison table<span class="block text-xs text-gray-500">As shown on the Compare tab (CSV)</span></a>
-                            <a href="#" id="downloadSummaryCardPng" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 border-t border-gray-100">Shareable summary card<span class="block text-xs text-gray-500">Privacy-safe PNG image (no NMI or account IDs)</span></a>
-                            <a href="#" id="copySummaryText" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Copy plain-English summary<span class="block text-xs text-gray-500">Forum-ready text summary to clipboard</span></a>
-                        </div>
                     </div>
                 </div>
             </div>
