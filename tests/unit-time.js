@@ -78,7 +78,16 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.67', 'app version is 1.67');
+assert(Amber.APP_VERSION === '1.68', 'app version is 1.68');
+{
+    // The service worker's cache follows the app version through its URL; sw.js holds no version to forget.
+    const fs = require('fs');
+    const path = require('path');
+    const sw = fs.readFileSync(path.join(__dirname, '..', 'sw.js'), 'utf8');
+    const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
+    assert(!/\d+\.\d+/.test(sw.replace(/\/\/.*$/gm, '')), 'sw.js has no hard-coded version');
+    assert(appJs.includes('register(`sw.js?v=${encodeURIComponent(Amber.APP_VERSION)}`)'), 'the service worker is registered with the app version');
+}
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 125.367 && Amber.PREVIOUS_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection defaults (2026-27 and 2025-26)');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');
 assert(Amber.DEFAULT_AMBER_DEMAND_CENTS === 43.431 && Amber.PREVIOUS_AMBER_DEMAND_CENTS === 42.345, 'Amber demand defaults (2026-27 and 2025-26)');

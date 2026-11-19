@@ -19,7 +19,7 @@ Without an Amber API key, use the "Not with Amber?" path on Start with a NEM12 f
 These are the properties the tests guard and that users rely on. A change that breaks one is a bug, even if the UI looks fine.
 
 1. **One way of pricing.** Compare, month by month (`monthly.js`), Bill Check, the Free? estimate and the Solar+? planner must price the same readings on the same plan to the same total. The planner's half-hourly costing (`planCardCost`, `amberCardCost`) is checked against `computePlanTotals` in `tests/unit-planner.js`, and `monthly.js` mirrors the Compare table.
-2. **Missing readings are never zero.** Days without readings are left out of usage costs and flagged ("Incomplete comparison", "No readings"). Fixed charges still cover the whole period. The planner fills at most 31 missing days from the same weekday and says so.
+2. **Missing readings are never zero.** Days without readings are left out of usage costs and flagged ("Incomplete comparison", "No readings"). Fixed charges, and Amber's demand charge, still cover the whole period. The planner fills at most 31 missing days from the same weekday and says so.
 3. **Time is explicit.** Amber's `nemTime` is an interval's end in NEM time (UTC+10, no daylight saving). Plan windows are local wall-clock time unless a plan says `clock: 'nem'`. Interval-end semantics matter at window edges (`Amber.intervalEndInWindow`, `timeInWindow`). The planner's slots are NEM half hours.
 4. **GST is consistent.** Templates are GST-inclusive; `networks.js` figures are ex GST and GST is added in `estimate.js`; household feed-in is GST-free. The GST toggle only changes the display (`adjustForGst`).
 5. **The cache is trustworthy.** Only final whole days are cached. Clearing it also removes what was worked out from it (results, imported households). Estimated readings stay refetchable, and empty old days are remembered as empty. The CSV backup round-trips (`tests/review.spec.js`).
@@ -50,7 +50,6 @@ These are the properties the tests guard and that users rely on. A change that b
 - **End-to-end tests depend on IDs and wording.** Many assertions match visible text, so copy edits need test edits too.
 - **Yearly maintenance is manual.** Each 1 July: the default offers and VDO in `templates.js`, Amber's network tariffs in `networks.js` (FY2026-27 today), Amber's default fixed charges and `AMBER_RATES_CHANGE_DATE` in `constants.js`, rebate and hardware defaults in `PLANNER_FINANCE_DEFAULTS`, and `TEMPLATES_AS_AT`. Market offers drift during the year.
 - **Vendored libraries** are pinned copies: Chart.js 4.4.2, chartjs-plugin-zoom 2.0.1, pdf.js 3.11.174. Updating them is manual.
-- **The price-update workflow** uses Node 20 actions, which GitHub is deprecating (a warning only). `test.yml` already uses Node 22.
 - **The API key** is obfuscated, not encrypted. That's fine for a browser-only tool, but it shouldn't be described as secure.
 
 ## Questions worth a reviewer's opinion

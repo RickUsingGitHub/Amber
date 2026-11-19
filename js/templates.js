@@ -572,17 +572,6 @@
         return Amber.TEMPLATES_AS_AT;
     };
 
-    Amber.latestAsAtForState = function (state, templates) {
-        const source = templates || Amber.supplierTemplates;
-        const plans = source[state] || {};
-        let latest = Amber.TEMPLATES_AS_AT;
-        Object.keys(plans).forEach((name) => {
-            const asAt = plans[name].asAt;
-            if (asAt && asAt > latest) latest = asAt;
-        });
-        return latest;
-    };
-
     const CDR_DAY_MAP = {
         SUN: 0, SUNDAY: 0,
         MON: 1, MONDAY: 1,

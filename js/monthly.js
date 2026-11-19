@@ -45,7 +45,7 @@
             Amber.processUsageData(items, ct, true);
         });
         Amber.applyAmberFeedInSettlement(ct, o.site, days, o.billPeriod ? null : { from, to });
-        const demand = Amber.calculateDemandTariff(ct, rates);
+        const demand = Amber.calculateDemandTariff(ct, rates, { from, to });
         const fixed = Amber.amberFixedForPeriod(rates, from, to);
 
         const out = {

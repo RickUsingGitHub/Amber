@@ -33,6 +33,34 @@ assert(near(amber.cost, 124), `Amber demand is per month (got ${amber.cost.toFix
 assert(amber.months.length === 2 && near(amber.months[0].maxDemandKwh * 2, 8) && near(amber.months[1].maxDemandKwh * 2, 2), 'each month keeps its own peak');
 assert(near(amber.maxDemandKwh * 2, 8) && amber.demandDays === 62, 'overall peak and demand days');
 
+// The bill charges demand for every day of the period (e.g. "Network - Peak Demand 01 Jul - 31 Jul
+// 6.67 kW ... $81.59" is 31 days), even when the demand window is weekdays only or readings are missing.
+function weekdayWindowData(skip) {
+    const items = [];
+    ['2026-07', '2026-08'].forEach((m) => {
+        for (let d = 1; d <= 31; d++) {
+            const date = `${m}-${String(d).padStart(2, '0')}`;
+            if (skip && skip(date)) continue;
+            const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
+            items.push({ nemTime: `${date}T18:00:00+10:00`, date, kwh: 1, perKwh: 30, duration: 30, channelIdentifier: 'E1',
+                tariffInformation: { demandWindow: weekday >= 1 && weekday <= 5 } });
+        }
+    });
+    const out = { E1: Amber.emptyChannel({ identifier: 'E1', type: 'general' }) };
+    Amber.processUsageData(items, out, true);
+    return out;
+}
+const weekdays = Amber.calculateDemandTariff(weekdayWindowData(), 40, { from: '2026-07-01', to: '2026-07-31' });
+assert(weekdays.demandDays === 31 && near(weekdays.cost, 2 * 0.4 * 31), `weekday-only window: demand charged for all 31 days of July (got ${weekdays.demandDays})`);
+const gaps = weekdayWindowData((date) => date >= '2026-07-20' && date <= '2026-07-25');
+const gapDemand = Amber.calculateDemandTariff(gaps, 40, { from: '2026-07-01', to: '2026-07-31' });
+assert(gapDemand.demandDays === 31, `missing readings don't shorten the demand charge (got ${gapDemand.demandDays} days)`);
+const across = Amber.calculateDemandTariff(weekdayWindowData(), 40, { from: '2026-07-15', to: '2026-08-14' });
+assert(across.months.length === 2 && across.months[0].days === 17 && across.months[1].days === 14 && across.demandDays === 31,
+    `a range across months charges each month's days in the range (got ${across.months.map((m) => m.days).join(' + ')})`);
+const noRange = Amber.calculateDemandTariff(gaps, 40);
+assert(noRange.demandDays === 62, `without a range, the readings' first to last day is used (got ${noRange.demandDays})`);
+
 const { monthlyDemandInfo } = Amber.precalculateDailySummaries(ct, { rateType: 'flat', flat: 30 }, { demandCents: 40, connectionCents: 0, subscriptionCents: 0 }, 'NSW');
 const calendarSum = Object.values(monthlyDemandInfo).reduce((s, m) => s + m.amber.cost, 0);
 assert(near(calendarSum, amber.cost), 'Results table and calendar demand agree');

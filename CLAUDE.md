@@ -41,6 +41,8 @@ If Playwright can't find its browser, point it at an installed Chromium with `la
    - `index.html`: the `<title>`, "Version X." in the header, and every `?v=X`;
    - `js/constants.js`: `Amber.APP_VERSION`;
    - `tests/unit-time.js`: the version assert.
+
+   `sw.js` needs no edit: it takes the version from the URL `app.js` registers it with.
 2. Update `README.md` and `docs/` if behaviour or structure changed.
 3. Run `npm run build:css` if classes changed, then `npm run lint` and `npm test`.
 4. Open a pull request. Merge only after the GitHub "Tests" check passes: it runs the lint and the tests (GitHub Pages serves `main`).
