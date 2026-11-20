@@ -78,7 +78,7 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.69', 'app version is 1.69');
+assert(Amber.APP_VERSION === '1.70', 'app version is 1.70');
 {
     // The yearly price update (each 1 July: templates.js, networks.js, Amber's charges in constants.js,
     // see REVIEW.md "Yearly maintenance") is due. This fails once the prices are 13 months old.
@@ -98,6 +98,8 @@ assert(Amber.APP_VERSION === '1.69', 'app version is 1.69');
     const appJs = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
     assert(!/\d+\.\d+/.test(sw.replace(/\/\/.*$/gm, '')), 'sw.js has no hard-coded version');
     assert(appJs.includes('register(`sw.js?v=${encodeURIComponent(Amber.APP_VERSION)}`)'), 'the service worker is registered with the app version');
+    // rickusinggithub.github.io serves several apps from one origin, sharing one Cache Storage.
+    assert(/k\.startsWith\('amber-compare-'\) && k !== CACHE_NAME/.test(sw), "the service worker removes only Amber's own old caches");
 }
 assert(Amber.DEFAULT_AMBER_CONNECTION_CENTS === 125.367 && Amber.PREVIOUS_AMBER_CONNECTION_CENTS === 116.787, 'Amber daily connection defaults (2026-27 and 2025-26)');
 assert(Amber.DEFAULT_AMBER_SUBSCRIPTION_CENTS === 82.181, 'Amber subscription default');

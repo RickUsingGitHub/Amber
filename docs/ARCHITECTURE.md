@@ -249,6 +249,6 @@ Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` 
 
 Each change ships as a version:
 
-1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert). The service worker (`sw.js`) needs no edit: `app.js` registers it as `sw.js?v=<APP_VERSION>`, which names its cache, so each release replaces the last one's offline copy.
+1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert). The service worker (`sw.js`) needs no edit: `app.js` registers it as `sw.js?v=<APP_VERSION>`, which names its cache, so each release replaces the last one's offline copy. It deletes only old `amber-compare-` caches: rickusinggithub.github.io serves several apps from one origin, and they share one Cache Storage.
 2. `npm run build:css` if classes changed; update the README and these docs if behaviour changed.
 3. Run `npm run lint` and `npm test`, open a pull request, and merge once the Tests check passes. GitHub Pages serves `main`.

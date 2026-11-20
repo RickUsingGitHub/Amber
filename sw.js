@@ -26,7 +26,8 @@
         if (!event || typeof event.waitUntil !== 'function') return;
         event.waitUntil(
             caches.keys().then((keys) => Promise.all(
-                keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+                // Other apps share this origin (rickusinggithub.github.io/...): remove only Amber's old caches.
+                keys.filter((k) => k.startsWith('amber-compare-') && k !== CACHE_NAME).map((k) => caches.delete(k))
             )).catch(() => {})
         );
     });
