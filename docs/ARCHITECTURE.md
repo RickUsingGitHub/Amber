@@ -21,13 +21,13 @@ js/                      Application code (see the module map)
 data/prices/<REGION>/    AEMO 5-minute wholesale prices, one JSON per month (NSW1, QLD1, SA1, VIC1)
 data/solar/<town>.json   PVGIS typical-year hourly weather for 22 towns
 scripts/static-server.js Tiny static server for development and Playwright (port 4173)
-scripts/update-prices.js Downloads AEMO prices into data/prices (run daily by a GitHub Action)
+scripts/update-prices.js Downloads AEMO prices into data/prices (run weekly by a GitHub Action)
 scripts/update-solar.js  Downloads PVGIS weather into data/solar (run by hand)
 tests/unit-*.js          Node unit checks (no framework: assert + console)
 tests/*.spec.js          Playwright end-to-end tests (Chromium)
 eslint.config.js         ESLint settings (npm run lint)
 eslint-rules/            The project's own ESLint rules (no-extra-arguments)
-.github/workflows/       test.yml (lint and tests on PRs and main), update-prices.yml (daily price refresh)
+.github/workflows/       test.yml (lint and tests on PRs and main), update-prices.yml (weekly price refresh)
 chart.umd.min.js, chartjs-plugin-zoom.min.js, pdf.min.js, pdf.worker.min.js   Vendored libraries
 ```
 
@@ -226,7 +226,7 @@ Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` 
 
 ## External data
 
-- **AEMO prices**: `scripts/update-prices.js` downloads `PRICE_AND_DEMAND_<YYYYMM>_<REGION>.csv` from AEMO into `data/prices/<REGION>/<YYYY-MM>.json` as `{ region, month, interval: 5, rrp: [...] }` ($/MWh, interval ending `month-01 00:00 + (i+1)×5 min` NEM time). `.github/workflows/update-prices.yml` runs it daily at 1:17 am AEST and commits changes.
+- **AEMO prices**: `scripts/update-prices.js` downloads `PRICE_AND_DEMAND_<YYYYMM>_<REGION>.csv` from AEMO into `data/prices/<REGION>/<YYYY-MM>.json` as `{ region, month, interval: 5, rrp: [...] }` ($/MWh, interval ending `month-01 00:00 + (i+1)×5 min` NEM time). `.github/workflows/update-prices.yml` runs it weekly (Mondays 1:17 am AEST, or by hand) and commits changes; each run re-downloads the last two months, so a week that crosses a month end is covered.
 - **PVGIS weather**: `scripts/update-solar.js` downloads a typical meteorological year (hourly GHI, DNI, DHI and temperature) and PVGIS's own 1 kW yield for each town in `Amber.SOLAR_LOCATIONS`. It's run by hand; the files don't change.
 - **Plan prices**: maintained by hand in `templates.js` (with `asAt` dates) and `networks.js` (Amber's FY2026-27 network tariffs). `Amber.TEMPLATES_AS_AT` is shown in the UI.
 
