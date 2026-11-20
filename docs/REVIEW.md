@@ -8,7 +8,7 @@ Notes for anyone reviewing this codebase: what it must keep doing, where mistake
 npm install
 npm run build:css
 npm run lint        # ESLint
-npm test            # ~11 unit scripts, then ~69 Playwright tests (~60 s with --workers=2)
+npm test            # ~11 unit scripts, then ~70 Playwright tests (~60 s with --workers=2)
 npm run serve       # http://127.0.0.1:4173
 ```
 
@@ -57,8 +57,7 @@ These are the properties the tests guard and that users rely on. A change that b
 1. `app.js` is now split by area. Is it worth going further before a frontend refresh, for example giving each file its own slice of `state` or splitting `planner-ui.js` the same way?
 2. Should HTML building move to small render helpers (or `<template>` elements in `index.html`) to cut repetition, while staying build-free and within the CSP?
 3. ESLint now runs in CI. Would a formatter (Prettier) or type checking of the JSDoc (`tsc --checkJs`) be welcome too, given the no-build constraint?
-5. Should the Solar+? search move to a Web Worker (it runs on the main thread today, yielding with `setTimeout(0)`)? The CSP already allows `worker-src 'self'`.
-6. Is there anything in the data handling that a privacy-minded user would object to?
+4. Is there anything in the data handling that a privacy-minded user would object to?
 
 ## Test map
 

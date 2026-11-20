@@ -1354,7 +1354,8 @@
         if (typeof Worker === 'function' && typeof window !== 'undefined' && window.location && /^https?:$/.test(window.location.protocol)) {
             try {
                 const res = await new Promise((resolve, reject) => {
-                    const worker = new Worker('js/planner.js');
+                    // The version keeps the worker's code in step with the page's after a release.
+                    const worker = new Worker(`js/planner.js?v=${encodeURIComponent(Amber.APP_VERSION || '')}`);
                     const cleanup = () => { try { worker.terminate(); } catch (e) { /* ignore */ } };
                     worker.onmessage = (e) => {
                         const msg = e.data || {};
@@ -1377,7 +1378,8 @@
                 });
                 return res;
             } catch (e) {
-                // Fall back to in-thread search if Worker fails to load or execute.
+                // Fall back to searching on the page (slower to respond while it runs) if the worker fails.
+                if (typeof console !== 'undefined') console.warn('Solar+? search: the background worker failed, so it runs on the page instead.', e);
             }
         }
         return Amber.plannerSearch(ctx, onProgress);
@@ -1385,7 +1387,9 @@
 
     if (root && typeof root.WorkerGlobalScope === 'function' && root instanceof root.WorkerGlobalScope && typeof root.importScripts === 'function') {
         try {
-            root.importScripts('constants.js', 'time.js', 'templates.js', 'costs.js', 'import.js', 'networks.js', 'estimate.js', 'solar.js');
+            // The same ?v= the page loaded this worker with, so every file is from the same release.
+            const v = (root.location && root.location.search) || '';
+            root.importScripts(...['constants.js', 'time.js', 'templates.js', 'costs.js', 'import.js', 'networks.js', 'estimate.js', 'solar.js'].map((f) => f + v));
             root.onmessage = function (e) {
                 const msg = e.data || {};
                 if (msg.type !== 'search' || !msg.ctx) return;

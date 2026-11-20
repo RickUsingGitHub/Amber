@@ -378,3 +378,39 @@ test('Solar & battery: without a year of readings it says what to do', async ({ 
     await page.click('#planDataStatus [data-plan-go="setup"]');
     await expect(page.locator('#tab-setup')).toHaveAttribute('aria-selected', 'true');
 });
+
+test('Solar & battery: the search runs in a background worker, so the page stays usable', async ({ page }) => {
+    test.setTimeout(120000);
+    // Record what the planner's worker sends back, and how long the page itself is ever blocked.
+    await page.addInitScript(() => {
+        const W = window.Worker;
+        window.__worker = { urls: [], types: [] };
+        window.Worker = class extends W {
+            constructor(url, opts) {
+                super(url, opts);
+                window.__worker.urls.push(String(url));
+                this.addEventListener('message', (e) => window.__worker.types.push(e.data && e.data.type));
+            }
+        };
+    });
+    const warnings = [];
+    page.on('console', (m) => { if (m.type() === 'warning') warnings.push(m.text()); });
+    await importYear(page);
+    await page.click('#tab-plan');
+    await page.selectOption('#planSolarMode', 'fixed');
+    await page.fill('#planSolarKw', '6.6');
+    await page.selectOption('#planBatteryMode', 'fixed');
+    await page.evaluate(() => {
+        window.__longest = 0;
+        let last = performance.now();
+        window.__tick = setInterval(() => { const now = performance.now(); window.__longest = Math.max(window.__longest, now - last); last = now; }, 20);
+    });
+    await page.click('#planRun');
+    await expect(page.locator('#planResults')).toBeVisible({ timeout: 90000 });
+    const w = await page.evaluate(() => { clearInterval(window.__tick); return Object.assign({ longest: window.__longest }, window.__worker); });
+    expect(w.urls.some((u) => /js\/planner\.js\?v=\d+\.\d+$/.test(u))).toBe(true);
+    expect(w.types).toContain('progress');
+    expect(w.types[w.types.length - 1]).toBe('done');
+    expect(warnings.filter((t) => t.includes('background worker failed'))).toEqual([]);
+    console.log(`longest the page was blocked during the search: ${Math.round(w.longest)} ms`);
+});
