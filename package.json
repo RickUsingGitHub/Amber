@@ -6,7 +6,7 @@
     "build:css": "tailwindcss -i ./css/input.css -o ./css/app.css --minify",
     "lint": "eslint .",
     "test": "npm run test:unit && playwright test",
-    "test:unit": "node tests/unit-syntax.js && node tests/unit-review.js && node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && node tests/unit-planner.js",
+    "test:unit": "node tests/unit-syntax.js && node tests/unit-review.js && node tests/unit-time.js && node tests/unit-bill.js && node tests/unit-stats.js && node tests/unit-demand.js && node tests/unit-billcheck.js && node tests/unit-redispatch.js && node tests/unit-import.js && node tests/unit-estimate.js && node tests/unit-planner.js && node tests/unit-battery.js",
     "serve": "node scripts/static-server.js"
   },
   "devDependencies": {

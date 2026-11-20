@@ -24,8 +24,10 @@
      * Parse a NEM12 file. Some portals export only the data rows (200/300/400, no 100 header or
      * 900 end row), sometimes with spaces around fields; both are accepted. Returns { ok, error, nmis: { NMI: { nmi, channels: { suffix: { suffix,
      * uom, intervalLength, kind ('import' | 'export'), days: { 'YYYY-MM-DD': [kWh per interval] },
-     * kwh } } } }, nmi (the NMI with most data), skipped }. Each NMI also gets incompleteDays: dates
-     * left out because a 300 row was missing readings.
+     * kwh, estimated: { 'YYYY-MM-DD': [true/false per interval] } } } } }, nmi (the NMI with most data),
+     * skipped }. Each NMI also gets incompleteDays: dates left out because a 300 row was missing readings.
+     * estimated marks readings the network estimated or substituted: a 300 row's quality flag E, S or F
+     * covers the whole day, and V (variable) takes each interval's flag from the 400 rows that follow.
      * Interval dates and times are NEM time (AEST); a later 300 row for the same day replaces an earlier one.
      * Each 200 section sets its own interval length and unit, so a channel can switch from 30- to
      * 5-minute readings part way through a file; a day's interval length is 1440 / its values.length.
@@ -40,6 +42,8 @@
         }
         let channel = null;
         let section = null; // { nmi, length, scale } of the current 200 row
+        let lastDay = null; // { channel, date, n } of the last 300 row read, for its 400 rows
+        const isSubstitute = (q) => /^[ESF]/i.test(q || '');
         let pos = 0;
         const totalLen = src.length;
         while (pos < totalLen) {
@@ -52,6 +56,7 @@
             const f = splitLine(line).map((x) => x.trim());
             const rec = f[0];
             if (rec === '200') {
+                lastDay = null;
                 const nmi = (f[1] || '').trim().toUpperCase();
                 const suffix = (f[4] || f[3] || '').trim().toUpperCase();
                 const uom = (f[7] || '').trim().toUpperCase();
@@ -64,11 +69,22 @@
                 }
                 const n = out.nmis[nmi] || (out.nmis[nmi] = { nmi, channels: {}, incomplete: new Set() });
                 // intervalLength/uom: the channel's first section (a later section may differ).
-                channel = n.channels[suffix] || (n.channels[suffix] = { suffix, uom, intervalLength: len, kind, days: {}, kwh: 0 });
+                channel = n.channels[suffix] || (n.channels[suffix] = { suffix, uom, intervalLength: len, kind, days: {}, kwh: 0, estimated: {} });
                 section = { nmi: n, length: len, scale: UOM_SCALE[uom] };
                 continue;
             }
+            if (rec === '400' && lastDay) {
+                // 400,<first interval>,<last interval>,<quality method>,... for a V (variable) day.
+                const from = parseInt(f[1], 10);
+                const to = parseInt(f[2], 10);
+                if (isSubstitute(f[3]) && from >= 1 && to >= from) {
+                    const flags = lastDay.channel.estimated[lastDay.date] || (lastDay.channel.estimated[lastDay.date] = new Array(lastDay.n).fill(false));
+                    for (let i = from - 1; i < Math.min(to, lastDay.n); i++) flags[i] = true;
+                }
+                continue;
+            }
             if (rec === '300' && channel) {
+                lastDay = null;
                 const d = f[1] || '';
                 if (!/^\d{8}$/.test(d)) { out.skipped += 1; continue; }
                 const date = `${d.substring(0, 4)}-${d.substring(4, 6)}-${d.substring(6, 8)}`;
@@ -85,6 +101,10 @@
                 channel.days[date] = values;
                 channel.kwh += values.reduce((s, v) => s + v, 0);
                 section.nmi.incomplete.delete(key);
+                // The quality flag follows the readings; E, S or F means the whole day was estimated or substituted.
+                delete channel.estimated[date];
+                if (isSubstitute(f[2 + n])) channel.estimated[date] = new Array(n).fill(true);
+                lastDay = { channel, date, n };
             }
         }
         let best = null;
@@ -317,7 +337,9 @@
                     const rrp = Amber.rrpForInterval(prices, endMs, len);
                     if (rrp == null) { ok = false; return; }
                     const nemTime = new Date(endMs).toISOString().substring(0, 19) + '+10:00';
-                    const item = { type: 'Usage', source: 'nem12', estimate: true, date, nemTime, duration: len, kwh, channelIdentifier: ch.suffix, channelType: role, quality: 'billable' };
+                    // Readings the network estimated or substituted are marked, as Amber's estimated readings are.
+                    const substituted = !!(ch.estimated && ch.estimated[date] && ch.estimated[date][i]);
+                    const item = { type: 'Usage', source: 'nem12', estimate: true, date, nemTime, duration: len, kwh, channelIdentifier: ch.suffix, channelType: role, quality: substituted ? 'estimated' : 'billable' };
                     const parts = Amber.itemClockParts(item, clockOpts);
                     const wholesale = lf * rrp / 10;
                     if (role === 'feedIn') {

@@ -500,7 +500,11 @@
         const qualityBanner = $('qualityBanner');
         if (estimatedDays > 0) {
             qualityBanner.classList.remove('hidden');
-            qualityBanner.textContent = `${estimatedDays} day${estimatedDays === 1 ? '' : 's'} in these dates still ${estimatedDays === 1 ? 'has' : 'have'} estimated meter readings, so the figures may change a little. This is normal for the last few days.`;
+            const dayWord = `${estimatedDays} day${estimatedDays === 1 ? '' : 's'}`;
+            qualityBanner.textContent = estSite && estSite.local
+                // NEM12: the network estimated or substituted these readings (a meter fault or no read); a newer file may correct them.
+                ? `${dayWord} in these dates ${estimatedDays === 1 ? 'has' : 'have'} readings the network estimated or filled in, not measured. A newer meter data file from your retailer or network may correct them.`
+                : `${dayWord} in these dates still ${estimatedDays === 1 ? 'has' : 'have'} estimated meter readings, so the figures may change a little. This is normal for the last few days.`;
         } else {
             qualityBanner.classList.add('hidden');
         }

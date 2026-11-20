@@ -4,6 +4,8 @@ A free, browser-only tool for Australian electricity customers. It shows what yo
 
 Everything runs in the browser: there is no server and no account, and nothing is uploaded.
 
+This is an independent tool. It isn't made by, endorsed by or connected with Amber Electric; it uses Amber's public API with your own key.
+
 **[Launch the app](https://rickusinggithub.github.io/Amber/)**
 
 ## Contents
@@ -73,7 +75,7 @@ The solar and battery planner. From the last 12 months of meter readings (Amber'
 - **Amber prices**: Amber's API (or its usage export) gives each interval's price. Fixed charges come from the rates on the Start tab.
 - **Other plans**: templates in `js/templates.js`, from published tariffs (AER and ESC default offers, Energy Made Easy, retailer fact sheets), each with an "as at" date.
 - **The NEM12 estimate** (households not on Amber): AEMO's 5-minute wholesale price for the region × a loss factor, plus Amber's 2026-27 network, market, environmental and hedging charges for the chosen network tariff (all 12 networks Amber and the NEM serve, including TasNetworks in Tasmania), plus GST. Feed-in is the wholesale price plus the export tariff, and Amber's quarterly wholesale price cap is applied. A second meter channel that is off most of the day is taken as controlled load (CL2 if it also runs in the daytime). NEM12 files with only 200/300 rows are fine, a meter that switches from 30- to 5-minute readings part way through is read correctly, and days with missing readings are left out rather than counted as zero. Checked against a year of real Amber prices on Ausgrid EA116/EA029: within 0.05 c/kWh per interval on average, and the year's usage and feed-in costs within 1%.
-- **Wholesale prices**: `data/prices/<region>/<month>.json`, refreshed daily from AEMO by a GitHub Action (`scripts/update-prices.js`).
+- **Wholesale prices**: `data/prices/<region>/<month>.json`, refreshed weekly from AEMO by a GitHub Action (`scripts/update-prices.js`), so a NEM12 file's last few days may have no prices yet and are left out until the next refresh.
 - **Solar**: a PVGIS 5.3 typical year (ERA5) for 24 towns (`data/solar`, fetched once by `scripts/update-solar.js`), with sun position, tilt, facing, shade, temperature and inverter clipping, scaled to PVGIS's own yield.
 
 ## Data completeness and CSV backups
@@ -120,7 +122,7 @@ More detail for contributors and reviewers:
 - The re-scheduling estimate uses meter data only (no battery telemetry): it assumes each day's shift budget is available and leaves midday solar exports where they were.
 - Sites with several general meters (E1 + E2) have demand worked out on their combined use.
 - The NEM12 estimate assumes the household keeps using power exactly as it did. With a battery on Amber, SmartShift would usually do better. Loss factors other than Ausgrid's are typical values, not measured; seasonal and monthly demand charges are spread by month; Evoenergy's off-peak demand charge is not modelled.
-- The planner uses last year's usage and today's plan prices (Amber: last year's interval prices) for every future year, scaled by the price rise you set. Its battery knows each day's prices in advance, so a real one may do a little worse. Network tariff changes after installing, VPP payments and blackout backup aren't counted. West-facing solar may read slightly low because the typical-year weather has cloudier afternoons. An existing battery's work at home can't be seen on the meter, so taking it out of the readings is an estimate; the check card shows how close it comes, but can't tell if the battery size entered is wrong (take off any backup reserve). Hardware and rebate defaults are rough late-2026 guides: use your quotes.
+- The planner uses last year's usage and today's plan prices (Amber: last year's interval prices) for every future year, scaled by the price rise you set. Its battery knows each day's prices in advance, so a real one may do a little worse. Against the best possible schedule with the same knowledge, it finds about 91% of the saving on Amber's prices and over 99% on a time-of-use plan. Network tariff changes after installing, VPP payments and blackout backup aren't counted. West-facing solar may read slightly low because the typical-year weather has cloudier afternoons. An existing battery's work at home can't be seen on the meter, so taking it out of the readings is an estimate; the check card shows how close it comes, but can't tell if the battery size entered is wrong (take off any backup reserve). Hardware and rebate defaults are rough late-2026 guides: use your quotes.
 - Bill Check reads the Amber bill layouts seen so far. If it can't read a bill, it shows the text it read so the reader can be fixed.
 
 ## Disclaimer

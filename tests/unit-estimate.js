@@ -210,6 +210,30 @@ const summaryTxt = Amber.formatShareSummaryText({
 assert(summaryTxt.includes('Amber was $20.00 (20.0%) cheaper than Flat Plan') && !summaryTxt.includes('4102000001'),
     'formatShareSummaryText produces privacy-safe plain-English summary');
 
+// ---- Estimated and substituted readings in a NEM12 file ----
+assert(items.every((i) => i.quality === 'billable'), 'actual (A) readings stay billable');
+const flaggedFile = [
+    '100,NEM12,202601010000,AUSGRID,RETAILER',
+    '200,4102000001,E1,E1,E1,N1,123,kWh,30,',
+    // 15 Jan substituted by the network (S14) for the whole day.
+    `300,20260115,${day(flat(0.5))},S14,,,20260116000000,`,
+    // 16 Jan variable (V): only intervals 11–12 were estimated.
+    `300,20260116,${day(flat(0.5))},V,,,20260117000000,`,
+    '400,1,10,A,,',
+    '400,11,12,E52,,',
+    '400,13,48,A,,',
+    '900'
+].join('\n');
+const flaggedNmi = Amber.parseNem12(flaggedFile).nmis['4102000001'];
+const marks = flaggedNmi.channels.E1.estimated;
+assert(marks['2026-01-15'].every(Boolean) && marks['2026-01-16'].filter(Boolean).length === 2 && marks['2026-01-16'][10] && marks['2026-01-16'][11],
+    'S14 marks a whole day; V takes each interval from its 400 rows');
+const flaggedEst = Amber.estimateAmberUsage(flaggedNmi, { networkKey: 'ausgrid', tariffCode: 'EA116', roles: { E1: 'general' }, prices });
+const estimatedOn = (d) => flaggedEst.days[d].filter((i) => Amber.isEstimatedQuality(i.quality)).length;
+assert(estimatedOn('2026-01-15') === 48 && estimatedOn('2026-01-16') === 2, `substituted readings are marked estimated, like Amber's (${estimatedOn('2026-01-15')}, ${estimatedOn('2026-01-16')})`);
+const corrected = Amber.parseNem12(flaggedFile.replace('900', `200,4102000001,E1,E1,E1,N1,123,kWh,30,\n300,20260115,${day(flat(0.5))},A,,,20260120000000,\n900`)).nmis['4102000001'];
+assert(!corrected.channels.E1.estimated['2026-01-15'], 'a later actual reading for the day clears the estimate');
+
 if (failed) {
     console.error(`${failed} estimate test(s) failed`);
     process.exit(1);
