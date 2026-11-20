@@ -409,7 +409,7 @@
         Amber.applyAmberFeedInSettlement(state.cachedChannelData, app.selectedSite(), numDays, { from: startDateStr, to: endDateStr });
         Amber.calculateOtherSupplierCosts(state.cachedChannelData, planConfig, app.currentStateCode());
         const otherDemand = Amber.calculateOtherDemandTariff(state.cachedChannelData, startDateStr, endDateStr, planConfig, app.currentStateCode());
-        const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates);
+        const demandTariffInfo = Amber.calculateDemandTariff(state.cachedChannelData, rates, { from: startDateStr, to: endDateStr });
         const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(
             state.cachedAllChannelData || state.cachedChannelData, planConfig, rates, app.currentStateCode()
         );
@@ -619,7 +619,7 @@
             const rates = app.readAmberRates();
             Amber.calculateOtherSupplierCosts(channelTotalsSelectedPeriod, planConfig, app.currentStateCode());
             const otherDemandInfo = Amber.calculateOtherDemandTariff(channelTotalsSelectedPeriod, startDateValue, clampedEnd, planConfig, app.currentStateCode());
-            const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates);
+            const demandTariffInfo = Amber.calculateDemandTariff(channelTotalsSelectedPeriod, rates, { from: startDateValue, to: clampedEnd });
             const { summaries, monthlyDemandInfo } = Amber.precalculateDailySummaries(channelTotalsSelectedPeriod, planConfig, rates, app.currentStateCode());
 
             state.lastFetchedStartDate = startDateValue;
@@ -749,7 +749,8 @@
             if (state.activeTab === 'bill') app.ensureBillLoaded({ fromTab: true });
         }
         if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !navigator.webdriver && /^https?:$/.test(root.location && root.location.protocol || '')) {
-            navigator.serviceWorker.register('sw.js').catch(() => {});
+            // The version in the URL names sw.js's cache, so a release clears the old one without editing sw.js.
+            navigator.serviceWorker.register(`sw.js?v=${encodeURIComponent(Amber.APP_VERSION)}`).catch(() => {});
         }
     }
 

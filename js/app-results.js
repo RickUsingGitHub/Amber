@@ -480,7 +480,11 @@
             }
         }
 
-        const asAt = Amber.latestAsAtForState(app.currentStateCode(), state.templates);
+        // The date of the plan being compared, not the newest of all plans (that made older prices look current).
+        const chosenTemplate = (state.templates[app.currentStateCode()] || {})[$('planSelector').value];
+        const pricesNote = chosenTemplate
+            ? `This plan's prices are the published ones as at ${app.fmtDate(Amber.templateAsAt(chosenTemplate))}, including GST.`
+            : 'This plan\'s prices are the ones you entered, including GST.';
         const estSite = app.selectedSite();
         const banner = $('estimateBanner');
         if (estSite && estSite.local) {
@@ -490,7 +494,7 @@
         } else {
             banner.classList.add('hidden');
         }
-        $('resultsDisclaimer').textContent = `Plan prices are the published ones as at ${app.fmtDate(asAt)}, including GST. Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
+        $('resultsDisclaimer').textContent = `${pricesNote} Prices change, so check the plan's fact sheet or Energy Made Easy (energymadeeasy.gov.au) before switching. Public holidays are treated as normal days.`;
 
         const estimatedDays = Object.values(state.dailySummaries).filter((s) => s && s.estimatedCount > 0).length;
         const qualityBanner = $('qualityBanner');

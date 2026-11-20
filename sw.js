@@ -1,11 +1,14 @@
 (function (root) {
-    const CACHE_NAME = 'amber-compare-v1.67';
+    // The app registers this file as sw.js?v=<Amber.APP_VERSION> (js/app.js), so each release
+    // gets its own cache and the old one is deleted on activate. Nothing here needs editing for a release.
+    const VERSION = (root && root.location && new URL(root.location.href).searchParams.get('v')) || 'dev';
+    const CACHE_NAME = `amber-compare-v${VERSION}`;
     const APP_SHELL = [
         './',
         'index.html',
         'manifest.json',
         'favicon.ico',
-        'css/app.css?v=1.67',
+        `css/app.css?v=${VERSION}`,
         'chart.umd.min.js',
         'chartjs-plugin-zoom.min.js'
     ];

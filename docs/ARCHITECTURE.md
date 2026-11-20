@@ -164,7 +164,7 @@ Missing days (up to 31) are filled from the nearest whole day on the same weekda
 
 1. Read the cache for the dates, fetch what's missing (`api.js`) and write final days back (`loadReadings` in `app.js`, shared with the bill check).
 2. `processUsageData` → channel totals; `applyAmberFeedInSettlement` (Ausgrid EA029 export settlement, one calendar month at a time via `Amber.monthsInRange`; Bill? settles the bill's own period with `billPeriod`).
-3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar).
+3. `calculateOtherSupplierCosts` (the chosen plan), `calculateDemandTariff` / `calculateOtherDemandTariff` (monthly peaks), `precalculateDailySummaries` (daily rows and calendar). Amber's demand is each month's demand-window peak × every calendar day of that month in the range (pass `{ from, to }`; the bill charges all days, readings or not). The planner's `amberCardCost` counts the same days.
 4. Render the answer, every plan for the network (`computePlanTotals` per template), then month by month (`monthly.js`, after the main results).
 
 ### Usage (`charts.js`, `calendar.js`, `stats.js`, `app-results.js`)
@@ -249,6 +249,6 @@ Saved JSON is read through `storedJson` (`app-core.js`) and `storedCustomPlans` 
 
 Each change ships as a version:
 
-1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert).
+1. Bump the version in three places: `index.html` (the `<title>`, the "Version X." line in the header, and every `?v=` query string), `js/constants.js` (`Amber.APP_VERSION`), and `tests/unit-time.js` (the version assert). The service worker (`sw.js`) needs no edit: `app.js` registers it as `sw.js?v=<APP_VERSION>`, which names its cache, so each release replaces the last one's offline copy.
 2. `npm run build:css` if classes changed; update the README and these docs if behaviour changed.
 3. Run `npm run lint` and `npm test`, open a pull request, and merge once the Tests check passes. GitHub Pages serves `main`.

@@ -102,6 +102,23 @@ assert(plans.some((p) => p.config.tou && p.config.tou.free && p.config.tou.free.
     assert(worst < 1e-6, `${minutes}-min: plans match the app to the cent (${kinds.length} plans, worst diff ${worst.toExponential(2)}, ${Date.now() - t0} ms)`);
 });
 
+// A weekday-only demand window: Amber's bill still charges demand for every day of each month,
+// and the planner and Compare must agree on that.
+{
+    const byDate = amberYear('2026-09-30', 30);
+    Object.keys(byDate).forEach((d) => {
+        const weekday = new Date(d + 'T00:00:00Z').getUTCDay();
+        if (weekday === 0 || weekday === 6) byDate[d].forEach((x) => { if (x.tariffInformation) x.tariffInformation = { demandWindow: false }; });
+    });
+    const year = Amber.planYear(byDate, { channelTypes });
+    const model = Amber.amberPlannerModel(year, site, amberRates);
+    const amber = Amber.amberCardCost(year, model, year.imp, year.exp, year.cl);
+    const app = appTotals(byDate, year.first, year.last, plans[0].config);
+    assert(near(amber.demand, app.amberDemand, 1e-6) && near(amber.total, app.amberTotal, 1e-6),
+        `weekday-only demand window: planner and Compare agree ($${amber.demand.toFixed(2)} vs $${app.amberDemand.toFixed(2)})`);
+    assert(app.demandDays === 365, `weekday-only demand window: demand is charged for all 365 days (got ${app.demandDays})`);
+}
+
 // Missing days are filled from the same weekday; too many missing is refused.
 {
     const byDate = amberYear('2026-09-30', 30);

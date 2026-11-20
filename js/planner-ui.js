@@ -1139,7 +1139,7 @@
         const bands = bandPrices(x.plan);
         const anyNeg = bands.some((b) => b.neg > 0);
         html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">${esc(label(x.plan))}: prices through the day</h4>`
-            + `<p class="text-xs text-gray-600 mb-2">The plain average of every half hour in the year, per kWh${plan.amber ? ', from Amber\'s prices over your readings\' year' : `, at the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}. The averages above are weighted by when you actually buy and send out power. Times are the electricity market's clock (Brisbane time), so in daylight saving they're about an hour behind the clock on the wall.</p>`
+            + `<p class="text-xs text-gray-600 mb-2">The plain average of every half hour in the year, per kWh${plan.amber ? ', from Amber\'s prices over your readings\' year' : `, at the plan's rates as at ${fmtDate(Amber.templateAsAt(plan.config))}`}. The averages above are weighted by when you actually buy and send out power. Times are the electricity market's clock (Brisbane time), so in daylight saving they're about an hour behind the clock on the wall.</p>`
             + `<table class="min-w-full divide-y divide-gray-200 text-sm" data-numbers="bands"><thead class="bg-gray-50"><tr>${th('Time of day')}${th('Buy (c/kWh)', 1)}${th('Feed-in (c/kWh)', 1)}${anyNeg ? th('Feed-in below zero', 1) : ''}</tr></thead><tbody class="divide-y divide-gray-200">`
             + bands.map((b, i) => `<tr${i === bands.length - 1 ? ' class="bg-gray-50 font-semibold"' : ''}><td class="px-2 py-2">${b.name}</td>${cell(cents(b.buy))}${cell(cents(b.sell))}${anyNeg ? cell(`${Math.round(b.neg * 100)}%`) : ''}</tr>`).join('')
             + '</tbody></table>';
@@ -1190,7 +1190,7 @@
         facts.push(['Export limit', `${s.exportLimit} kW`]);
         facts.push(['Feed-in below zero', r.switchOff ? 'the panels switch off (a "curtailable" inverter); a battery soaks up what it can first' : 'the panels keep sending power out, and that costs you']);
         if (x.fin && x.fin.capex.total > 0) facts.push(['Up front', capexText(x)]);
-        facts.push(['Power prices', `${plan.amber ? 'Amber\'s prices over your readings\' year' : `the plan's rates as at ${fmtDate(Amber.TEMPLATES_AS_AT)}`}, rising ${f.escalation}% a year`]);
+        facts.push(['Power prices', `${plan.amber ? 'Amber\'s prices over your readings\' year' : `the plan's rates as at ${fmtDate(Amber.templateAsAt(plan.config))}`}, rising ${f.escalation}% a year`]);
         facts.push(['Money', `worth is counted in today's money at ${f.discount}% a year over ${f.years} years${hardware ? `; the inverter is replaced every ${f.inverterLife} years for ${dollars(f.inverterCost)}` : ''}`]);
         html += `<h4 class="text-sm font-semibold text-gray-800 mt-5 mb-1">What it assumes</h4>`
             + `<dl class="grid grid-cols-1 sm:grid-cols-4 gap-x-4 gap-y-1 text-sm" data-numbers="assumes">${facts.map(([a, b]) => `<dt class="font-medium text-gray-800">${esc(a)}</dt><dd class="sm:col-span-3 text-gray-700 mb-1 sm:mb-0">${esc(b)}</dd>`).join('')}</dl>`
@@ -1252,12 +1252,21 @@
             + `<p class="text-gray-600">Savings here are against nothing new on ${esc(label(r.compare.plan))}${r.compare === r.free ? ', the cheapest plan as things are, so they count only what the panels and battery add' : ', so they include anything gained just by switching plan'}. They shrink as the panels and battery wear, and grow as power prices rise ${r.f.escalation}% a year.</p>`;
     }
 
+    /** "1 Jul 2026", or "1 Jul 2026 to 20 Oct 2026" when the plans' published prices are from different dates. */
+    function pricesAsAtText(plans) {
+        const dates = plans.filter((p) => !p.amber).map((p) => Amber.templateAsAt(p.config)).sort();
+        if (!dates.length) return fmtDate(Amber.TEMPLATES_AS_AT);
+        const first = dates[0];
+        const last = dates[dates.length - 1];
+        return first === last ? fmtDate(first) : `${fmtDate(first)} to ${fmtDate(last)}`;
+    }
+
     function renderAssumptions() {
         const r = ui.results;
         const y = ui.year;
         const town = Amber.SOLAR_LOCATIONS.find((l) => l.id === $('planLocation').value);
         const items = [
-            `Next year is your readings from ${fmtDate(y.first)} to ${fmtDate(y.last)} with the changes you entered, priced at today's plan rates (${r.plans.length - 1} plans for your network, prices as at ${fmtDate(Amber.TEMPLATES_AS_AT)}). Amber uses its prices over those same 12 months: a different year's wholesale prices could make it cheaper or dearer.`,
+            `Next year is your readings from ${fmtDate(y.first)} to ${fmtDate(y.last)} with the changes you entered, priced at today's plan rates (${r.plans.length - 1} plans for your network, prices as at ${pricesAsAtText(r.plans)}). Amber uses its prices over those same 12 months: a different year's wholesale prices could make it cheaper or dearer.`,
             'Each option is worked out half hour by half hour, with every plan\'s daily charges, free windows, caps and demand charges, the same way as the Compare tab.',
             r.weather ? `New panels: a typical year of sunshine for ${town ? town.name : 'your area'} (PVGIS, EU Joint Research Centre), matched to PVGIS's own yield, with ${num('planShading')}% shade. West-facing panels may come out a little low: that weather data has cloudier afternoons than mornings. The inverter is assumed to be 75% of the panel size (panels up to 133% of the inverter, as most installers fit them); each option shows the sizes to ask for.` : 'No new panels.',
             r.existing.kwh > 0

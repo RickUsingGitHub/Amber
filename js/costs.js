@@ -368,20 +368,44 @@
 
     /**
      * Amber (network) demand charge. Demand is billed per calendar month: each month's
-     * own peak × that month's demand days, summed across the range.
+     * own peak × that month's days in the period, summed across the range.
      */
-    Amber.calculateDemandTariff = function (channelTotals, amberDemandCents) {
+    Amber.calculateDemandTariff = function (channelTotals, amberDemandCents, range) {
         // amberDemandCents: c/kW/day, or the amberRates object (each month at its own rate).
+        // range { from, to } (YYYY-MM-DD): the period being priced. The bill charges demand for
+        // every day of it, readings or not (like the fixed charges), so each month's days are its
+        // calendar days inside the range. Without a range, the readings' first to last day is used.
+        const span = range && range.from && range.to ? range : readingsSpan(channelTotals);
         const months = Amber.splitChannelsByMonth(channelTotals);
         const keys = Object.keys(months).sort();
+        const daysIn = (k) => (span ? calendarDaysInMonth(k, span.from, span.to) : null);
         if (keys.length > 1) {
             const combined = combineMonthly(keys.map((k) => ({
-                month: k, info: Amber.calculateMonthDemandTariff(months[k], demandCentsFor(amberDemandCents, k))
+                month: k, info: Amber.calculateMonthDemandTariff(months[k], demandCentsFor(amberDemandCents, k), daysIn(k))
             })), 'demandDays');
             return combined || { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         }
-        return Amber.calculateMonthDemandTariff(channelTotals, demandCentsFor(amberDemandCents, keys[0]));
+        return Amber.calculateMonthDemandTariff(channelTotals, demandCentsFor(amberDemandCents, keys[0]), keys[0] ? daysIn(keys[0]) : null);
     };
+
+    /** First and last usage day across all channels, or null when there are no readings. */
+    function readingsSpan(channelTotals) {
+        let from = null;
+        let to = null;
+        Object.values(channelTotals || {}).forEach((c) => (c && c.usageData || []).forEach((item) => {
+            const d = Amber.usageDateStr(item);
+            if (!d) return;
+            if (!from || d < from) from = d;
+            if (!to || d > to) to = d;
+        }));
+        return from ? { from, to } : null;
+    }
+
+    /** Days of month monthKey (YYYY-MM) that fall within from..to (inclusive). */
+    function calendarDaysInMonth(monthKey, from, to) {
+        const m = Amber.monthsInRange(from, to).find((x) => x.key === monthKey);
+        return m ? m.days : 0;
+    }
 
     /**
      * All channels of one type as one channel (sites can have several general meters, e.g. E1
@@ -400,7 +424,12 @@
         };
     };
 
-    Amber.calculateMonthDemandTariff = function (channelTotals, amberDemandCents) {
+    /**
+     * One month of Amber demand: the month's highest 30-minute demand-window peak × 2 (kW) × rate ×
+     * billedDays. billedDays is the month's calendar days in the period (see calculateDemandTariff);
+     * when it isn't given, the days with demand-window readings are counted.
+     */
+    Amber.calculateMonthDemandTariff = function (channelTotals, amberDemandCents, billedDays) {
         const generalChannel = Amber.mergedChannelOfType(channelTotals, 'general');
         const empty = { cost: 0, maxDemandKwh: 0, demandDays: 0, maxDemandTime: null };
         if (!generalChannel || !generalChannel.usageData || generalChannel.usageData.length === 0) {
@@ -430,8 +459,9 @@
         });
         if (maxDemandKwh === 0) return empty;
 
-        const demandDaysSet = new Set(demandWindowUsage.map((item) => Amber.usageDateStr(item)));
-        const numberOfDemandDays = demandDaysSet.size;
+        const numberOfDemandDays = billedDays != null
+            ? billedDays
+            : new Set(demandWindowUsage.map((item) => Amber.usageDateStr(item))).size;
         const rate = amberDemandCents != null ? amberDemandCents : Amber.DEFAULT_AMBER_DEMAND_CENTS;
         const demandTariffCost = maxDemandKwh * 2 * (rate / 100) * numberOfDemandDays;
 
@@ -728,23 +758,12 @@
                 ? (amberDemandInfoMonth.cost / amberDemandInfoMonth.demandDays) : 0;
             const otherDailyDemandCharge = otherDemandInfoMonth ? otherDemandInfoMonth.dailyCharge : 0;
 
-            const amberDemandDaysInMonth = new Set();
-            const generalChannelForMonth = Amber.mergedChannelOfType(monthChannelData, 'general');
-            if (generalChannelForMonth) {
-                generalChannelForMonth.usageData.forEach((item) => {
-                    if (item.tariffInformation && item.tariffInformation.demandWindow) {
-                        amberDemandDaysInMonth.add(Amber.usageDateStr(item));
-                    }
-                });
-            }
-
+            // Amber's demand is charged on every day (see calculateDemandTariff), so each day shows its share.
             const loopDate = new Date(monthStartDate);
             while (loopDate <= monthEndDate) {
                 const dateStr = Amber.formatForInput(loopDate);
                 if (summaries[dateStr]) {
-                    if (amberDemandDaysInMonth.has(dateStr)) {
-                        summaries[dateStr].amberDemandCost = amberDailyDemandCost;
-                    }
+                    summaries[dateStr].amberDemandCost = amberDailyDemandCost;
                     if (demandDays.includes(loopDate.getDay())) {
                         summaries[dateStr].otherDemandCost = otherDailyDemandCharge;
                     }

@@ -96,6 +96,11 @@ function main() {
             if (!csv) return;
             const parsed = parse(csv, month);
             if (!parsed.rows) return;
+            // A cut-off or partial download must never replace prices we already have.
+            if (have && fs.existsSync(file) && parsed.rows < (have.intervals || 0)) {
+                console.warn(`  ${region} ${month}: download has ${parsed.rows} intervals, fewer than the ${have.intervals} saved; keeping the saved file`);
+                return;
+            }
             const body = JSON.stringify({ region, month, interval: 5, rrp: parsed.rrp });
             const old = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null;
             if (old !== body) {

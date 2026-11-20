@@ -401,19 +401,20 @@
                 exportCharge += Math.max(0, midday - (t.belKwhPerDay || 0) * (to - from + 1)) * rate / 100;
             });
         }
+        // Demand: each month's demand-window peak, charged for every day of the month in the
+        // period (as the bill does, and as Amber.calculateDemandTariff does for Compare).
         let demand = 0;
         months.forEach((m) => {
+            const from = Math.max(m.startDay, r.from);
+            const to = Math.min(m.endDay, r.to);
             let peak = 0;
-            const demandDays = new Set();
-            for (let i = m.startDay * SLOTS; i < (m.endDay + 1) * SLOTS; i++) {
-                if (!year.demandFlag[i]) continue;
-                demandDays.add(Math.floor(i / SLOTS));
-                if (imp[i] > peak) peak = imp[i];
+            for (let i = from * SLOTS; i < (to + 1) * SLOTS; i++) {
+                if (year.demandFlag[i] && imp[i] > peak) peak = imp[i];
             }
             if (peak > 0) {
                 const rate = Amber.demandCentsFor(model.rates, m.key);
                 const c = rate != null ? rate : Amber.DEFAULT_AMBER_DEMAND_CENTS;
-                demand += peak * 2 * (c / 100) * demandDays.size;
+                demand += peak * 2 * (c / 100) * (to - from + 1);
             }
         });
         const fixed = Amber.amberFixedForPeriod(model.rates, year.dates[r.from], year.dates[r.to]);

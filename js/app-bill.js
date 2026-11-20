@@ -242,11 +242,7 @@
         html = app.scrollBox(html + '</tbody></table>');
 
         const notes = [];
-        const bad = rows.filter((r) => !r.ok).map((r) => r.key);
         if (!rows.length) notes.push('No matching lines were found on this bill.');
-        if (bad.includes('demandCost') && !bad.includes('demandKw') && totals.demandDays && totals.demandDays !== days) {
-            notes.push(`Peak demand matches but the charge doesn't: the bill charges demand for all ${days} days, while Amber's data marks only ${totals.demandDays} days as demand days.`);
-        }
         if (totals.dataDays < days) notes.push(`Meter data is missing for ${days - totals.dataDays} day(s) of the bill period.`);
         const estimated = new Set();
         Object.values(data).forEach((c) => (c.usageData || []).forEach((item) => {
