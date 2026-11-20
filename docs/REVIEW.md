@@ -57,7 +57,6 @@ These are the properties the tests guard and that users rely on. A change that b
 1. `app.js` is now split by area. Is it worth going further before a frontend refresh, for example giving each file its own slice of `state` or splitting `planner-ui.js` the same way?
 2. Should HTML building move to small render helpers (or `<template>` elements in `index.html`) to cut repetition, while staying build-free and within the CSP?
 3. ESLint now runs in CI. Would a formatter (Prettier) or type checking of the JSDoc (`tsc --checkJs`) be welcome too, given the no-build constraint?
-4. Is the planner's battery heuristic good enough, or should it be compared against a simple linear-programming optimum for a few test days to measure how optimistic it is?
 5. Should the Solar+? search move to a Web Worker (it runs on the main thread today, yielding with `setTimeout(0)`)? The CSP already allows `worker-src 'self'`.
 6. Is there anything in the data handling that a privacy-minded user would object to?
 
@@ -73,6 +72,7 @@ These are the properties the tests guard and that users rely on. A change that b
 | `unit-redispatch.js` | Free? re-scheduling |
 | `unit-import.js` | Amber CSV import |
 | `unit-estimate.js` | NEM12 parsing and the Amber price rebuild |
+| `unit-battery.js` | The planner's battery against the exact optimum (dynamic programming over stored energy) on two weeks of real NSW prices and on a time-of-use plan: it finds about 91% and 99.7% of the best possible saving; realistic foresight finds less |
 | `unit-planner.js` | Planner: parity with Compare, flows, export limit, battery energy balance, existing battery, negative feed-in, midday halving, finance and ratings |
 | `unit-review.js` | Regression checks from an earlier review: household caps across channels, export settlement, missing vs zero days, CSV backup timestamps |
 | `autoload`, `cache`, `import`, `review` specs | Opening state, the cache, CSV import and backup round trip |
