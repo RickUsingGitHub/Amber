@@ -4,6 +4,8 @@ A free, browser-only tool for Australian electricity customers. It shows what yo
 
 Everything runs in the browser: there is no server and no account, and nothing is uploaded.
 
+This is an independent tool. It isn't made by, endorsed by or connected with Amber Electric; it uses Amber's public API with your own key.
+
 **[Launch the app](https://rickusinggithub.github.io/Amber/)**
 
 ## Contents

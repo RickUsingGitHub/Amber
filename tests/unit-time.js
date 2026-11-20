@@ -78,7 +78,18 @@ const clockA = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 const clockB = Amber.clockPartsForItem(clockItem, vicLocal, 'VIC');
 assert(clockA === clockB, 'clock parts are cached on the usage item');
 assert(clockA.hours === 17, 'cached Melbourne DST hour is 17');
-assert(Amber.APP_VERSION === '1.68', 'app version is 1.68');
+assert(Amber.APP_VERSION === '1.69', 'app version is 1.69');
+{
+    // The yearly price update (each 1 July: templates.js, networks.js, Amber's charges in constants.js,
+    // see REVIEW.md "Yearly maintenance") is due. This fails once the prices are 13 months old.
+    const monthsOld = (iso) => {
+        const d = new Date(iso + 'T00:00:00');
+        const now = new Date();
+        return (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+    };
+    assert(monthsOld(Amber.TEMPLATES_AS_AT) <= 13, `plan prices (TEMPLATES_AS_AT ${Amber.TEMPLATES_AS_AT}) are under 13 months old; if not, it's time for the 1 July price update`);
+    assert(monthsOld(Amber.AMBER_RATES_CHANGE_DATE) <= 13, `Amber's charges (AMBER_RATES_CHANGE_DATE ${Amber.AMBER_RATES_CHANGE_DATE}) are under 13 months old; if not, update them for 1 July`);
+}
 {
     // The service worker's cache follows the app version through its URL; sw.js holds no version to forget.
     const fs = require('fs');

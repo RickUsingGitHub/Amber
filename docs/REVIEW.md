@@ -48,7 +48,7 @@ These are the properties the tests guard and that users rely on. A change that b
 - **No formatter or type checking.** ESLint (`npm run lint`, run in CI) catches unused and shadowed variables, undefined names and calls with too many arguments within a file, and holds the style (4-space indentation, single quotes, semicolons). There's no Prettier, and nothing checks types or calls between files. JSDoc comments exist on many engine functions but not throughout.
 - **Home-made unit test harness.** `tests/unit-*.js` use their own `assert` and print `ok:`/`FAIL:`. They work, but give no per-test isolation or coverage.
 - **End-to-end tests depend on IDs and wording.** Many assertions match visible text, so copy edits need test edits too.
-- **Yearly maintenance is manual.** Each 1 July: the default offers and VDO in `templates.js`, Amber's network tariffs in `networks.js` (FY2026-27 today), Amber's default fixed charges and `AMBER_RATES_CHANGE_DATE` in `constants.js`, rebate and hardware defaults in `PLANNER_FINANCE_DEFAULTS`, and `TEMPLATES_AS_AT`. Market offers drift during the year.
+- **Yearly maintenance is manual.** Each 1 July: the default offers and VDO in `templates.js`, Amber's network tariffs in `networks.js` (FY2026-27 today), Amber's default fixed charges and `AMBER_RATES_CHANGE_DATE` in `constants.js`, rebate and hardware defaults in `PLANNER_FINANCE_DEFAULTS`, and `TEMPLATES_AS_AT`. Market offers drift during the year. `tests/unit-time.js` fails once `TEMPLATES_AS_AT` or `AMBER_RATES_CHANGE_DATE` is more than 13 months old, so the update can't be forgotten.
 - **Vendored libraries** are pinned copies: Chart.js 4.4.2, chartjs-plugin-zoom 2.0.1, pdf.js 3.11.174. Updating them is manual.
 - **The API key** is obfuscated, not encrypted. That's fine for a browser-only tool, but it shouldn't be described as secure.
 
@@ -59,8 +59,7 @@ These are the properties the tests guard and that users rely on. A change that b
 3. ESLint now runs in CI. Would a formatter (Prettier) or type checking of the JSDoc (`tsc --checkJs`) be welcome too, given the no-build constraint?
 4. Is the planner's battery heuristic good enough, or should it be compared against a simple linear-programming optimum for a few test days to measure how optimistic it is?
 5. Should the Solar+? search move to a Web Worker (it runs on the main thread today, yielding with `setTimeout(0)`)? The CSP already allows `worker-src 'self'`.
-6. Should the app say explicitly that it's independent of Amber Electric (see FRONTEND.md)?
-7. Is there anything in the data handling that a privacy-minded user would object to?
+6. Is there anything in the data handling that a privacy-minded user would object to?
 
 ## Test map
 

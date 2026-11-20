@@ -9,7 +9,7 @@ What the UI is today, what any redesign has to keep working, and where it could 
 3. **Tailwind is prebuilt.** Classes must appear literally in `index.html` or `js/**/*.js` for `npm run build:css` to include them; classes assembled from pieces at runtime must be listed in `tailwind.config.js` `safelist`. Commit the rebuilt `css/app.css`.
 4. **IDs and data attributes are an API.** The JS looks elements up by ID (`$('id')` / `getElementById`) and the Playwright tests use about 135 distinct `#id` selectors and the `data-*` hooks listed below. Rename one only with its JS and tests.
 5. **Help keys.** Every `data-help="key"` must exist in `Amber.HELP` (`js/help.js`). A test fails on unknown keys, and another fails if a visible planner input has no help button nearby.
-6. **Independent tool.** This isn't Amber Electric's app. Don't adopt Amber's branding (logo, colours, typography) in a refresh. Consider saying "independent, not affiliated with Amber Electric" near the title; it isn't said explicitly today.
+6. **Independent tool.** This isn't Amber Electric's app. Don't adopt Amber's branding (logo, colours, typography) in a refresh. The header says so ("An independent tool, not made by or connected with Amber Electric").
 7. **Everything stays in the browser.** No analytics, external fonts, maps or embeds; the CSP's `connect-src` allows only `'self'` and `https://api.amber.com.au`.
 
 ## Page structure
